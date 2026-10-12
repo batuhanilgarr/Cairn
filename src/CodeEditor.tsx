@@ -46,6 +46,8 @@ type Props = {
   /** Extra completions for the JS editor etc. */
   completions?: { label: string; detail?: string; type?: string }[];
   editorRef?: React.MutableRefObject<EditorView | null>;
+  /** Extra extensions (e.g. a lazily loaded GraphQL language); swapped without recreating the editor. */
+  extensions?: Extension;
 };
 
 /* ------------------------------- theme ------------------------------- */
@@ -176,7 +178,7 @@ const langExt = (lang: Lang): Extension => {
   }
 };
 
-export function CodeEditor({ value, onChange, lang = "text", readOnly, placeholder, vars, wrap, singleLine, onSubmit, onPasteText, className, completions, editorRef }: Props) {
+export function CodeEditor({ value, onChange, lang = "text", readOnly, placeholder, vars, wrap, singleLine, onSubmit, onPasteText, className, completions, editorRef, extensions }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
   const cb = useRef({ onChange, onSubmit, onPasteText });
@@ -188,6 +190,7 @@ export function CodeEditor({ value, onChange, lang = "text", readOnly, placehold
   const roC = useRef(new Compartment());
   const wrapC = useRef(new Compartment());
   const compC = useRef(new Compartment());
+  const extC = useRef(new Compartment());
 
   useEffect(() => {
     const extra = (): Extension[] => {
@@ -204,12 +207,28 @@ export function CodeEditor({ value, onChange, lang = "text", readOnly, placehold
         indentOnInput(),
         cmPlaceholder(placeholder ?? ""),
         langC.current.of(langExt(lang)),
+        extC.current.of(extensions ?? []),
         roC.current.of([EditorState.readOnly.of(!!readOnly), EditorView.editable.of(!readOnly)]),
         wrapC.current.of(wrap || singleLine ? EditorView.lineWrapping : []),
-        compC.current.of(autocompletion({ override: [varCompletions, ...(completions?.length ? [(c: CompletionContext) => {
-          const w = c.matchBefore(/[\w.]+/);
-          if (!w || (w.from === w.to && !c.explicit)) return null;
-          return { from: w.from, options: completions }; }] : [])], icons: false })),
+        // Sources are added through language data (not `override`), so they sit alongside the language's own
+        // completions, e.g. GraphQL schema fields.
+        compC.current.of([
+          autocompletion({ icons: false }),
+          EditorState.languageData.of(() => [{ autocomplete: varCompletions }]),
+          ...(completions?.length
+            ? [
+                EditorState.languageData.of(() => [
+                  {
+                    autocomplete: (c: CompletionContext) => {
+                      const w = c.matchBefore(/[\w.]+/);
+                      if (!w || (w.from === w.to && !c.explicit)) return null;
+                      return { from: w.from, options: completions };
+                    },
+                  },
+                ]),
+              ]
+            : []),
+        ]),
         EditorView.updateListener.of((u) => {
           if (u.docChanged) {
             const text = u.state.doc.toString();
@@ -281,6 +300,7 @@ export function CodeEditor({ value, onChange, lang = "text", readOnly, placehold
   useEffect(() => view.current?.dispatch({ effects: roC.current.reconfigure([EditorState.readOnly.of(!!readOnly), EditorView.editable.of(!readOnly)]) }), [readOnly]);
   useEffect(() => view.current?.dispatch({ effects: wrapC.current.reconfigure(wrap || singleLine ? EditorView.lineWrapping : []) }), [wrap, singleLine]);
   useEffect(() => view.current?.dispatch({ effects: setVarsEffect.of(vars ?? {}) }), [vars]);
+  useEffect(() => view.current?.dispatch({ effects: extC.current.reconfigure(extensions ?? []) }), [extensions]);
 
   return <div ref={host} className={`cm-host ${singleLine ? "single" : ""} ${className ?? ""}`} />;
 }

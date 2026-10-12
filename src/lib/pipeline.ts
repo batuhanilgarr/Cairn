@@ -82,7 +82,12 @@ export async function executeRequest(
   //    req.* edits accumulate and apply on top of the built request.
   let edits: { before: ScriptRequest; after: ScriptRequest } | null = null;
   if (pre.length) {
-    const before = buildRequest(tab, eff());
+    let before: ReturnType<typeof buildRequest>;
+    try {
+      before = buildRequest(tab, eff());
+    } catch (e) {
+      return fail((e as Error).message);
+    }
     const base: ScriptRequest = { method: before.method, url: before.url, headers: before.headers.map(([k, v]) => [k, v]), body: before.body };
     let cur = base;
     for (const code of pre) {
@@ -111,7 +116,12 @@ export async function executeRequest(
   }
 
   // 3. send
-  const spec = buildRequest(tab, eff(), extra);
+  let spec: ReturnType<typeof buildRequest>;
+  try {
+    spec = buildRequest(tab, eff(), extra);
+  } catch (e) {
+    return fail((e as Error).message);
+  }
   if (edits) applyScriptEdits(spec, edits.before, edits.after);
   let response: ResponseData;
   try {

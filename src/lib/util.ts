@@ -25,7 +25,15 @@ export const setTabDefaults = (d: typeof tabDefaults) => {
   tabDefaults = d;
 };
 
+export const defaultGql = () => ({ query: "", variables: "", operation: "" });
+export const defaultWs = () => ({ composer: "", messages: [], protocols: "" });
+export const defaultGrpc = (): RequestTab["grpc"] => ({ source: "reflection", protoFiles: [], importPaths: [], method: "", message: "{}", tls: true });
+
 export const newTab = (): RequestTab => ({
+  kind: "http",
+  gql: defaultGql(),
+  ws: defaultWs(),
+  grpc: defaultGrpc(),
   id: uid(),
   name: "New request",
   method: "GET",
@@ -51,7 +59,14 @@ export const newTab = (): RequestTab => ({
 /** Fill in fields added by newer versions, so tabs saved by an older build still load. */
 export const normalizeTab = (t: Partial<RequestTab>): RequestTab => {
   const base = newTab();
-  return { ...base, ...t, oauth: { ...base.oauth, ...(t.oauth ?? {}) } } as RequestTab;
+  return {
+    ...base,
+    ...t,
+    oauth: { ...base.oauth, ...(t.oauth ?? {}) },
+    gql: { ...base.gql, ...(t.gql ?? {}) },
+    ws: { ...base.ws, ...(t.ws ?? {}) },
+    grpc: { ...base.grpc, ...(t.grpc ?? {}) },
+  } as RequestTab;
 };
 
 export const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"];
@@ -87,7 +102,22 @@ export function buildRequest(tab: RequestTab, env: Environment | undefined, extr
   for (const [k, v] of extraHeaders) if (!has(k.toLowerCase())) headers.push([k, v]);
 
   let body: string | undefined;
-  if (tab.bodyMode !== "none" && !["GET", "HEAD"].includes(tab.method)) {
+  let method = tab.method;
+  if (tab.kind === "graphql") {
+    method = "POST";
+    const raw = sub(tab.gql.variables).trim();
+    let variables: unknown = {};
+    if (raw) {
+      try {
+        variables = JSON.parse(raw);
+      } catch (e) {
+        throw new Error(`GraphQL variables aren't valid JSON: ${(e as Error).message}`);
+      }
+    }
+    body = JSON.stringify({ query: sub(tab.gql.query), variables, ...(tab.gql.operation.trim() ? { operationName: sub(tab.gql.operation.trim()) } : {}) });
+    if (!has("content-type")) headers.push(["Content-Type", "application/json"]);
+    if (!has("accept")) headers.push(["Accept", "application/graphql-response+json, application/json"]);
+  } else if (tab.bodyMode !== "none" && !["GET", "HEAD"].includes(tab.method)) {
     body = sub(tab.body);
     if (!has("content-type")) {
       if (tab.bodyMode === "json") headers.push(["Content-Type", "application/json"]);
@@ -96,7 +126,7 @@ export function buildRequest(tab: RequestTab, env: Environment | undefined, extr
     }
   }
   return {
-    method: tab.method,
+    method,
     url,
     headers,
     body,

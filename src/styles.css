@@ -275,3 +275,28 @@ h4 { margin: 4px 0; font-size: 12px; text-transform: uppercase; letter-spacing: 
 .script-col > .cm-host { flex: 1; }
 .panel-body.fill .tools { flex: none; margin-bottom: 6px; }
 .urlbar .cm-host.single { align-self: stretch; }
+
+/* graphql */
+.gql { display: flex; height: 100%; min-height: 0; gap: 10px; }
+.gql-main { flex: 1; display: grid; grid-template-columns: 1.6fr 1fr; gap: 12px; min-width: 0; min-height: 0; }
+.gql-col { display: flex; flex-direction: column; min-width: 0; min-height: 0; gap: 6px; }
+.gql-col > .cm-host { flex: 1; }
+.gql-head { display: flex; align-items: center; gap: 8px; }
+.gql-head h4 { margin: 0; }
+.gql-head .op { width: 190px; padding: 3px 8px; font-size: 12px; }
+.gql-docs { width: 300px; flex: none; border-left: 1px solid var(--border); padding: 0 0 0 10px; display: flex; flex-direction: column; gap: 6px; min-height: 0; }
+.gql-docs-head { display: flex; justify-content: space-between; align-items: center; }
+.gql-docs-body { flex: 1; display: grid; grid-template-columns: 110px 1fr; gap: 8px; min-height: 0; }
+.gql-types { overflow: auto; display: flex; flex-direction: column; border-right: 1px solid var(--border); padding-right: 4px; }
+.gql-types button { border: 0; background: transparent; text-align: left; padding: 3px 6px; border-radius: 6px; cursor: pointer; font-size: 12px; display: flex; flex-direction: column; }
+.gql-types button small { color: var(--muted); font-size: 10px; }
+.gql-types button.on { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.gql-types button.root { font-weight: 700; }
+.gql-type { overflow: auto; font-size: 12px; }
+.gql-type h4 { margin: 0 0 4px; text-transform: none; font-size: 14px; color: var(--text); }
+.gql-field { display: flex; gap: 6px; padding: 4px 0; border-bottom: 1px solid var(--border); }
+.gql-field.dep code { text-decoration: line-through; opacity: .6; }
+.gql-field a { color: var(--accent); cursor: pointer; }
+.spacer { flex: 1; }
+.kind { width: 104px; font-weight: 600; }
+.m-GQL { color: #e535ab; } .m-gRPC, .m-GRPC { color: #0ea5a4; } .m-WS { color: #3b82f6; } .m-SSE { color: #f59e0b; }

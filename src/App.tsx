@@ -17,6 +17,8 @@ import { ScriptsPanel } from "./ScriptsPanel";
 import { TestsPanel } from "./TestsPanel";
 import { RunnerModal, type RunState } from "./RunnerModal";
 import { DefaultsModal } from "./DefaultsModal";
+import { GraphQLPanel } from "./GraphQLPanel";
+import { cachedSchema, loadGraphQL, storeSchema } from "./lib/graphql";
 import { applyDefaults, type Layer } from "./lib/inherit";
 import { executeRequest, resolveOAuth, withSession } from "./lib/pipeline";
 import { getToken, tokenKey, type TokenCache } from "./lib/oauth";
@@ -50,7 +52,7 @@ import {
   slug,
   uniquePath,
 } from "./lib/collection";
-import type { BodyMode, Collection, Environment, HistoryItem, RequestTab, ResponseData, RunOutput, TreeNode } from "./lib/types";
+import type { BodyMode, Collection, RequestKind, Environment, HistoryItem, RequestTab, ResponseData, RunOutput, TreeNode } from "./lib/types";
 import {
   METHODS,
   emptyKV,
@@ -71,7 +73,17 @@ import { parseBru, parseBruEnv } from "./lib/bruno";
 import { ensureEnvironment, writeImport } from "./lib/importer";
 import "./styles.css";
 
-type ReqSection = "params" | "headers" | "body" | "auth" | "scripts" | "tests" | "settings";
+type ReqSection = "params" | "headers" | "body" | "query" | "auth" | "scripts" | "tests" | "settings";
+
+const SECTIONS: Record<RequestKind, ReqSection[]> = {
+  http: ["params", "headers", "body", "auth", "scripts", "tests", "settings"],
+  graphql: ["query", "headers", "auth", "scripts", "tests", "settings"],
+  sse: ["params", "headers", "auth", "settings"],
+  ws: ["headers", "auth", "settings"],
+  grpc: ["headers", "auth", "settings"],
+};
+const KIND_LABEL: Record<RequestKind, string> = { http: "HTTP", graphql: "GraphQL", sse: "SSE", ws: "WebSocket", grpc: "gRPC" };
+const pillOf = (t: RequestTab) => (t.kind === "http" ? t.method : t.kind === "graphql" ? "GQL" : t.kind === "grpc" ? "gRPC" : t.kind.toUpperCase());
 type ResSection = "body" | "headers" | "tests" | "console";
 type SideSection = "collections" | "history" | "environments";
 
@@ -107,6 +119,8 @@ export default function App() {
   const bump = () => setTick((t) => t + 1);
   const [runs, setRuns] = useState<Record<string, RunOutput | null>>({});
   const [oauthBusy, setOauthBusy] = useState(false);
+  const [gqlFetching, setGqlFetching] = useState<Record<string, boolean>>({});
+  const [gqlError, setGqlError] = useState<Record<string, string | null>>({});
   const [runner, setRunner] = useState<RunState | null>(null);
   const [settings, setSettings] = useState<Settings>(loadSettings);
   const [settingsOpen, setSettingsOpen] = useState<SettingsSection | null>(null);
@@ -126,6 +140,8 @@ export default function App() {
 
   const active = tabs.find((t) => t.id === activeId) ?? tabs[0];
   const env = envs.find((e) => e.id === envId);
+  const sections = SECTIONS[active?.kind ?? "http"];
+  const section: ReqSection = sections.includes(reqSection) ? reqSection : sections[0];
   const response = active ? responses[active.id] : null;
   const run = active ? runs[active.id] : null;
 
@@ -575,6 +591,32 @@ export default function App() {
   }, [active, env]);
 
   const effOAuth = inherited?.tab.authMode === "oauth2" ? inherited.tab.oauth : null;
+  /** Introspect the endpoint with the same auth, headers and scripts as the request itself. */
+  const fetchSchema = async () => {
+    const tab = active;
+    setGqlFetching((m) => ({ ...m, [tab.id]: true }));
+    setGqlError((m) => ({ ...m, [tab.id]: null }));
+    try {
+      const { getIntrospectionQuery } = await loadGraphQL();
+      const probe = { ...tab, gql: { query: getIntrospectionQuery({ descriptions: true }), variables: "", operation: "" }, postScript: "", assertions: [], captures: [] };
+      const out = await executeRequest(probe, { env, session: sessionRef.current, tokens: tokensRef.current, onSession: bump, layers: await freshLayers(tab) });
+      if (!out.response) throw new Error(out.error ?? "Request failed");
+      let json: any;
+      try {
+        json = JSON.parse(out.response.body);
+      } catch {
+        throw new Error(`The endpoint didn't return JSON (HTTP ${out.response.status})`);
+      }
+      if (!json?.data?.__schema) throw new Error(json?.errors?.[0]?.message ?? "No schema in the response. Introspection may be disabled on this server.");
+      storeSchema(tab.url, json.data);
+    } catch (e) {
+      setGqlError((m) => ({ ...m, [tab.id]: String((e as Error).message ?? e) }));
+    } finally {
+      setGqlFetching((m) => ({ ...m, [tab.id]: false }));
+      bump();
+    }
+  };
+
   const oauthToken = effOAuth ? tokensRef.current.get(tokenKey(resolveOAuth(effOAuth, withSession(env, sessionRef.current)))) : undefined;
 
   const getTokenNow = async () => {
@@ -849,7 +891,7 @@ export default function App() {
               {history.length === 0 && <p className="muted pad">Sent requests will show up here.</p>}
               {history.map((h) => (
                 <button key={h.id} className="hist" onClick={() => addTab({ ...h.tab, id: uid(), file: null, saved: null })}>
-                  <span className={`m m-${h.method}`}>{h.method}</span>
+                  <span className={`m m-${pillOf(h.tab)}`}>{pillOf(h.tab)}</span>
                   <span className="hist-url">{h.url.replace(/^https?:\/\//, "")}</span>
                   {h.status !== null && <span className={`dot ${statusClass(h.status)}`}>{h.status}</span>}
                 </button>
@@ -946,7 +988,7 @@ export default function App() {
         <div className="tabbar" data-tauri-drag-region>
           {tabs.map((t) => (
             <div key={t.id} className={`tab ${t.id === active.id ? "on" : ""}`} onClick={() => setActiveId(t.id)}>
-              <span className={`m m-${t.method}`}>{t.method}</span>
+              <span className={`m m-${pillOf(t)}`}>{pillOf(t)}</span>
               <span className="tab-title">{tabTitle(t)}</span>
               {isDirty(t) && <b className="unsaved">●</b>}
               <button
@@ -975,11 +1017,18 @@ export default function App() {
         </div>
 
         <div className="urlbar">
+          <select className="kind" value={active.kind} onChange={(e) => patch({ kind: e.target.value as RequestKind })} title="Request type">
+            {(["http", "graphql"] as RequestKind[]).map((k) => (
+              <option key={k} value={k}>{KIND_LABEL[k]}</option>
+            ))}
+          </select>
+          {(active.kind === "http" || active.kind === "sse") && (
           <select className={`method m-${active.method}`} value={active.method} onChange={(e) => patch({ method: e.target.value })}>
             {METHODS.map((m) => (
               <option key={m}>{m}</option>
             ))}
           </select>
+          )}
           <CodeEditor
             singleLine
             className="url"
@@ -1003,9 +1052,9 @@ export default function App() {
 
         <section className="panel req" ref={reqPanel} style={{ flex: `0 0 ${splitPct}%` }}>
           <nav className="subtabs">
-            {(["params", "headers", "body", "auth", "scripts", "tests", "settings"] as ReqSection[]).map((s) => (
-              <button key={s} className={reqSection === s ? "on" : ""} onClick={() => setReqSection(s)}>
-                {s[0].toUpperCase() + s.slice(1)}
+            {sections.map((s) => (
+              <button key={s} className={section === s ? "on" : ""} onClick={() => setReqSection(s)}>
+                {s === "headers" && active.kind === "grpc" ? "Metadata" : s[0].toUpperCase() + s.slice(1)}
                 {s === "params" && counts.params > 0 && <i>{counts.params}</i>}
                 {s === "headers" && counts.headers > 0 && <i>{counts.headers}</i>}
                 {s === "scripts" && (active.preScript.trim() || active.postScript.trim()) && <i>●</i>}
@@ -1013,9 +1062,9 @@ export default function App() {
               </button>
             ))}
           </nav>
-          <div className={`panel-body ${reqSection === "body" || reqSection === "scripts" ? "fill" : ""}`}>
-            {reqSection === "params" && <KVEditor rows={active.params} onChange={(params) => patch({ params })} />}
-            {reqSection === "headers" && (
+          <div className={`panel-body ${section === "body" || reqSection === "scripts" ? "fill" : ""}`}>
+            {section === "params" && <KVEditor rows={active.params} onChange={(params) => patch({ params })} />}
+            {section === "headers" && (
               <>
                 <KVEditor rows={active.headers} onChange={(headers) => patch({ headers })} />
                 {inherited && inherited.inheritedHeaders.length > 0 && (
@@ -1033,7 +1082,7 @@ export default function App() {
                 )}
               </>
             )}
-            {reqSection === "body" && (
+            {section === "body" && (
               <div className="col">
                 <div className="row">
                   {(["none", "json", "text", "form"] as BodyMode[]).map((m) => (
@@ -1070,12 +1119,23 @@ export default function App() {
                 )}
               </div>
             )}
-            {reqSection === "auth" && (
+            {section === "query" && (
+              <GraphQLPanel
+                tab={active}
+                patch={patch}
+                vars={varMap}
+                schema={cachedSchema(active.url)}
+                fetching={!!gqlFetching[active.id]}
+                schemaError={gqlError[active.id] ?? null}
+                onFetchSchema={fetchSchema}
+              />
+            )}
+            {section === "auth" && (
               <AuthPanel tab={active} patch={patch} token={oauthToken} busy={oauthBusy} onGetToken={getTokenNow} onResetToken={resetToken} inheritFrom={active.file && collection ? (inherited?.authFrom ?? null) : undefined} />
             )}
-            {reqSection === "scripts" && <ScriptsPanel tab={active} patch={patch} vars={varMap} />}
-            {reqSection === "tests" && <TestsPanel tab={active} patch={patch} />}
-            {reqSection === "settings" && (
+            {section === "scripts" && <ScriptsPanel tab={active} patch={patch} vars={varMap} />}
+            {section === "tests" && <TestsPanel tab={active} patch={patch} />}
+            {section === "settings" && (
               <div className="col">
                 <label className="check">
                   <input type="checkbox" checked={active.followRedirects} onChange={(e) => patch({ followRedirects: e.target.checked })} />

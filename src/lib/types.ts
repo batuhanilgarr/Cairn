@@ -31,7 +31,27 @@ export type Capture = { id: string; variable: string; from: "json" | "header"; p
 export type TestResult = { name: string; passed: boolean; error?: string };
 export type RunOutput = { tests: TestResult[]; logs: string[]; scriptError?: string; captured: Record<string, string> };
 
+export type RequestKind = "http" | "graphql" | "sse" | "ws" | "grpc";
+
+export type GraphQLConfig = { query: string; variables: string; operation: string };
+export type SavedMessage = { id: string; name: string; body: string };
+export type WsConfig = { composer: string; messages: SavedMessage[]; protocols: string };
+export type GrpcConfig = {
+  /** "reflection" asks the server for its schema; "proto" uses the .proto files below. */
+  source: "reflection" | "proto";
+  protoFiles: string[];
+  importPaths: string[];
+  /** Fully-qualified method: "pkg.Service/Method" */
+  method: string;
+  message: string;
+  tls: boolean;
+};
+
 export type RequestTab = {
+  kind: RequestKind;
+  gql: GraphQLConfig;
+  ws: WsConfig;
+  grpc: GrpcConfig;
   id: string;
   name: string;
   method: string;

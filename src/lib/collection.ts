@@ -1,5 +1,5 @@
 import { parse, stringify } from "yaml";
-import type { AuthMode, BodyMode, Environment, KV, OAuthConfig, RequestTab } from "./types";
+import type { AuthMode, BodyMode, Environment, KV, OAuthConfig, RequestKind, RequestTab } from "./types";
 import { defaultOAuth, emptyKV, newTab, uid } from "./util";
 import { basename, dirname, join, listFiles, makeDir, pathExists, readText, removePath, writeText } from "./fs";
 
@@ -17,7 +17,10 @@ const kvOut = (rows: KV[]) =>
     .map((r) => ({ key: r.key, value: r.value, ...(r.enabled ? {} : { enabled: false }) }));
 
 export function serializeRequest(t: RequestTab): string {
-  const doc: Record<string, unknown> = { name: t.name, method: t.method, url: t.url };
+  const doc: Record<string, unknown> = { name: t.name };
+  if (t.kind !== "http") doc.type = t.kind;
+  if (t.kind !== "graphql" && t.kind !== "ws" && t.kind !== "grpc") doc.method = t.method;
+  doc.url = t.url;
   if (t.source) doc.source = t.source;
   const params = kvOut(t.params);
   const headers = kvOut(t.headers);
@@ -26,6 +29,25 @@ export function serializeRequest(t: RequestTab): string {
   if (t.bodyMode !== "none") doc.body = { mode: t.bodyMode, content: t.body };
   const auth = authOut(t);
   if (auth) doc.auth = auth;
+  if (t.kind === "graphql") {
+    doc.graphql = { query: t.gql.query, ...(t.gql.variables.trim() ? { variables: t.gql.variables } : {}), ...(t.gql.operation ? { operation: t.gql.operation } : {}) };
+  }
+  if (t.kind === "ws") {
+    doc.websocket = {
+      ...(t.ws.protocols.trim() ? { protocols: t.ws.protocols } : {}),
+      ...(t.ws.composer.trim() ? { message: t.ws.composer } : {}),
+      ...(t.ws.messages.length ? { saved: t.ws.messages.map((m) => ({ name: m.name, body: m.body })) } : {}),
+    };
+  }
+  if (t.kind === "grpc") {
+    doc.grpc = {
+      source: t.grpc.source,
+      ...(t.grpc.source === "proto" ? { protoFiles: t.grpc.protoFiles, ...(t.grpc.importPaths.length ? { importPaths: t.grpc.importPaths } : {}) } : {}),
+      method: t.grpc.method,
+      message: t.grpc.message,
+      ...(t.grpc.tls ? {} : { tls: false }),
+    };
+  }
   const tests = t.assertions.map((a) => ({
     kind: a.kind,
     ...(a.path ? { path: a.path } : {}),
@@ -131,8 +153,23 @@ function parseRequestRaw(text: string, file: string): RequestTab {
   return {
     ...t,
     name: String(d.name ?? basename(file).replace(/\.req\.ya?ml$/, "")),
+    kind: (["graphql", "sse", "ws", "grpc"].includes(d.type) ? d.type : "http") as RequestKind,
     method: String(d.method ?? "GET").toUpperCase(),
     url: String(d.url ?? ""),
+    gql: { query: String(d.graphql?.query ?? ""), variables: String(d.graphql?.variables ?? ""), operation: String(d.graphql?.operation ?? "") },
+    ws: {
+      composer: String(d.websocket?.message ?? ""),
+      protocols: String(d.websocket?.protocols ?? ""),
+      messages: (Array.isArray(d.websocket?.saved) ? d.websocket.saved : []).map((m: any) => ({ id: uid(), name: String(m?.name ?? ""), body: String(m?.body ?? "") })),
+    },
+    grpc: {
+      source: d.grpc?.source === "proto" ? "proto" : "reflection",
+      protoFiles: Array.isArray(d.grpc?.protoFiles) ? d.grpc.protoFiles.map(String) : [],
+      importPaths: Array.isArray(d.grpc?.importPaths) ? d.grpc.importPaths.map(String) : [],
+      method: String(d.grpc?.method ?? ""),
+      message: String(d.grpc?.message ?? "{}"),
+      tls: d.grpc?.tls !== false,
+    },
     source: d.source ? String(d.source) : undefined,
     params: kvIn(d.params),
     headers: kvIn(d.headers),
