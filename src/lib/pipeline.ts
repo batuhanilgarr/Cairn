@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { sendRaw } from "./net";
 import type { Environment, KV, OAuthConfig, RequestTab, ResponseData, RunOutput, TestResult } from "./types";
 import { buildRequest, emptyKV } from "./util";
 import { runAssertions, runCaptures } from "./assert";
@@ -115,7 +115,7 @@ export async function executeRequest(
   if (edits) applyScriptEdits(spec, edits.before, edits.after);
   let response: ResponseData;
   try {
-    response = await invoke<ResponseData>("send_request", { spec });
+    response = await sendRaw(spec);
   } catch (e) {
     return { error: String(e), run, sent: spec };
   }

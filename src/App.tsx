@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { sendRaw } from "./lib/net";
+import { listen } from "@tauri-apps/api/event";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import { SettingsModal, type SettingsSection } from "./SettingsModal";
+import { CommandPalette, type Command } from "./CommandPalette";
+import { applyAppearance, loadSettings, networkOf, saveSettings, type Settings } from "./lib/settings";
+import { setNetwork } from "./lib/net";
 import { KVEditor } from "./KVEditor";
 import { Dialog, type DialogState } from "./Dialog";
 import { Tree } from "./Tree";
@@ -51,6 +58,7 @@ import {
   newTab,
   normalizeTab,
   save,
+  setTabDefaults,
   statusClass,
   tryPrettyJson,
   uid,
@@ -99,6 +107,13 @@ export default function App() {
   const [runs, setRuns] = useState<Record<string, RunOutput | null>>({});
   const [oauthBusy, setOauthBusy] = useState(false);
   const [runner, setRunner] = useState<RunState | null>(null);
+  const [settings, setSettings] = useState<Settings>(loadSettings);
+  const [settingsOpen, setSettingsOpen] = useState<SettingsSection | null>(null);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => load("rq.sidebar", true));
+  const urlInput = useRef<HTMLInputElement>(null);
+  const lastFired = useRef<{ id: string; at: number }>({ id: "", at: 0 });
+  const actions = useRef<Record<string, () => void>>({});
   const [chain, setChain] = useState<ChainLink[]>([]);
   const [chainVer, setChainVer] = useState(0);
   const [defaultsEdit, setDefaultsEdit] = useState<{ dir: string; title: string; tab: RequestTab } | null>(null);
@@ -123,7 +138,7 @@ export default function App() {
   useEffect(() => save("rq.side", side), [side]);
   useEffect(() => save("rq.collection", collection), [collection]);
   useEffect(() => save("rq.envId", envId), [envId]);
-  useEffect(() => save("rq.history", history.slice(0, 100)), [history]);
+  useEffect(() => save("rq.history", history.slice(0, settings.historyLimit)), [history, settings.historyLimit]);
 
   const ask = (title: string, initial = "", confirm = "Create", label?: string) =>
     new Promise<string | null>((resolve) =>
@@ -258,9 +273,7 @@ export default function App() {
   };
 
   const fetchSpec = async (url: string) => {
-    const res = await invoke<ResponseData>("send_request", {
-      spec: { method: "GET", url, headers: [["Accept", "application/json, application/yaml, text/yaml, */*"]], body: null, timeoutMs: 30000, insecure: false, followRedirects: true },
-    });
+    const res = await sendRaw({ method: "GET", url, headers: [["Accept", "application/json, application/yaml, text/yaml, */*"]], body: null, timeoutMs: 30000, insecure: false, followRedirects: true });
     if (res.status >= 400) throw new Error(`Fetching the spec failed: HTTP ${res.status} ${res.statusText}`);
     return res.body;
   };
@@ -401,10 +414,12 @@ export default function App() {
 
   const deleteNode = (node: TreeNode) =>
     guard(async () => {
-      const ok = await confirmDialog(
-        node.isDir ? "Delete folder" : "Delete request",
-        node.isDir ? `"${node.name}" and everything inside it will be deleted from disk.` : `"${node.name}" will be deleted from disk.`,
-      );
+      const ok =
+        !settings.confirmDelete ||
+        (await confirmDialog(
+          node.isDir ? "Delete folder" : "Delete request",
+          node.isDir ? `"${node.name}" and everything inside it will be deleted from disk.` : `"${node.name}" will be deleted from disk.`,
+        ));
       if (!ok) return;
       await removePath(node.path);
       setTabs((ts) => {
@@ -547,7 +562,7 @@ export default function App() {
     } finally {
       setLoading((l) => ({ ...l, [tab.id]: false }));
       setHistory((h) =>
-        [{ id: uid(), at: Date.now(), method: tab.method, url: tab.url, status, tab }, ...h].slice(0, 100),
+        [{ id: uid(), at: Date.now(), method: tab.method, url: tab.url, status, tab }, ...h].slice(0, settings.historyLimit),
       );
     }
   }, [active, env]);
@@ -602,32 +617,131 @@ export default function App() {
       render(true);
     });
 
+  /* ---------------- settings, menu, shortcuts, palette ---------------- */
+
+  const changeSettings = (p: Partial<Settings>) => setSettings((cur) => ({ ...cur, ...p }));
   useEffect(() => {
+    saveSettings(settings);
+    applyAppearance(settings);
+    setNetwork(networkOf(settings));
+    setTabDefaults({ timeoutMs: settings.timeoutMs, followRedirects: settings.followRedirects, insecure: !settings.verifyTls });
+    try {
+      void getCurrentWebview().setZoom(settings.zoom).catch(() => {});
+    } catch {
+      /* not running inside Tauri (browser preview) */
+    }
+  }, [settings]);
+  useEffect(() => save("rq.sidebar", sidebarOpen), [sidebarOpen]);
+
+  const nextTab = (d: number) => {
+    const i = tabs.findIndex((t) => t.id === active.id);
+    setActiveId(tabs[(i + d + tabs.length) % tabs.length].id);
+  };
+  const zoomBy = (d: number) => changeSettings({ zoom: Math.min(1.5, Math.max(0.8, Math.round((settings.zoom + d) * 100) / 100)) });
+
+  actions.current = {
+    settings: () => setSettingsOpen("general"),
+    shortcuts: () => setSettingsOpen("shortcuts"),
+    "new-request": () => addTab(),
+    "new-collection": () => void newCollection(),
+    "open-collection": () => void openCollection(),
+    save: () => void saveTab(active),
+    "close-tab": () => closeTab(active.id),
+    import: () => (collection ? void importMenu() : void info("Open a collection first", "Create or open a collection (Collections tab) to import into.")),
+    send: () => void send(),
+    "focus-url": () => {
+      urlInput.current?.focus();
+      urlInput.current?.select();
+    },
+    "duplicate-tab": () => addTab({ ...active, id: uid(), file: null, saved: null, name: "New request" }),
+    "next-tab": () => nextTab(1),
+    "prev-tab": () => nextTab(-1),
+    "run-collection": () => (collection ? void runFolder(collection.root, `Run ${collection.name}`) : void info("No collection open", "Open a collection to run its requests.")),
+    palette: () => setPaletteOpen(true),
+    "toggle-sidebar": () => setSidebarOpen((v) => !v),
+    "zoom-in": () => zoomBy(0.1),
+    "zoom-out": () => zoomBy(-0.1),
+    "zoom-reset": () => changeSettings({ zoom: 1 }),
+    "help-docs": () => void openUrl("https://github.com/batuhanilgarr/Reqnest#readme"),
+    "help-github": () => void openUrl("https://github.com/batuhanilgarr/Reqnest"),
+    "help-issue": () => void openUrl("https://github.com/batuhanilgarr/Reqnest/issues/new"),
+  };
+
+  /** Menu accelerators and the keydown fallback both land here; a repeat within 150 ms is the same keypress. */
+  const fire = useCallback((id: string) => {
+    const now = Date.now();
+    if (lastFired.current.id === id && now - lastFired.current.at < 150) return;
+    lastFired.current = { id, at: now };
+    actions.current[id]?.();
+  }, []);
+
+  useEffect(() => {
+    const un = listen<string>("menu", (e) => fire(e.payload)).catch(() => null);
+    return () => {
+      un.then((f) => f?.());
+    };
+  }, [fire]);
+
+  useEffect(() => {
+    const map: Record<string, string> = { Enter: "send", s: "save", t: "new-request", w: "close-tab", k: "palette", l: "focus-url", b: "toggle-sidebar", d: "duplicate-tab", ",": "settings", "/": "shortcuts", o: "open-collection", "=": "zoom-in", "-": "zoom-out", "0": "zoom-reset" };
     const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-        e.preventDefault();
-        send();
-      }
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
-        e.preventDefault();
-        saveTab(active);
-      }
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "t") {
-        e.preventDefault();
-        addTab();
-      }
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "w") {
-        e.preventDefault();
-        closeTab(active.id);
-      }
+      if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
+      const id = map[e.key.length === 1 ? e.key.toLowerCase() : e.key];
+      if (!id) return;
+      e.preventDefault();
+      fire(id);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  });
+  }, [fire]);
+
+  // Auto-save: write dirty, file-backed requests shortly after the last edit.
+  useEffect(() => {
+    if (!settings.autoSave) return;
+    const timer = setTimeout(() => {
+      for (const t of tabsRef.current) if (t.file && t.saved != null && serializeRequest(t) !== t.saved) void writeTab(t, t.file).catch(() => {});
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [tabs, settings.autoSave]);
 
   const isDirty = (t: RequestTab) => !!t.file && t.saved != null && serializeRequest(t) !== t.saved;
   const dirtyFiles = useMemo(() => new Set(tabs.filter(isDirty).map((t) => t.file!)), [tabs]);
   const tabTitle = (t: RequestTab) => t.name !== "New request" ? t.name : t.url.replace(/^https?:\/\//, "") || "New request";
+
+  const flatRequests = useMemo(() => {
+    const out: { path: string; label: string }[] = [];
+    const walk = (nodes: TreeNode[], trail: string[]) => {
+      for (const n of nodes) {
+        if (n.isDir) walk(n.children, [...trail, n.name]);
+        else out.push({ path: n.path, label: [...trail, n.name.replace(/\.req\.ya?ml$/, "")].join(" / ") });
+      }
+    };
+    walk(tree, []);
+    return out;
+  }, [tree]);
+
+  const commands: Command[] = [
+    { id: "a:send", group: "Action", title: "Send request", hint: "⌘↵", run: () => fire("send") },
+    { id: "a:new", group: "Action", title: "New request", hint: "⌘T", run: () => fire("new-request") },
+    { id: "a:save", group: "Action", title: "Save request", hint: "⌘S", run: () => fire("save") },
+    { id: "a:dup", group: "Action", title: "Duplicate tab", hint: "⌘D", run: () => fire("duplicate-tab") },
+    { id: "a:open", group: "Action", title: "Open collection…", hint: "⌘O", run: () => fire("open-collection") },
+    { id: "a:newc", group: "Action", title: "New collection…", run: () => fire("new-collection") },
+    { id: "a:import", group: "Action", title: "Import OpenAPI, Postman, Bruno…", run: () => fire("import") },
+    { id: "a:run", group: "Action", title: "Run collection", run: () => fire("run-collection") },
+    { id: "a:side", group: "View", title: "Toggle sidebar", hint: "⌘B", run: () => fire("toggle-sidebar") },
+    { id: "a:set", group: "App", title: "Settings", hint: "⌘,", run: () => fire("settings") },
+    { id: "a:keys", group: "App", title: "Keyboard shortcuts", hint: "⌘/", run: () => fire("shortcuts") },
+    { id: "t:system", group: "Theme", title: "Theme: System", run: () => changeSettings({ theme: "system" }) },
+    { id: "t:light", group: "Theme", title: "Theme: Light", run: () => changeSettings({ theme: "light" }) },
+    { id: "t:dark", group: "Theme", title: "Theme: Dark", run: () => changeSettings({ theme: "dark" }) },
+    { id: "a:clearh", group: "Action", title: "Clear request history", run: () => setHistory([]) },
+    ...envs.map((e) => ({ id: `e:${e.id}`, group: "Env", title: `Switch environment: ${e.name}`, run: () => setEnvId(e.id) })),
+    ...tabs.map((t) => ({ id: `tab:${t.id}`, group: "Tab", title: tabTitle(t), hint: t.method, run: () => setActiveId(t.id) })),
+    ...flatRequests.map((r) => ({ id: `r:${r.path}`, group: "Request", title: r.label, run: () => void openFile(r.path) })),
+    ...(collection ? tree.filter((n) => n.isDir).map((n) => ({ id: `d:${n.path}`, group: "Folder", title: `Run folder: ${n.name}`, run: () => void runFolder(n.path, `Run ${n.name}`) })) : []),
+  ];
+
 
   const counts = useMemo(
     () => ({
@@ -644,7 +758,7 @@ export default function App() {
   }, [response]);
 
   return (
-    <div className="app">
+    <div className={`app ${sidebarOpen ? "" : "no-side"}`}>
       <aside className="sidebar">
         <div className="titlebar-drag" data-tauri-drag-region />
         <div className="brand">
@@ -778,7 +892,7 @@ export default function App() {
                   <button
                     className="link"
                     onClick={async () => {
-                      if (!(await confirmDialog("Delete environment", `"${env.name}" will be removed.`))) return;
+                      if (settings.confirmDelete && !(await confirmDialog("Delete environment", `"${env.name}" will be removed.`))) return;
                       if (env.file) await removePath(env.file).catch(() => {});
                       const rest = envs.filter((x) => x.id !== env.id);
                       setEnvs(rest);
@@ -791,6 +905,14 @@ export default function App() {
               )}
             </div>
           )}
+        </div>
+        <div className="side-foot">
+          <button onClick={() => fire("palette")} title="Command palette (⌘K)">
+            <span>⌕</span> Search <kbd>⌘K</kbd>
+          </button>
+          <button onClick={() => fire("settings")} title="Settings (⌘,)">
+            <span>⚙</span> Settings
+          </button>
         </div>
       </aside>
 
@@ -833,6 +955,7 @@ export default function App() {
             ))}
           </select>
           <input
+            ref={urlInput}
             className="url"
             placeholder="Enter URL, e.g. https://api.example.com/users  (use {{vars}})"
             value={active.url}
@@ -1043,6 +1166,23 @@ export default function App() {
           </div>
         </section>
       </main>
+      {paletteOpen && <CommandPalette commands={commands} onClose={() => setPaletteOpen(false)} />}
+      {settingsOpen && (
+        <SettingsModal
+          settings={settings}
+          onChange={changeSettings}
+          section={settingsOpen}
+          onSection={setSettingsOpen}
+          onClose={() => setSettingsOpen(null)}
+          onClearHistory={() => { setHistory([]); flash("History cleared"); }}
+          onClearSession={() => { sessionRef.current = {}; tokensRef.current = new Map(); bump(); flash("Session cleared"); }}
+          onResetState={async () => {
+            if (!(await confirmDialog("Reset app state", "Forgets open tabs, history, the last collection and all settings. Your collection files are not touched.", "Reset"))) return;
+            Object.keys(localStorage).filter((k) => k.startsWith("rq.")).forEach((k) => localStorage.removeItem(k));
+            location.reload();
+          }}
+        />
+      )}
       <Dialog state={dialog} />
       {defaultsEdit && (
         <DefaultsModal

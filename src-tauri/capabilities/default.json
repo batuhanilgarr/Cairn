@@ -18,6 +18,9 @@
           "url": "http://*"
         }
       ]
-    }
+    },
+    "core:webview:allow-set-webview-zoom",
+    "core:event:default",
+    "core:app:default"
   ]
 }

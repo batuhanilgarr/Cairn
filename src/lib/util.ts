@@ -19,6 +19,12 @@ export const defaultOAuth = (): OAuthConfig => ({
   prefix: "Bearer",
 });
 
+let tabDefaults = { timeoutMs: 30000, followRedirects: true, insecure: false };
+/** New requests start from the user's Settings > Requests defaults. */
+export const setTabDefaults = (d: typeof tabDefaults) => {
+  tabDefaults = d;
+};
+
 export const newTab = (): RequestTab => ({
   id: uid(),
   name: "New request",
@@ -32,9 +38,9 @@ export const newTab = (): RequestTab => ({
   authToken: "",
   authUser: "",
   authPass: "",
-  insecure: false,
-  followRedirects: true,
-  timeoutMs: 30000,
+  insecure: tabDefaults.insecure,
+  followRedirects: tabDefaults.followRedirects,
+  timeoutMs: tabDefaults.timeoutMs,
   preScript: "",
   postScript: "",
   assertions: [],

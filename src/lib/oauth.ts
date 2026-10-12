@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import type { OAuthConfig, ResponseData } from "./types";
+import { sendRaw } from "./net";
+import type { OAuthConfig } from "./types";
 
 export type TokenInfo = {
   accessToken: string;
@@ -44,9 +45,7 @@ async function tokenRequest(c: OAuthConfig, params: Record<string, string>): Pro
   }
   for (const e of c.extra) if (e.enabled && e.key) body.set(e.key, e.value);
 
-  const res = await invoke<ResponseData>("send_request", {
-    spec: { method: "POST", url: c.tokenUrl, headers, body: body.toString(), timeoutMs: 30000, insecure: false, followRedirects: true },
-  });
+  const res = await sendRaw({ method: "POST", url: c.tokenUrl, headers, body: body.toString(), timeoutMs: 30000, insecure: false, followRedirects: true });
   let json: any;
   try {
     json = JSON.parse(res.body);

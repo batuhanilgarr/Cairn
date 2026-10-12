@@ -13,6 +13,24 @@ pub struct RequestSpec {
     pub timeout_ms: Option<u64>,
     pub insecure: bool,
     pub follow_redirects: bool,
+    #[serde(default)]
+    pub network: NetworkSettings,
+}
+
+/// App-wide network settings (Settings > Network). Sent with every request so the UI stays the single source of truth.
+#[derive(Deserialize, Default, Clone)]
+#[serde(rename_all = "camelCase", default)]
+pub struct NetworkSettings {
+    /// "env" (default: honour HTTP(S)_PROXY), "none", or "custom"
+    pub proxy_mode: String,
+    pub proxy_url: String,
+    pub no_proxy: String,
+    /// PEM file with extra trusted root certificates
+    pub ca_cert: String,
+    /// PEM client certificate + private key for mutual TLS
+    pub client_cert: String,
+    pub client_key: String,
+    pub user_agent: String,
 }
 
 #[derive(Serialize)]
@@ -38,13 +56,7 @@ async fn send_request(spec: RequestSpec) -> Result<ResponseData, String> {
         reqwest::redirect::Policy::none()
     };
 
-    let client = reqwest::Client::builder()
-        .danger_accept_invalid_certs(spec.insecure)
-        .redirect(redirect)
-        .timeout(Duration::from_millis(spec.timeout_ms.unwrap_or(30_000)))
-        .user_agent(concat!("Reqnest/", env!("CARGO_PKG_VERSION")))
-        .build()
-        .map_err(|e| e.to_string())?;
+    let client = build_client(&spec, redirect)?;
 
     let mut req = client.request(method, &spec.url);
     for (k, v) in spec.headers.iter().filter(|(k, _)| !k.trim().is_empty()) {
@@ -112,6 +124,49 @@ async fn oauth_listen(port: u16, timeout_secs: u64) -> Result<String, String> {
     tokio::time::timeout(Duration::from_secs(timeout_secs), wait)
         .await
         .map_err(|_| "Timed out waiting for the browser sign-in to finish".to_string())?
+}
+
+fn build_client(spec: &RequestSpec, redirect: reqwest::redirect::Policy) -> Result<reqwest::Client, String> {
+    let n = &spec.network;
+    let ua = if n.user_agent.trim().is_empty() {
+        concat!("Reqnest/", env!("CARGO_PKG_VERSION")).to_string()
+    } else {
+        n.user_agent.clone()
+    };
+    let mut b = reqwest::Client::builder()
+        .danger_accept_invalid_certs(spec.insecure)
+        .redirect(redirect)
+        .timeout(Duration::from_millis(spec.timeout_ms.unwrap_or(30_000)))
+        .user_agent(ua);
+
+    match n.proxy_mode.as_str() {
+        "none" => b = b.no_proxy(),
+        "custom" if !n.proxy_url.trim().is_empty() => {
+            let mut p = reqwest::Proxy::all(n.proxy_url.trim()).map_err(|e| format!("Invalid proxy URL: {e}"))?;
+            if !n.no_proxy.trim().is_empty() {
+                p = p.no_proxy(reqwest::NoProxy::from_string(n.no_proxy.trim()));
+            }
+            b = b.proxy(p);
+        }
+        _ => {} // default: environment proxies
+    }
+    if !n.ca_cert.trim().is_empty() {
+        let pem = fs::read(n.ca_cert.trim()).map_err(|e| format!("CA certificate {}: {e}", n.ca_cert))?;
+        let certs = reqwest::Certificate::from_pem_bundle(&pem).map_err(|e| format!("CA certificate {}: {e}", n.ca_cert))?;
+        for c in certs {
+            b = b.add_root_certificate(c);
+        }
+    }
+    if !n.client_cert.trim().is_empty() {
+        let mut pem = fs::read(n.client_cert.trim()).map_err(|e| format!("Client certificate {}: {e}", n.client_cert))?;
+        if !n.client_key.trim().is_empty() {
+            pem.push(b'\n');
+            pem.extend(fs::read(n.client_key.trim()).map_err(|e| format!("Client key {}: {e}", n.client_key))?);
+        }
+        let id = reqwest::Identity::from_pem(&pem).map_err(|e| format!("Client certificate/key: {e}"))?;
+        b = b.identity(id);
+    }
+    b.build().map_err(|e| e.to_string())
 }
 
 fn describe_error(e: reqwest::Error) -> String {
@@ -244,11 +299,105 @@ fn path_exists(path: String) -> bool {
     Path::new(&path).exists()
 }
 
+fn build_menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
+    use tauri::menu::{AboutMetadata, MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder};
+    let item = |id: &str, label: &str, accel: Option<&str>| {
+        let mut b = MenuItemBuilder::with_id(id, label);
+        if let Some(a) = accel {
+            b = b.accelerator(a);
+        }
+        b.build(app)
+    };
+
+    let app_menu = SubmenuBuilder::new(app, "Reqnest")
+        .about(Some(AboutMetadata {
+            name: Some("Reqnest".into()),
+            version: Some(env!("CARGO_PKG_VERSION").into()),
+            comments: Some("Local-first API client".into()),
+            ..Default::default()
+        }))
+        .separator()
+        .item(&item("settings", "Settings…", Some("CmdOrCtrl+,"))?)
+        .separator()
+        .services()
+        .separator()
+        .hide()
+        .hide_others()
+        .show_all()
+        .separator()
+        .quit()
+        .build()?;
+
+    let file = SubmenuBuilder::new(app, "File")
+        .item(&item("new-request", "New Request", Some("CmdOrCtrl+T"))?)
+        .item(&item("new-collection", "New Collection…", Some("CmdOrCtrl+Shift+N"))?)
+        .item(&item("open-collection", "Open Collection…", Some("CmdOrCtrl+O"))?)
+        .separator()
+        .item(&item("save", "Save", Some("CmdOrCtrl+S"))?)
+        .item(&item("close-tab", "Close Tab", Some("CmdOrCtrl+W"))?)
+        .separator()
+        .item(&item("import", "Import…", Some("CmdOrCtrl+Shift+I"))?)
+        .build()?;
+
+    let edit = SubmenuBuilder::new(app, "Edit")
+        .item(&PredefinedMenuItem::undo(app, None)?)
+        .item(&PredefinedMenuItem::redo(app, None)?)
+        .separator()
+        .item(&PredefinedMenuItem::cut(app, None)?)
+        .item(&PredefinedMenuItem::copy(app, None)?)
+        .item(&PredefinedMenuItem::paste(app, None)?)
+        .item(&PredefinedMenuItem::select_all(app, None)?)
+        .build()?;
+
+    let request = SubmenuBuilder::new(app, "Request")
+        .item(&item("send", "Send", Some("CmdOrCtrl+Return"))?)
+        .item(&item("focus-url", "Focus URL Bar", Some("CmdOrCtrl+L"))?)
+        .separator()
+        .item(&item("duplicate-tab", "Duplicate Tab", Some("CmdOrCtrl+D"))?)
+        .item(&item("next-tab", "Next Tab", Some("Ctrl+Tab"))?)
+        .item(&item("prev-tab", "Previous Tab", Some("Ctrl+Shift+Tab"))?)
+        .separator()
+        .item(&item("run-collection", "Run Collection…", None)?)
+        .build()?;
+
+    let view = SubmenuBuilder::new(app, "View")
+        .item(&item("palette", "Command Palette…", Some("CmdOrCtrl+K"))?)
+        .item(&item("toggle-sidebar", "Toggle Sidebar", Some("CmdOrCtrl+B"))?)
+        .separator()
+        .item(&item("zoom-in", "Zoom In", Some("CmdOrCtrl+="))?)
+        .item(&item("zoom-out", "Zoom Out", Some("CmdOrCtrl+-"))?)
+        .item(&item("zoom-reset", "Actual Size", Some("CmdOrCtrl+0"))?)
+        .separator()
+        .fullscreen()
+        .build()?;
+
+    let window = SubmenuBuilder::new(app, "Window").minimize().maximize().separator().close_window().build()?;
+
+    let help = SubmenuBuilder::new(app, "Help")
+        .item(&item("shortcuts", "Keyboard Shortcuts", Some("CmdOrCtrl+/"))?)
+        .separator()
+        .item(&item("help-docs", "Documentation", None)?)
+        .item(&item("help-github", "Reqnest on GitHub", None)?)
+        .item(&item("help-issue", "Report an Issue…", None)?)
+        .build()?;
+
+    MenuBuilder::new(app).items(&[&app_menu, &file, &edit, &request, &view, &window, &help]).build()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .setup(|app| {
+            let menu = build_menu(app.handle())?;
+            app.set_menu(menu)?;
+            Ok(())
+        })
+        .on_menu_event(|app, event| {
+            use tauri::Emitter;
+            let _ = app.emit("menu", event.id().0.clone());
+        })
         .invoke_handler(tauri::generate_handler![
             send_request,
             oauth_listen,
@@ -341,5 +490,70 @@ mod oauth_tests {
         };
         let err = oauth_listen(port, 1).await.unwrap_err();
         assert!(err.contains("Timed out"));
+    }
+}
+
+#[cfg(test)]
+mod network_tests {
+    use super::*;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    fn spec(url: &str, network: NetworkSettings) -> RequestSpec {
+        RequestSpec {
+            method: "GET".into(),
+            url: url.into(),
+            headers: vec![],
+            body: None,
+            timeout_ms: Some(5000),
+            insecure: false,
+            follow_redirects: true,
+            network,
+        }
+    }
+
+    /// A one-shot fake proxy: records the request head and answers 200 "via-proxy".
+    async fn fake_proxy() -> (u16, tokio::task::JoinHandle<String>) {
+        let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = l.local_addr().unwrap().port();
+        let h = tokio::spawn(async move {
+            let (mut s, _) = l.accept().await.unwrap();
+            let mut buf = vec![0u8; 4096];
+            let n = s.read(&mut buf).await.unwrap();
+            let body = "via-proxy";
+            let resp = format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", body.len(), body);
+            s.write_all(resp.as_bytes()).await.unwrap();
+            String::from_utf8_lossy(&buf[..n]).to_string()
+        });
+        (port, h)
+    }
+
+    #[tokio::test]
+    async fn custom_proxy_is_used_and_custom_user_agent_sent() {
+        let (port, seen) = fake_proxy().await;
+        let net = NetworkSettings {
+            proxy_mode: "custom".into(),
+            proxy_url: format!("http://127.0.0.1:{port}"),
+            user_agent: "ReqnestTest/9".into(),
+            ..Default::default()
+        };
+        let res = send_request(spec("http://api.invalid/path?q=1", net)).await.unwrap();
+        assert_eq!(res.body, "via-proxy");
+        let head = seen.await.unwrap();
+        assert!(head.starts_with("GET http://api.invalid/path?q=1 HTTP/1.1"), "got: {head}");
+        assert!(head.to_lowercase().contains("user-agent: reqnesttest/9"));
+    }
+
+    #[tokio::test]
+    async fn bad_ca_path_and_bad_proxy_give_clear_errors() {
+        let e = send_request(spec("http://x.invalid", NetworkSettings { ca_cert: "/nope/ca.pem".into(), ..Default::default() }))
+            .await
+            .err()
+            .unwrap();
+        assert!(e.contains("CA certificate /nope/ca.pem"), "{e}");
+        let e = send_request(spec("http://x.invalid", NetworkSettings { proxy_mode: "custom".into(), proxy_url: "::not a url".into(), ..Default::default() }))
+            .await
+            .err()
+            .unwrap();
+        assert!(e.contains("Invalid proxy URL"), "{e}");
     }
 }

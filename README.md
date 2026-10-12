@@ -20,6 +20,9 @@ No account, no cloud, no telemetry. Fast startup, tiny footprint.
 - **Scripts**: pre-request and post-response JavaScript (`req`, `res`, `env`, `test`, `expect`) in an isolated Web Worker (no app or filesystem access, 5 s limit). Variables set by scripts/captures are session-only: kept in memory, never written to disk
 - **Runner**: run a whole folder or collection in file order with live pass/fail
 - **Folder & collection defaults** (⚙ on the collection or any folder, saved as `folder.yaml`): shared headers, auth and pre/post scripts. A folder overrides what's above it, a request overrides both; a request can switch an inherited header off, and new requests default to "Inherit auth". The request's Headers tab shows what it inherits and from where
+- **Native macOS menu bar** (File, Edit, Request, View, Window, Help) with shortcuts, and a **Settings** window (⌘,): defaults, appearance (theme, accent, zoom), network (proxy, custom CA, client certificates for mutual TLS, user agent), shortcuts, data
+- **Command palette** (⌘K): jump to any request, tab or environment, run actions
+- **Auto-save** (optional) writes request edits to disk as you type
 - Draggable split between request and response
 - Edits made outside the app (git pull, editor) are picked up when the window regains focus
 - Tabs, request history, JSON highlighting, response headers/size/time
