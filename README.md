@@ -19,6 +19,8 @@ No account, no cloud, no telemetry. Fast startup, tiny footprint.
 - **Tests without code**: assertions on status, JSON path, header, body, timing; **capture** response values into variables for the next request
 - **Scripts**: pre-request and post-response JavaScript (`req`, `res`, `env`, `test`, `expect`) in an isolated Web Worker (no app or filesystem access, 5 s limit). Variables set by scripts/captures are session-only: kept in memory, never written to disk
 - **Runner**: run a whole folder or collection in file order with live pass/fail
+- **Folder & collection defaults** (⚙ on the collection or any folder, saved as `folder.yaml`): shared headers, auth and pre/post scripts. A folder overrides what's above it, a request overrides both; a request can switch an inherited header off, and new requests default to "Inherit auth". The request's Headers tab shows what it inherits and from where
+- Draggable split between request and response
 - Edits made outside the app (git pull, editor) are picked up when the window regains focus
 - Tabs, request history, JSON highlighting, response headers/size/time
 - Per-request: redirects, TLS verification toggle, timeout
@@ -26,7 +28,7 @@ No account, no cloud, no telemetry. Fast startup, tiny footprint.
 
 ## Roadmap
 
-folder/collection-level auth, headers and scripts, CLI runner for CI,
+CLI runner for CI (JUnit output),
 gRPC / WebSocket / SSE / GraphQL, mock server, MCP support, team sync (self-hostable).
 
 ## Develop

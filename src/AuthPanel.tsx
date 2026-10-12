@@ -10,6 +10,9 @@ type Props = {
   busy: boolean;
   onGetToken: () => void;
   onResetToken: () => void;
+  /** undefined: no inheritance here (folder defaults editor). null/string: offer "inherit"; the string says where from. */
+  inheritFrom: string | null | undefined;
+  showToken?: boolean;
 };
 
 const ttl = (t: TokenInfo) => {
@@ -19,7 +22,7 @@ const ttl = (t: TokenInfo) => {
   return s > 3600 ? `valid for ${Math.round(s / 360) / 10} h` : s > 90 ? `valid for ${Math.round(s / 60)} min` : `valid for ${s}s`;
 };
 
-export function AuthPanel({ tab, patch, token, busy, onGetToken, onResetToken }: Props) {
+export function AuthPanel({ tab, patch, token, busy, onGetToken, onResetToken, inheritFrom, showToken = true }: Props) {
   const [reveal, setReveal] = useState(false);
   const o = tab.oauth;
   const set = (p: Partial<OAuthConfig>) => patch({ oauth: { ...o, ...p } });
@@ -33,11 +36,17 @@ export function AuthPanel({ tab, patch, token, busy, onGetToken, onResetToken }:
   return (
     <div className="col wide">
       <select value={tab.authMode} onChange={(e) => patch({ authMode: e.target.value as AuthMode })}>
+        {inheritFrom !== undefined && <option value="inherit">Inherit from folder / collection</option>}
         <option value="none">No auth</option>
         <option value="bearer">Bearer token</option>
         <option value="basic">Basic auth</option>
         <option value="oauth2">OAuth 2.0</option>
       </select>
+      {tab.authMode === "inherit" && (
+        <p className="muted small">
+          {inheritFrom ? `Using the auth set on “${inheritFrom}”.` : "No parent folder or the collection sets auth yet. Set it with ⚙ on the folder or collection."}
+        </p>
+      )}
       {tab.authMode === "bearer" && <input className="cell" placeholder="Token" value={tab.authToken} onChange={(e) => patch({ authToken: e.target.value })} />}
       {tab.authMode === "basic" && (
         <>
@@ -94,7 +103,7 @@ export function AuthPanel({ tab, patch, token, busy, onGetToken, onResetToken }:
             <p className="muted small">Extra token request fields (audience, resource, …)</p>
             <KVEditor rows={o.extra} onChange={(extra) => set({ extra })} />
           </div>
-          <div className="token-box">
+          {showToken && <div className="token-box">
             {token ? (
               <>
                 <div className="row">
@@ -119,7 +128,7 @@ export function AuthPanel({ tab, patch, token, busy, onGetToken, onResetToken }:
                 </>
               )}
             </div>
-          </div>
+          </div>}
         </>
       )}
     </div>

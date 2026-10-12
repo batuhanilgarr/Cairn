@@ -1,6 +1,7 @@
 export type KV = { id: string; key: string; value: string; enabled: boolean; secret?: boolean };
 export type BodyMode = "none" | "json" | "text" | "form";
-export type AuthMode = "none" | "bearer" | "basic" | "oauth2";
+/** "inherit" uses the nearest folder/collection auth (see lib/inherit.ts). */
+export type AuthMode = "none" | "inherit" | "bearer" | "basic" | "oauth2";
 
 export type OAuthGrant = "client_credentials" | "authorization_code" | "password";
 export type OAuthConfig = {

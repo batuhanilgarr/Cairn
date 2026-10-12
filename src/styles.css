@@ -97,7 +97,7 @@ select { cursor: pointer; }
 .btn:disabled { opacity: .6; cursor: default; }
 
 .panel { display: flex; flex-direction: column; min-height: 0; border-top: 1px solid var(--border); }
-.panel.req { flex: 0 0 38%; }
+.panel.req { flex: 0 0 40%; min-height: 80px; }
 .panel.res { flex: 1; background: var(--bg-panel); }
 .subtabs { display: flex; align-items: center; gap: 2px; padding: 0 10px; border-bottom: 1px solid var(--border); }
 .subtabs button { border: 0; background: transparent; padding: 9px 10px; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; }
@@ -188,3 +188,16 @@ h4 { margin: 4px 0; font-size: 12px; text-transform: uppercase; letter-spacing: 
 .run-row:has(.run-err) .run-ic { color: var(--bad); }
 .run-row.running { background: var(--hover); }
 .run-main { min-width: 0; flex: 1; }
+
+/* defaults, inheritance, splitter */
+.splitter { flex: none; height: 7px; margin: -3px 0; cursor: row-resize; position: relative; z-index: 5; }
+.splitter::after { content: ""; position: absolute; left: 0; right: 0; top: 3px; height: 1px; background: var(--border); transition: background .12s, height .12s; }
+.splitter:hover::after { background: var(--accent); height: 3px; top: 2px; }
+.dialog.defaults { width: 720px; max-width: 94vw; }
+.defaults-body { max-height: 52vh; overflow: auto; padding: 12px 2px; }
+.inherited { margin-top: 14px; padding-top: 8px; border-top: 1px dashed var(--border); }
+.inh-row { display: flex; gap: 10px; align-items: baseline; font-size: 12px; padding: 2px 0; }
+.inh-row code { min-width: 140px; }
+.inh-row span { flex: 1; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inh-row em { color: var(--muted); font-style: normal; font-size: 11px; background: var(--hover); border-radius: 8px; padding: 1px 8px; }
+.inh-row.over code, .inh-row.over span { text-decoration: line-through; opacity: .55; }

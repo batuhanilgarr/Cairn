@@ -4,6 +4,7 @@ import { buildRequest, emptyKV } from "./util";
 import { runAssertions, runCaptures } from "./assert";
 import { runScript, type ScriptRequest } from "./script";
 import { getToken, type TokenCache } from "./oauth";
+import { applyDefaults, type Layer } from "./inherit";
 import { interpolate } from "./util";
 
 /** Session variables: set by scripts and captures, held in memory only, never written to disk. */
@@ -56,9 +57,17 @@ function applyScriptEdits(spec: ReturnType<typeof buildRequest>, before: ScriptR
 }
 
 export async function executeRequest(
-  tab: RequestTab,
-  deps: { env: Environment | undefined; session: Session; tokens: TokenCache; onSession: () => void },
+  rawTab: RequestTab,
+  deps: {
+    env: Environment | undefined;
+    session: Session;
+    tokens: TokenCache;
+    onSession: () => void;
+    /** Defaults of the request's folders, outermost first. */
+    layers?: Layer[];
+  },
 ): Promise<Outcome> {
+  const { tab, pre, post } = applyDefaults(rawTab, deps.layers ?? []);
   const run: RunOutput = { tests: [], logs: [], captured: {} };
   const setVars = (vars: Record<string, string>) => {
     if (!Object.keys(vars).length) return;
@@ -69,20 +78,25 @@ export async function executeRequest(
   const fail = (error: string): Outcome => ({ error, run });
   const eff = () => withSession(deps.env, deps.session);
 
-  // 1. pre-request script: env.set() feeds {{variables}}, req.* edits apply on top of the built request.
+  // 1. pre-request scripts (collection, folders, request): env.set() feeds {{variables}},
+  //    req.* edits accumulate and apply on top of the built request.
   let edits: { before: ScriptRequest; after: ScriptRequest } | null = null;
-  if (tab.preScript.trim()) {
+  if (pre.length) {
     const before = buildRequest(tab, eff());
     const base: ScriptRequest = { method: before.method, url: before.url, headers: before.headers.map(([k, v]) => [k, v]), body: before.body };
-    const r = await runScript(tab.preScript, { req: structuredClone(base), vars: varsOf(eff()) });
-    run.logs.push(...r.logs);
-    run.tests.push(...r.tests);
-    setVars(r.set);
-    if (r.error) {
-      run.scriptError = `Pre-request script: ${r.error}`;
-      return fail(run.scriptError);
+    let cur = base;
+    for (const code of pre) {
+      const r = await runScript(code, { req: structuredClone(cur), vars: varsOf(eff()) });
+      run.logs.push(...r.logs);
+      run.tests.push(...r.tests);
+      setVars(r.set);
+      if (r.error) {
+        run.scriptError = `Pre-request script: ${r.error}`;
+        return fail(run.scriptError);
+      }
+      cur = r.req;
     }
-    edits = { before: base, after: r.req };
+    edits = { before: base, after: cur };
   }
 
   // 2. OAuth2
@@ -106,14 +120,14 @@ export async function executeRequest(
     return { error: String(e), run, sent: spec };
   }
 
-  // 4. captures, assertions, post-response script
+  // 4. captures, assertions, post-response scripts
   const cap = runCaptures(tab.captures, response);
   setVars(cap.values);
   for (const v of cap.missed) run.logs.push(`capture: nothing found for "${v}"`);
   run.tests.push(...runAssertions(tab.assertions, response));
 
-  if (tab.postScript.trim()) {
-    const r = await runScript(tab.postScript, {
+  for (const code of post) {
+    const r = await runScript(code, {
       req: { method: spec.method, url: spec.url, headers: spec.headers, body: spec.body },
       res: response,
       vars: varsOf(eff()),

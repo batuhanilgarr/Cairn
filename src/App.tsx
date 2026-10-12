@@ -7,6 +7,8 @@ import { AuthPanel } from "./AuthPanel";
 import { ScriptsPanel } from "./ScriptsPanel";
 import { TestsPanel } from "./TestsPanel";
 import { RunnerModal, type RunState } from "./RunnerModal";
+import { DefaultsModal } from "./DefaultsModal";
+import { applyDefaults, type Layer } from "./lib/inherit";
 import { executeRequest, resolveOAuth, withSession } from "./lib/pipeline";
 import { getToken, tokenKey, type TokenCache } from "./lib/oauth";
 import {
@@ -24,6 +26,10 @@ import {
 } from "./lib/fs";
 import {
   initCollection,
+  loadChain,
+  loadDefaults,
+  saveDefaults,
+  type ChainLink,
   loadEnvironments,
   readCollectionMeta,
   writeCollectionMeta,
@@ -93,6 +99,12 @@ export default function App() {
   const [runs, setRuns] = useState<Record<string, RunOutput | null>>({});
   const [oauthBusy, setOauthBusy] = useState(false);
   const [runner, setRunner] = useState<RunState | null>(null);
+  const [chain, setChain] = useState<ChainLink[]>([]);
+  const [chainVer, setChainVer] = useState(0);
+  const [defaultsEdit, setDefaultsEdit] = useState<{ dir: string; title: string; tab: RequestTab } | null>(null);
+  const [splitPct, setSplitPct] = useState<number>(() => load("rq.split", 40));
+  const reqPanel = useRef<HTMLElement>(null);
+  const resPanel = useRef<HTMLElement>(null);
   const [rawView, setRawView] = useState(false);
 
   const active = tabs.find((t) => t.id === activeId) ?? tabs[0];
@@ -341,7 +353,7 @@ export default function App() {
       const name = await ask("New request", "", "Create");
       if (!name) return;
       const file = await requestPath(dir, name);
-      const tab = { ...newTab(), name };
+      const tab = { ...newTab(), name, authMode: "inherit" as const };
       await writeTab(tab, file);
       await refreshTree();
       addTab({ ...tab, file, saved: serializeRequest(tab) });
@@ -425,15 +437,15 @@ export default function App() {
   // Pick up changes made outside the app (git pull, editor): refresh tree and reload clean tabs.
   useEffect(() => {
     const onFocus = async () => {
+      setChainVer((v) => v + 1);
       await refreshTree();
       const current = tabsRef.current;
       for (const t of current) {
         if (!t.file || t.saved == null || serializeRequest(t) !== t.saved) continue;
         const text = await readText(t.file).catch(() => null);
-        if (text !== null && text !== t.saved) {
-          const fresh = parseRequest(text, t.file);
-          setTabs((ts) => ts.map((x) => (x.id === t.id ? { ...fresh, id: t.id } : x)));
-        }
+        if (text === null) continue;
+        const fresh = parseRequest(text, t.file);
+        if (fresh.saved !== t.saved) setTabs((ts) => ts.map((x) => (x.id === t.id ? { ...fresh, id: t.id } : x)));
       }
     };
     window.addEventListener("focus", onFocus);
@@ -463,6 +475,43 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [envs, collection]);
 
+  // Defaults inherited by the active request (read fresh from disk, so external edits count).
+  useEffect(() => {
+    let live = true;
+    if (collection && active?.file)
+      loadChain(collection.root, active.file, collection.name).then((c) => live && setChain(c)).catch(() => live && setChain([]));
+    else setChain([]);
+    return () => {
+      live = false;
+    };
+  }, [collection, active?.file, chainVer]);
+  const layersOf = (c: ChainLink[]): Layer[] => c.map((l) => ({ label: l.label, defaults: l.defaults }));
+  const inherited = useMemo(() => (active ? applyDefaults(active, layersOf(chain)) : null), [active, chain]);
+  useEffect(() => save("rq.split", splitPct), [splitPct]);
+
+  const freshLayers = async (tab: RequestTab): Promise<Layer[]> =>
+    collection && tab.file ? layersOf(await loadChain(collection.root, tab.file, collection.name).catch(() => [])) : [];
+
+  const openDefaults = (dir: string, title: string) =>
+    guard(async () => setDefaultsEdit({ dir, title, tab: await loadDefaults(dir) }));
+
+  const startDrag = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const move = (ev: MouseEvent) => {
+      const a = reqPanel.current?.getBoundingClientRect();
+      const b = resPanel.current?.getBoundingClientRect();
+      if (!a || !b) return;
+      const total = b.bottom - a.top;
+      setSplitPct(Math.min(80, Math.max(15, ((ev.clientY - a.top) / total) * 100)));
+    };
+    const up = () => {
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", up);
+    };
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+  };
+
   const addTab = (t?: RequestTab) => {
     const tab = t ?? newTab();
     setTabs((ts) => [...ts, tab]);
@@ -490,7 +539,7 @@ export default function App() {
     setRuns((r) => ({ ...r, [tab.id]: null }));
     let status: number | null = null;
     try {
-      const out = await executeRequest(tab, { env, session: sessionRef.current, tokens: tokensRef.current, onSession: bump });
+      const out = await executeRequest(tab, { env, session: sessionRef.current, tokens: tokensRef.current, onSession: bump, layers: await freshLayers(tab) });
       status = out.response?.status ?? null;
       setResponses((r) => ({ ...r, [tab.id]: out.response ?? { error: out.error ?? "Request failed" } }));
       setRuns((r) => ({ ...r, [tab.id]: out.run }));
@@ -503,12 +552,13 @@ export default function App() {
     }
   }, [active, env]);
 
-  const oauthToken = active?.authMode === "oauth2" ? tokensRef.current.get(tokenKey(resolveOAuth(active.oauth, withSession(env, sessionRef.current)))) : undefined;
+  const effOAuth = inherited?.tab.authMode === "oauth2" ? inherited.tab.oauth : null;
+  const oauthToken = effOAuth ? tokensRef.current.get(tokenKey(resolveOAuth(effOAuth, withSession(env, sessionRef.current)))) : undefined;
 
   const getTokenNow = async () => {
     setOauthBusy(true);
     try {
-      await getToken(resolveOAuth(active.oauth, withSession(env, sessionRef.current)), tokensRef.current, { force: true });
+      await getToken(resolveOAuth((inherited?.tab ?? active).oauth, withSession(env, sessionRef.current)), tokensRef.current, { force: true });
     } catch (e) {
       await info("OAuth 2.0", String((e as Error).message ?? e));
     } finally {
@@ -517,7 +567,7 @@ export default function App() {
     }
   };
   const resetToken = () => {
-    tokensRef.current.delete(tokenKey(resolveOAuth(active.oauth, withSession(env, sessionRef.current))));
+    tokensRef.current.delete(tokenKey(resolveOAuth((inherited?.tab ?? active).oauth, withSession(env, sessionRef.current))));
     bump();
   };
 
@@ -536,7 +586,7 @@ export default function App() {
         try {
           const tab = parseRequest((await readText(files[i])) ?? "", files[i]);
           items[i].name = tab.name;
-          const out = await executeRequest(tab, { env, session: sessionRef.current, tokens: tokensRef.current, onSession: bump });
+          const out = await executeRequest(tab, { env, session: sessionRef.current, tokens: tokensRef.current, onSession: bump, layers: await freshLayers(tab) });
           items[i].status = out.response?.status;
           items[i].ms = out.response?.timeMs;
           items[i].error = out.error;
@@ -627,6 +677,7 @@ export default function App() {
                     <span className="row-actions always">
                       <button title="New request" onClick={() => newRequestIn(selectedDir || collection.root)}>＋</button>
                       <button title="New folder" onClick={() => newFolderIn(selectedDir || collection.root)}>▤</button>
+                      <button title="Collection defaults (headers, auth, scripts)" onClick={() => openDefaults(collection.root, `Defaults for “${collection.name}”`)}>⚙</button>
                       <button title="Run all requests" onClick={() => runFolder(collection.root, `Run ${collection.name}`)}>▶</button>
                       <button title="Import (OpenAPI, Postman, Bruno)" onClick={importMenu}>⇩</button>
                       <button title="Open another collection" onClick={openCollection}>⌂</button>
@@ -642,6 +693,7 @@ export default function App() {
                     onOpen={openFile}
                     onSelectDir={setSelectedDir}
                     onRun={(dir) => runFolder(dir, `Run ${basename(dir)}`)}
+                    onDefaults={(dir) => openDefaults(dir, `Defaults for “${basename(dir)}”`)}
                     onNewRequest={newRequestIn}
                     onNewFolder={newFolderIn}
                     onRename={renameNode}
@@ -802,7 +854,7 @@ export default function App() {
           </button>
         </div>
 
-        <section className="panel req">
+        <section className="panel req" ref={reqPanel} style={{ flex: `0 0 ${splitPct}%` }}>
           <nav className="subtabs">
             {(["params", "headers", "body", "auth", "scripts", "tests", "settings"] as ReqSection[]).map((s) => (
               <button key={s} className={reqSection === s ? "on" : ""} onClick={() => setReqSection(s)}>
@@ -816,7 +868,24 @@ export default function App() {
           </nav>
           <div className="panel-body">
             {reqSection === "params" && <KVEditor rows={active.params} onChange={(params) => patch({ params })} />}
-            {reqSection === "headers" && <KVEditor rows={active.headers} onChange={(headers) => patch({ headers })} />}
+            {reqSection === "headers" && (
+              <>
+                <KVEditor rows={active.headers} onChange={(headers) => patch({ headers })} />
+                {inherited && inherited.inheritedHeaders.length > 0 && (
+                  <div className="inherited">
+                    <h4>Inherited</h4>
+                    {inherited.inheritedHeaders.map((h, i) => (
+                      <div key={i} className={`inh-row ${h.overridden ? "over" : ""}`}>
+                        <code>{h.key}</code>
+                        <span>{h.value}</span>
+                        <em>{h.overridden ? "overridden here" : h.from}</em>
+                      </div>
+                    ))}
+                    <p className="muted small">To switch one off for this request, add the same header above and untick it.</p>
+                  </div>
+                )}
+              </>
+            )}
             {reqSection === "body" && (
               <div className="col">
                 <div className="row">
@@ -852,7 +921,7 @@ export default function App() {
               </div>
             )}
             {reqSection === "auth" && (
-              <AuthPanel tab={active} patch={patch} token={oauthToken} busy={oauthBusy} onGetToken={getTokenNow} onResetToken={resetToken} />
+              <AuthPanel tab={active} patch={patch} token={oauthToken} busy={oauthBusy} onGetToken={getTokenNow} onResetToken={resetToken} inheritFrom={active.file && collection ? (inherited?.authFrom ?? null) : undefined} />
             )}
             {reqSection === "scripts" && <ScriptsPanel tab={active} patch={patch} />}
             {reqSection === "tests" && <TestsPanel tab={active} patch={patch} />}
@@ -880,7 +949,9 @@ export default function App() {
           </div>
         </section>
 
-        <section className="panel res">
+        <div className="splitter" onMouseDown={startDrag} role="separator" aria-orientation="horizontal" />
+
+        <section className="panel res" ref={resPanel}>
           <nav className="subtabs">
             <button className={resSection === "body" ? "on" : ""} onClick={() => setResSection("body")}>
               Response
@@ -973,6 +1044,21 @@ export default function App() {
         </section>
       </main>
       <Dialog state={dialog} />
+      {defaultsEdit && (
+        <DefaultsModal
+          title={defaultsEdit.title}
+          initial={defaultsEdit.tab}
+          onClose={() => setDefaultsEdit(null)}
+          onSave={(t) =>
+            guard(async () => {
+              await saveDefaults(defaultsEdit.dir, t);
+              setDefaultsEdit(null);
+              setChainVer((v) => v + 1);
+              flash("Defaults saved");
+            })
+          }
+        />
+      )}
       {runner && <RunnerModal run={runner} onStop={() => (stopRef.current = true)} onClose={() => setRunner(null)} />}
       {toast && <div className="toast">{toast}</div>}
     </div>

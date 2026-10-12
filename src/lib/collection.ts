@@ -1,7 +1,7 @@
 import { parse, stringify } from "yaml";
 import type { AuthMode, BodyMode, Environment, KV, OAuthConfig, RequestTab } from "./types";
 import { defaultOAuth, emptyKV, newTab, uid } from "./util";
-import { basename, dirname, join, listFiles, makeDir, pathExists, readText, writeText } from "./fs";
+import { basename, dirname, join, listFiles, makeDir, pathExists, readText, removePath, writeText } from "./fs";
 
 /**
  * On-disk format. Design rules (these are what keep Git diffs clean):
@@ -24,9 +24,8 @@ export function serializeRequest(t: RequestTab): string {
   if (params.length) doc.params = params;
   if (headers.length) doc.headers = headers;
   if (t.bodyMode !== "none") doc.body = { mode: t.bodyMode, content: t.body };
-  if (t.authMode === "bearer") doc.auth = { mode: "bearer", token: t.authToken };
-  if (t.authMode === "basic") doc.auth = { mode: "basic", username: t.authUser, password: t.authPass };
-  if (t.authMode === "oauth2") doc.auth = { mode: "oauth2", ...oauthOut(t.oauth) };
+  const auth = authOut(t);
+  if (auth) doc.auth = auth;
   const tests = t.assertions.map((a) => ({
     kind: a.kind,
     ...(a.path ? { path: a.path } : {}),
@@ -47,6 +46,40 @@ export function serializeRequest(t: RequestTab): string {
   if (Object.keys(settings).length) doc.settings = settings;
   return stringify(doc, YAML_OPTS);
 }
+
+const authOut = (t: RequestTab): Record<string, unknown> | null => {
+  if (t.authMode === "inherit") return { mode: "inherit" };
+  if (t.authMode === "bearer") return { mode: "bearer", token: t.authToken };
+  if (t.authMode === "basic") return { mode: "basic", username: t.authUser, password: t.authPass };
+  if (t.authMode === "oauth2") return { mode: "oauth2", ...oauthOut(t.oauth) };
+  return null;
+};
+
+const authIn = (a: any): Pick<RequestTab, "authMode" | "authToken" | "authUser" | "authPass" | "oauth"> => ({
+  authMode: (a?.mode ?? "none") as AuthMode,
+  authToken: String(a?.token ?? ""),
+  authUser: String(a?.username ?? ""),
+  authPass: String(a?.password ?? ""),
+  oauth:
+    a?.mode === "oauth2"
+      ? {
+          ...defaultOAuth(),
+          grant: a.grant ?? "client_credentials",
+          authUrl: String(a.authUrl ?? ""),
+          tokenUrl: String(a.tokenUrl ?? ""),
+          clientId: String(a.clientId ?? ""),
+          clientSecret: String(a.clientSecret ?? ""),
+          scope: String(a.scope ?? ""),
+          username: String(a.username ?? ""),
+          password: String(a.password ?? ""),
+          redirectPort: Number(a.redirectPort ?? 8976),
+          pkce: a.pkce !== false,
+          clientAuth: a.clientAuth === "body" ? "body" : "basic",
+          prefix: String(a.prefix ?? "Bearer"),
+          extra: kvIn(a.extra),
+        }
+      : defaultOAuth(),
+});
 
 /** Only non-default OAuth fields are written, so a plain client_credentials setup stays a few lines. */
 function oauthOut(o: OAuthConfig): Record<string, unknown> {
@@ -87,6 +120,12 @@ const kvIn = (rows: unknown): KV[] => {
 };
 
 export function parseRequest(text: string, file: string): RequestTab {
+  const tab = parseRequestRaw(text, file);
+  // "Saved" means the canonical form: a hand-edited file isn't dirty just because its formatting differs.
+  return { ...tab, saved: serializeRequest(tab) };
+}
+
+function parseRequestRaw(text: string, file: string): RequestTab {
   const d: any = parse(text) ?? {};
   const t = newTab();
   return {
@@ -99,29 +138,7 @@ export function parseRequest(text: string, file: string): RequestTab {
     headers: kvIn(d.headers),
     bodyMode: (d.body?.mode ?? "none") as BodyMode,
     body: String(d.body?.content ?? ""),
-    authMode: (d.auth?.mode ?? "none") as AuthMode,
-    authToken: String(d.auth?.token ?? ""),
-    authUser: String(d.auth?.username ?? ""),
-    authPass: String(d.auth?.password ?? ""),
-    oauth:
-      d.auth?.mode === "oauth2"
-        ? {
-            ...defaultOAuth(),
-            grant: d.auth.grant ?? "client_credentials",
-            authUrl: String(d.auth.authUrl ?? ""),
-            tokenUrl: String(d.auth.tokenUrl ?? ""),
-            clientId: String(d.auth.clientId ?? ""),
-            clientSecret: String(d.auth.clientSecret ?? ""),
-            scope: String(d.auth.scope ?? ""),
-            username: String(d.auth.username ?? ""),
-            password: String(d.auth.password ?? ""),
-            redirectPort: Number(d.auth.redirectPort ?? 8976),
-            pkce: d.auth.pkce !== false,
-            clientAuth: d.auth.clientAuth === "body" ? "body" : "basic",
-            prefix: String(d.auth.prefix ?? "Bearer"),
-            extra: kvIn(d.auth.extra),
-          }
-        : defaultOAuth(),
+    ...authIn(d.auth),
     assertions: (Array.isArray(d.tests) ? d.tests : []).map((a: any) => ({
       id: uid(),
       enabled: a?.enabled !== false,
@@ -246,3 +263,59 @@ export async function saveEnvironment(root: string, env: Environment): Promise<s
 }
 
 export { dirname };
+
+
+/* ------------------- folder / collection defaults (folder.yaml) ------------------- */
+
+/**
+ * Defaults for every request below a folder: headers, auth and scripts. They live in
+ * `<folder>/folder.yaml` (the collection root has one too). They're edited through the same
+ * panels as a request, so a defaults object is held as a RequestTab with only those fields used.
+ */
+export const DEFAULTS_FILE = "folder.yaml";
+
+export function serializeDefaults(t: RequestTab): string {
+  const doc: Record<string, unknown> = {};
+  const headers = kvOut(t.headers);
+  if (headers.length) doc.headers = headers;
+  const auth = t.authMode === "inherit" ? null : authOut(t);
+  if (auth) doc.auth = auth;
+  const scripts: Record<string, string> = {};
+  if (t.preScript.trim()) scripts.pre = t.preScript;
+  if (t.postScript.trim()) scripts.post = t.postScript;
+  if (Object.keys(scripts).length) doc.scripts = scripts;
+  return Object.keys(doc).length ? stringify(doc, YAML_OPTS) : "";
+}
+
+export function parseDefaults(text: string | null): RequestTab {
+  const d: any = (text && parse(text)) || {};
+  return {
+    ...newTab(),
+    name: "defaults",
+    headers: kvIn(d.headers),
+    ...authIn(d.auth),
+    preScript: String(d.scripts?.pre ?? ""),
+    postScript: String(d.scripts?.post ?? ""),
+  };
+}
+
+export async function loadDefaults(dir: string): Promise<RequestTab> {
+  return parseDefaults(await readText(join(dir, DEFAULTS_FILE)));
+}
+
+export async function saveDefaults(dir: string, t: RequestTab) {
+  const text = serializeDefaults(t);
+  const file = join(dir, DEFAULTS_FILE);
+  if (text) await writeText(file, text);
+  else if (await pathExists(file)) await removePath(file); // nothing left to say: don't leave an empty file around
+}
+
+export type ChainLink = { dir: string; label: string; defaults: RequestTab };
+
+/** Defaults from the collection root down to the folder containing `file`, outermost first. */
+export async function loadChain(root: string, file: string, rootLabel: string): Promise<ChainLink[]> {
+  if (!file.startsWith(root + "/")) return [];
+  const rel = dirname(file).slice(root.length).split("/").filter(Boolean);
+  const dirs = [root, ...rel.map((_, i) => join(root, ...rel.slice(0, i + 1)))];
+  return Promise.all(dirs.map(async (dir, i) => ({ dir, label: i === 0 ? rootLabel : basename(dir), defaults: await loadDefaults(dir) })));
+}
