@@ -8,6 +8,8 @@ import { CommandPalette, type Command } from "./CommandPalette";
 import { applyAppearance, loadSettings, networkOf, saveSettings, type Settings } from "./lib/settings";
 import { setNetwork } from "./lib/net";
 import { KVEditor } from "./KVEditor";
+import { CodeEditor, type Lang, type VarMap } from "./CodeEditor";
+import type { EditorView } from "@codemirror/view";
 import { Dialog, type DialogState } from "./Dialog";
 import { Tree } from "./Tree";
 import { AuthPanel } from "./AuthPanel";
@@ -53,7 +55,6 @@ import {
   METHODS,
   emptyKV,
   formatBytes,
-  highlightJson,
   load,
   newTab,
   normalizeTab,
@@ -102,7 +103,7 @@ export default function App() {
   const sessionRef = useRef<Record<string, string>>({});
   const tokensRef = useRef<TokenCache>(new Map());
   const stopRef = useRef(false);
-  const [, setTick] = useState(0);
+  const [tick, setTick] = useState(0);
   const bump = () => setTick((t) => t + 1);
   const [runs, setRuns] = useState<Record<string, RunOutput | null>>({});
   const [oauthBusy, setOauthBusy] = useState(false);
@@ -111,7 +112,6 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState<SettingsSection | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => load("rq.sidebar", true));
-  const urlInput = useRef<HTMLInputElement>(null);
   const lastFired = useRef<{ id: string; at: number }>({ id: "", at: 0 });
   const actions = useRef<Record<string, () => void>>({});
   const [chain, setChain] = useState<ChainLink[]>([]);
@@ -121,6 +121,8 @@ export default function App() {
   const reqPanel = useRef<HTMLElement>(null);
   const resPanel = useRef<HTMLElement>(null);
   const [rawView, setRawView] = useState(false);
+  const [wrapRes, setWrapRes] = useState(true);
+  const urlView = useRef<EditorView | null>(null);
 
   const active = tabs.find((t) => t.id === activeId) ?? tabs[0];
   const env = envs.find((e) => e.id === envId);
@@ -154,9 +156,9 @@ export default function App() {
     );
   const info = (title: string, message: string) =>
     new Promise<void>((resolve) => setDialog({ kind: "info", title, message, resolve: () => (setDialog(null), resolve()) }));
-  const flash = (msg: string) => {
+  const flash = (msg: string, ms = 1800) => {
     setToast(msg);
-    setTimeout(() => setToast((t) => (t === msg ? null : t)), 1800);
+    setTimeout(() => setToast((t) => (t === msg ? null : t)), ms);
   };
   const guard = async (fn: () => Promise<void>) => {
     try {
@@ -556,6 +558,11 @@ export default function App() {
     try {
       const out = await executeRequest(tab, { env, session: sessionRef.current, tokens: tokensRef.current, onSession: bump, layers: await freshLayers(tab) });
       status = out.response?.status ?? null;
+      if (out.sent) {
+        const text = [out.sent.url, out.sent.body ?? "", ...out.sent.headers.flat()].join("\n");
+        const missing = [...new Set([...text.matchAll(/\{\{\s*([\w.\-]+)\s*\}\}/g)].map((m) => m[1]))];
+        if (missing.length) flash(`Undefined variable${missing.length > 1 ? "s" : ""}: ${missing.join(", ")}`, 4500);
+      }
       setResponses((r) => ({ ...r, [tab.id]: out.response ?? { error: out.error ?? "Request failed" } }));
       setRuns((r) => ({ ...r, [tab.id]: out.run }));
       if (out.run.scriptError || out.run.tests.some((t) => !t.passed)) setResSection("tests");
@@ -650,8 +657,8 @@ export default function App() {
     import: () => (collection ? void importMenu() : void info("Open a collection first", "Create or open a collection (Collections tab) to import into.")),
     send: () => void send(),
     "focus-url": () => {
-      urlInput.current?.focus();
-      urlInput.current?.select();
+      urlView.current?.focus();
+      urlView.current?.dispatch({ selection: { anchor: 0, head: urlView.current.state.doc.length } });
     },
     "duplicate-tab": () => addTab({ ...active, id: uid(), file: null, saved: null, name: "New request" }),
     "next-tab": () => nextTab(1),
@@ -750,6 +757,25 @@ export default function App() {
     }),
     [active],
   );
+
+  /** What {{variables}} resolve to right now (secrets masked), for highlighting and hover. */
+  const varMap = useMemo<VarMap>(() => {
+    const m: VarMap = {};
+    for (const v of env?.vars ?? []) if (v.enabled && v.key) m[v.key] = v.secret ? "•••••• (secret)" : v.value;
+    for (const [k, v] of Object.entries(sessionRef.current)) m[k] = v;
+    return m;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [env, tick]);
+
+  const resLang: Lang = useMemo(() => {
+    if (!response || "error" in response) return "text";
+    const ct = (response.headers.find(([k]) => k.toLowerCase() === "content-type")?.[1] ?? "").toLowerCase();
+    if (ct.includes("json") || /^\s*[[{]/.test(response.body.slice(0, 20))) return "json";
+    if (ct.includes("html")) return "html";
+    if (ct.includes("xml")) return "xml";
+    if (ct.includes("javascript")) return "js";
+    return "text";
+  }, [response]);
 
   const resBody = useMemo(() => {
     if (!response || "error" in response) return null;
@@ -954,22 +980,20 @@ export default function App() {
               <option key={m}>{m}</option>
             ))}
           </select>
-          <input
-            ref={urlInput}
+          <CodeEditor
+            singleLine
             className="url"
-            placeholder="Enter URL, e.g. https://api.example.com/users  (use {{vars}})"
             value={active.url}
-            spellCheck={false}
-            onPaste={(e) => {
-              // Intercept before the <input> flattens multi-line text.
-              const text = e.clipboardData.getData("text");
-              if (looksLikeCurl(text)) {
-                e.preventDefault();
-                applyCurl(text);
-              }
+            vars={varMap}
+            editorRef={urlView}
+            placeholder="Enter URL, or paste a cURL command  (use {{variables}})"
+            onSubmit={send}
+            onPasteText={(text) => {
+              if (!looksLikeCurl(text)) return false;
+              applyCurl(text);
+              return true;
             }}
-            onChange={(e) => (looksLikeCurl(e.target.value) ? applyCurl(e.target.value) : patch({ url: e.target.value }))}
-            onKeyDown={(e) => e.key === "Enter" && send()}
+            onChange={(v) => (looksLikeCurl(v) ? applyCurl(v) : patch({ url: v }))}
           />
           <button className="btn primary" onClick={send} disabled={loading[active.id]}>
             {loading[active.id] ? "Sending…" : "Send"}
@@ -989,7 +1013,7 @@ export default function App() {
               </button>
             ))}
           </nav>
-          <div className="panel-body">
+          <div className={`panel-body ${reqSection === "body" || reqSection === "scripts" ? "fill" : ""}`}>
             {reqSection === "params" && <KVEditor rows={active.params} onChange={(params) => patch({ params })} />}
             {reqSection === "headers" && (
               <>
@@ -1033,20 +1057,23 @@ export default function App() {
                 {active.bodyMode === "none" ? (
                   <p className="muted">This request has no body.</p>
                 ) : (
-                  <textarea
-                    className="editor"
-                    spellCheck={false}
-                    value={active.body}
-                    placeholder={active.bodyMode === "form" ? "key=value&other=value" : active.bodyMode === "json" ? '{ "hello": "world" }' : ""}
-                    onChange={(e) => patch({ body: e.target.value })}
-                  />
+                  <div className="editor-slot">
+                    <CodeEditor
+                      className="boxed"
+                      value={active.body}
+                      lang={active.bodyMode === "json" ? "json" : "text"}
+                      vars={varMap}
+                      placeholder={active.bodyMode === "form" ? "key=value&other=value" : active.bodyMode === "json" ? '{ "hello": "world" }' : ""}
+                      onChange={(v) => patch({ body: v })}
+                    />
+                  </div>
                 )}
               </div>
             )}
             {reqSection === "auth" && (
               <AuthPanel tab={active} patch={patch} token={oauthToken} busy={oauthBusy} onGetToken={getTokenNow} onResetToken={resetToken} inheritFrom={active.file && collection ? (inherited?.authFrom ?? null) : undefined} />
             )}
-            {reqSection === "scripts" && <ScriptsPanel tab={active} patch={patch} />}
+            {reqSection === "scripts" && <ScriptsPanel tab={active} patch={patch} vars={varMap} />}
             {reqSection === "tests" && <TestsPanel tab={active} patch={patch} />}
             {reqSection === "settings" && (
               <div className="col">
@@ -1108,7 +1135,7 @@ export default function App() {
               </div>
             )}
           </nav>
-          <div className="panel-body">
+          <div className={`panel-body ${resSection === "body" && response && !("error" in response) ? "fill" : ""}`}>
             {loading[active.id] && <p className="muted">Sending request…</p>}
             {!loading[active.id] && !response && <p className="muted center">Hit <kbd>⌘↵</kbd> to send a request.</p>}
             {response && "error" in response && resSection !== "tests" && resSection !== "console" && <pre className="err">{response.error}</pre>}
@@ -1140,15 +1167,23 @@ export default function App() {
                       <input type="checkbox" checked={rawView} onChange={(e) => setRawView(e.target.checked)} /> Raw
                     </label>
                   )}
+                  <label className="check">
+                    <input type="checkbox" checked={wrapRes} onChange={(e) => setWrapRes(e.target.checked)} /> Wrap
+                  </label>
                   <button className="btn small" onClick={() => navigator.clipboard.writeText(resBody.pretty ?? resBody.text)}>
                     Copy
                   </button>
                 </div>
-                {resBody.pretty && !rawView ? (
-                  <pre className="code" dangerouslySetInnerHTML={{ __html: highlightJson(resBody.pretty) }} />
-                ) : (
-                  <pre className="code">{resBody.text}</pre>
-                )}
+                <div className="editor-slot">
+                  <CodeEditor
+                    readOnly
+                    wrap={wrapRes}
+                    lang={resLang}
+                    value={resBody.pretty && !rawView ? resBody.pretty : resBody.text}
+                    vars={undefined}
+                    className="fill"
+                  />
+                </div>
               </>
             )}
             {response && !("error" in response) && resSection === "headers" && (

@@ -251,3 +251,27 @@ h4 { margin: 4px 0; font-size: 12px; text-transform: uppercase; letter-spacing: 
 .side-foot button:hover { background: var(--hover); color: var(--text); }
 .side-foot span { width: 16px; text-align: center; }
 .side-foot kbd { margin-left: auto; }
+
+/* code editors */
+.cm-host { min-height: 0; height: 100%; }
+.cm-host .cm-editor { height: 100%; }
+.cm-host.boxed { border: 1px solid var(--border); border-radius: 8px; background: var(--bg-input); overflow: hidden; }
+.cm-host.boxed:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
+.cm-host.single { height: auto; flex: 1; min-width: 0; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-input); padding: 0 10px; display: flex; align-items: center; }
+.cm-host.single:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
+.cm-host.single .cm-editor { width: 100%; height: auto; }
+.cm-host.single .cm-content { padding: 8px 0; font-size: 13px; }
+.cm-host.single .cm-scroller { overflow-x: auto; overflow-y: hidden; line-height: 1.5; }
+.cm-host.single .cm-line { padding: 0; }
+.cm-host.fill { height: 100%; }
+
+/* fill-height editors inside panels */
+.panel-body.fill { display: flex; flex-direction: column; overflow: hidden; padding: 8px 12px 12px; }
+.panel-body.fill > .col { flex: 1; min-height: 0; max-width: none; }
+.editor-slot { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.editor-slot > .cm-host { flex: 1; }
+.panel-body.fill .scripts { flex: 1; min-height: 0; grid-template-rows: minmax(0, 1fr) auto; }
+.script-col { min-height: 0; }
+.script-col > .cm-host { flex: 1; }
+.panel-body.fill .tools { flex: none; margin-bottom: 6px; }
+.urlbar .cm-host.single { align-self: stretch; }
