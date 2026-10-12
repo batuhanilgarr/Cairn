@@ -1,11 +1,10 @@
 import { sendRaw } from "./net";
 import type { Environment, KV, OAuthConfig, RequestTab, ResponseData, RunOutput, TestResult } from "./types";
-import { buildRequest, emptyKV } from "./util";
+import { buildRequest, emptyKV, interpolate } from "./util";
 import { runAssertions, runCaptures } from "./assert";
 import { runScript, type ScriptRequest } from "./script";
 import { getToken, type TokenCache } from "./oauth";
 import { applyDefaults, type Layer } from "./inherit";
-import { interpolate } from "./util";
 
 /** Session variables: set by scripts and captures, held in memory only, never written to disk. */
 export type Session = Record<string, string>;
@@ -149,7 +148,7 @@ export async function executeRequest(rawTab: RequestTab, deps: Deps): Promise<Ou
   const cap = runCaptures(tab.captures, response);
   setVars(cap.values);
   for (const v of cap.missed) run.logs.push(`capture: nothing found for "${v}"`);
-  run.tests.push(...runAssertions(tab.assertions, response));
+  run.tests.push(...runAssertions(tab.assertions, response, (t) => interpolate(t, eff())));
 
   for (const code of post) {
     const r = await runScript(code, {

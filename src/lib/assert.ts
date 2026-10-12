@@ -31,11 +31,13 @@ export function describeAssertion(a: Assertion): string {
   return `${target} ${ops[a.op]}${a.op === "exists" ? "" : " " + a.value}`;
 }
 
-export function runAssertions(list: Assertion[], res: ResponseData): TestResult[] {
+/** `sub` fills in {{variables}} in the expected value and the path, so an assertion can compare against a captured or environment value. */
+export function runAssertions(list: Assertion[], res: ResponseData, sub: (s: string) => string = (s) => s): TestResult[] {
   const json = parseJsonSafe(res.body);
   return list
     .filter((a) => a.enabled)
-    .map((a) => {
+    .map((raw) => {
+      const a: Assertion = { ...raw, value: sub(raw.value), path: sub(raw.path) };
       const name = describeAssertion(a);
       let actual: unknown;
       switch (a.kind) {

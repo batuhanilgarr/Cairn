@@ -1,0 +1,23 @@
+{
+  "name": "@reqnest/cli",
+  "version": "0.1.0",
+  "description": "Run Reqnest collections in CI: assertions, scripts, OAuth, JUnit/JSON/HTML reports",
+  "type": "module",
+  "bin": { "reqnest": "dist/reqnest.mjs" },
+  "files": ["dist"],
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc --noEmit -p .",
+    "test": "node build.mjs && node --test test/cli.test.mjs"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "esbuild": "^0.25.0",
+    "tough-cookie": "^5.1.0",
+    "typescript": "~5.8.0",
+    "undici": "^7.0.0"
+  },
+  "license": "MIT"
+}

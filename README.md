@@ -29,6 +29,7 @@ No account, no cloud, no telemetry. Fast startup, tiny footprint.
 - **Code generation** in 14 languages (⇧⌘G), variables resolved or kept as `{{name}}`
 - **Cookie jar**: stored on this Mac, sent automatically, viewable and editable in Settings > Cookies; per-response Set-Cookie tab
 - **Response history & diff**: the last 20 responses per request, side-by-side body/header comparison (free, unlike some alternatives)
+- **CLI for CI** (`cli/`): `reqnest run ./collection --env Staging --junit results.xml`: the same pipeline as the app (inheritance, captures, scripts, assertions, OAuth, cookies), data-driven runs, JUnit/JSON/HTML reports, a GitHub Action. See [cli/README.md](cli/README.md)
 - **Command palette** (⌘K): jump to any request, tab or environment, run actions
 - **Auto-save** (optional) writes request edits to disk as you type
 - Draggable split between request and response
@@ -39,7 +40,6 @@ No account, no cloud, no telemetry. Fast startup, tiny footprint.
 
 ## Roadmap
 
-CLI runner for CI (JUnit output),
 gRPC / WebSocket / SSE / GraphQL, mock server, MCP support, team sync (self-hostable).
 
 ## Develop

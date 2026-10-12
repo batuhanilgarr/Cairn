@@ -19,7 +19,7 @@ export type ScriptResult = {
  * Scripts run in a Web Worker: no DOM, no access to the app or to Tauri's IPC, killed after a
  * timeout. A collection from someone else can't reach your files or secrets through a script.
  */
-const HARNESS = `
+export const HARNESS = `
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
 const fmt = (a) => typeof a === 'string' ? a : (() => { try { return JSON.stringify(a); } catch { return String(a); } })();
 const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);

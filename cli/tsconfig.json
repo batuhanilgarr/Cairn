@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "lib": ["ES2023", "DOM"],
+    "types": ["node"],
+    "allowImportingTsExtensions": true,
+    "paths": {
+      "@tauri-apps/api/core": ["./shims/tauri-core.ts"],
+      "@tauri-apps/plugin-dialog": ["./shims/plugin-dialog.ts"],
+      "@tauri-apps/plugin-opener": ["./shims/plugin-opener.ts"]
+    }
+  },
+  "include": ["src", "shims", "../src/lib"]
+}
