@@ -370,3 +370,21 @@ h4 { margin: 4px 0; font-size: 12px; text-transform: uppercase; letter-spacing: 
 .cookie-add { margin: 16px 0; display: flex; flex-direction: column; gap: 6px; }
 .cookie-add .row { margin-bottom: 0; }
 .cookie-add .cell { flex: 1; }
+
+/* response diff */
+.diff { width: 1000px; max-width: 96vw; height: 640px; max-height: 90vh; display: flex; flex-direction: column; background: var(--bg); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; box-shadow: 0 24px 80px rgba(0,0,0,.4); }
+.diff-head { display: flex; align-items: center; gap: 14px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+.diff-head h3 { margin: 0; font-size: 15px; }
+.diff-head .seg { margin: 0; }
+.diff-pick { display: flex; align-items: center; gap: 10px; padding: 8px 16px; border-bottom: 1px solid var(--border); }
+.diff-pick select { flex: 1; min-width: 0; }
+.diff-body { flex: 1; overflow: auto; min-height: 0; }
+.diff-body .cm-mergeView, .diff-body .cm-editor { font-size: 12px; }
+.diff-body .cm-changedLine { background: color-mix(in srgb, var(--accent) 10%, transparent) !important; }
+.diff-body .cm-deletedChunk { background: color-mix(in srgb, var(--bad) 12%, transparent); }
+.diff-body .cm-insertedLine, .diff-body .cm-changedText { background: color-mix(in srgb, var(--ok) 22%, transparent) !important; }
+.diff-body .cm-deletedLine, .diff-body del { background: color-mix(in srgb, var(--bad) 22%, transparent) !important; text-decoration: none; }
+.diff-body .cm-collapsedLines { background: var(--hover); color: var(--muted); }
+.view-banner { display: flex; align-items: center; gap: 10px; padding: 6px 12px; background: color-mix(in srgb, var(--warn) 16%, transparent); font-size: 12px; }
+.hist-pick { margin: 0 6px; padding: 2px 6px; font-size: 12px; max-width: 190px; }
+.diff-head .seg { min-width: 170px; }

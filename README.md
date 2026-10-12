@@ -25,6 +25,10 @@ No account, no cloud, no telemetry. Fast startup, tiny footprint.
 - **WebSocket**: connect with headers/auth/subprotocols (custom CA and client certs supported), send text, JSON or binary (base64), saved messages, a filterable live message log
 - **Server-Sent Events** (GET or POST, e.g. LLM streaming APIs): live event log with event names, ids, retry; non-SSE streams (NDJSON) show as raw chunks
 - **gRPC**: schema from server reflection or your `.proto` files (compiled in-process, import paths supported), method picker with JSON templates, unary, server/client/bidirectional streaming, metadata, deadlines, TLS with custom CA / client certs / skip-verify, final status code and trailers. int64 values keep full precision
+- **Binary responses** (images, audio, video, PDF previews; hex dump for the rest), Save to file, time-to-first-byte
+- **Code generation** in 14 languages (⇧⌘G), variables resolved or kept as `{{name}}`
+- **Cookie jar**: stored on this Mac, sent automatically, viewable and editable in Settings > Cookies; per-response Set-Cookie tab
+- **Response history & diff**: the last 20 responses per request, side-by-side body/header comparison (free, unlike some alternatives)
 - **Command palette** (⌘K): jump to any request, tab or environment, run actions
 - **Auto-save** (optional) writes request edits to disk as you type
 - Draggable split between request and response

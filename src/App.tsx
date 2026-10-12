@@ -20,6 +20,7 @@ import { DefaultsModal } from "./DefaultsModal";
 import { GraphQLPanel } from "./GraphQLPanel";
 import { StreamLog } from "./StreamLog";
 import { CodeGenModal } from "./CodeGenModal";
+import { DiffModal, type HistEntry } from "./DiffModal";
 import { BinaryView, suggestFileName } from "./BinaryView";
 import { parseSetCookie } from "./lib/cookies";
 import { GrpcPanel, type GrpcSchema } from "./GrpcPanel";
@@ -131,6 +132,9 @@ export default function App() {
   const [oauthBusy, setOauthBusy] = useState(false);
   const [streams, setStreams] = useState<Record<string, StreamState>>({});
   const [codegenOpen, setCodegenOpen] = useState(false);
+  const [respHist, setRespHist] = useState<Record<string, HistEntry[]>>({});
+  const [viewing, setViewing] = useState<Record<string, number | null>>({});
+  const [diffOpen, setDiffOpen] = useState(false);
   const [grpcSchemas, setGrpcSchemas] = useState<Record<string, GrpcSchema>>({});
   const entryN = useRef(0);
   const queue = useRef<Record<string, { entries: StreamEntry[]; patch: Partial<StreamState> }>>({});
@@ -161,7 +165,10 @@ export default function App() {
   const isStreamKind = active?.kind === "ws" || active?.kind === "sse" || active?.kind === "grpc";
   const streamState = (active && streams[active.id]) || EMPTY_STREAM;
   const streamStatus = streamState.status;
-  const response = active ? responses[active.id] : null;
+  const hist = (active && respHist[active.id]) || [];
+  const viewIdx = active ? (viewing[active.id] ?? null) : null;
+  const latestResponse = active ? responses[active.id] : null;
+  const response = viewIdx !== null && hist[viewIdx] ? hist[viewIdx].response : latestResponse;
   const run = active ? runs[active.id] : null;
 
   useEffect(() => {
@@ -791,6 +798,11 @@ export default function App() {
         if (missing.length) flash(`Undefined variable${missing.length > 1 ? "s" : ""}: ${missing.join(", ")}`, 4500);
       }
       setResponses((r) => ({ ...r, [tab.id]: out.response ?? { error: out.error ?? "Request failed" } }));
+      setViewing((v) => ({ ...v, [tab.id]: null }));
+      if (out.response) {
+        const saved = out.response.sizeBytes > 2_000_000 ? { ...out.response, body: "(too large to keep in history)", bodyBase64: null } : out.response;
+        setRespHist((h) => ({ ...h, [tab.id]: [...(h[tab.id] ?? []), { n: ++entryN.current, at: Date.now(), response: saved }].slice(-20) }));
+      }
       setRuns((r) => ({ ...r, [tab.id]: out.run }));
       if (out.run.scriptError || out.run.tests.some((t) => !t.passed)) setResSection("tests");
     } finally {
@@ -1002,6 +1014,7 @@ export default function App() {
     { id: "a:newc", group: "Action", title: "New collection…", run: () => fire("new-collection") },
     { id: "a:import", group: "Action", title: "Import OpenAPI, Postman, Bruno…", run: () => fire("import") },
     { id: "a:run", group: "Action", title: "Run collection", run: () => fire("run-collection") },
+    { id: "a:diff", group: "Action", title: "Compare responses of this request", run: () => (hist.length > 1 ? setDiffOpen(true) : flash("Send the request at least twice to compare responses")) },
     { id: "a:code", group: "Action", title: "Generate code for this request", hint: "⇧⌘G", run: () => fire("codegen") },
     { id: "a:side", group: "View", title: "Toggle sidebar", hint: "⌘B", run: () => fire("toggle-sidebar") },
     { id: "a:set", group: "App", title: "Settings", hint: "⌘,", run: () => fire("settings") },
@@ -1474,6 +1487,17 @@ export default function App() {
               </button>
             )}
             <div className="spacer" />
+            {hist.length > 1 && (
+              <>
+                <select className="hist-pick" value={viewIdx ?? "latest"} title="Earlier responses to this request" onChange={(e) => setViewing((v) => ({ ...v, [active.id]: e.target.value === "latest" ? null : Number(e.target.value) }))}>
+                  <option value="latest">Latest</option>
+                  {hist.slice(0, -1).map((h, i) => (
+                    <option key={h.n} value={i}>{new Date(h.at).toTimeString().slice(0, 8)} · {h.response.status} · {h.response.timeMs} ms</option>
+                  )).reverse()}
+                </select>
+                <button className="btn small" onClick={() => setDiffOpen(true)} title="Compare two responses side by side">Compare</button>
+              </>
+            )}
             {response && !("error" in response) && (
               <div className="meta">
                 <span className={`pill ${statusClass(response.status)}`}>
@@ -1486,6 +1510,12 @@ export default function App() {
               </div>
             )}
           </nav>
+          {viewIdx !== null && hist[viewIdx] && (
+            <div className="view-banner">
+              Showing an earlier response from {new Date(hist[viewIdx].at).toLocaleTimeString()}.
+              <button className="link" onClick={() => setViewing((v) => ({ ...v, [active.id]: null }))}>Back to latest</button>
+            </div>
+          )}
           <div className={`panel-body ${resSection === "body" && response && !("error" in response) ? "fill" : ""}`}>
             {loading[active.id] && <p className="muted">Sending request…</p>}
             {!loading[active.id] && !response && <p className="muted center">Hit <kbd>⌘↵</kbd> to send a request.</p>}
@@ -1586,6 +1616,7 @@ export default function App() {
         </section>
         )}
       </main>
+      {diffOpen && hist.length > 1 && <DiffModal items={hist} onClose={() => setDiffOpen(false)} />}
       {codegenOpen && <CodeGenModal build={buildSnippet} onClose={() => setCodegenOpen(false)} />}
       {paletteOpen && <CommandPalette commands={commands} onClose={() => setPaletteOpen(false)} />}
       {settingsOpen && (

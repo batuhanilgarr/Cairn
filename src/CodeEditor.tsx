@@ -52,7 +52,7 @@ type Props = {
 
 /* ------------------------------- theme ------------------------------- */
 
-const theme = EditorView.theme({
+export const theme = EditorView.theme({
   "&": { color: "var(--text)", backgroundColor: "transparent", fontSize: "12px", height: "100%" },
   ".cm-scroller": { fontFamily: "var(--mono)", lineHeight: "1.6", overflow: "auto" },
   ".cm-content": { caretColor: "var(--accent)", padding: "6px 0" },
@@ -79,7 +79,7 @@ const theme = EditorView.theme({
   ".cm-placeholder": { color: "var(--muted)" },
 });
 
-const highlight = HighlightStyle.define([
+export const highlight = HighlightStyle.define([
   { tag: [t.propertyName, t.attributeName], color: "var(--j-key)" },
   { tag: [t.string, t.special(t.string)], color: "var(--j-str)" },
   { tag: [t.number, t.integer, t.float], color: "var(--j-num)" },
