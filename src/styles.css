@@ -125,3 +125,29 @@ select { cursor: pointer; }
 .htable { border-collapse: collapse; width: 100%; font-size: 12px; }
 .htable td { padding: 5px 8px; border-bottom: 1px solid var(--border); vertical-align: top; word-break: break-all; }
 .htable td:first-child { color: var(--accent); font-family: var(--mono); width: 32%; }
+
+/* collections, dialogs, toast */
+.empty p { color: var(--muted); margin: 4px 0 12px; }
+.btn.block { display: block; width: 100%; margin-bottom: 8px; }
+.btn.danger { background: var(--bad); border-color: var(--bad); color: #fff; font-weight: 600; }
+.coll-head { display: flex; align-items: center; padding: 4px 8px 6px 14px; }
+.coll-name { flex: 1; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tree-row { display: flex; align-items: center; gap: 4px; padding: 5px 8px 5px 10px; cursor: pointer; border-radius: 6px; margin: 0 6px; }
+.tree-row:hover { background: var(--hover); }
+.tree-row.on { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.tree-row.sel:not(.on) { background: var(--hover); }
+.chev { width: 10px; color: var(--muted); font-size: 10px; flex: none; }
+.tree-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.unsaved { color: var(--accent); margin-left: 6px; font-size: 9px; }
+.row-actions { display: none; gap: 2px; }
+.tree-row:hover .row-actions, .row-actions.always { display: flex; }
+.row-actions button { border: 0; background: transparent; cursor: pointer; border-radius: 4px; padding: 1px 4px; color: var(--muted); font-size: 12px; }
+.row-actions button:hover { background: var(--hover); color: var(--text); }
+.icon-btn.lock { width: 24px; font-size: 12px; opacity: .55; }
+.icon-btn.lock.on { opacity: 1; }
+.scrim { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: grid; place-items: center; z-index: 50; }
+.dialog { width: 380px; background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 18px; box-shadow: 0 20px 60px rgba(0,0,0,.35); }
+.dialog h3 { margin: 0 0 8px; font-size: 15px; }
+.dialog .cell { width: 100%; margin-top: 6px; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 7px 14px; border-radius: 20px; font-size: 12px; z-index: 60; }

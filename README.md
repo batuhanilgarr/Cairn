@@ -10,9 +10,13 @@ No account, no cloud, no telemetry. Fast startup, tiny footprint.
 - Bodies: JSON, text, form-urlencoded
 - Auth: Bearer, Basic
 - Environments with `{{variables}}`
+- **Git-friendly collections**: a collection is a folder of plain YAML files (`*.req.yaml`), no generated IDs, stable key order, literal-block bodies for clean diffs. Order comes from file names, never from file contents
+- Environments stored in `environments/*.env.yaml`; variables marked 🔒 secret live in `.reqnest/secrets.yaml` (auto-gitignored)
+- Paste a `curl ...` command into the URL bar: method, headers, body, auth and Content-Type are filled in automatically
+- Edits made outside the app (git pull, editor) are picked up when the window regains focus
 - Tabs, request history, JSON highlighting, response headers/size/time
 - Per-request: redirects, TLS verification toggle, timeout
-- `⌘↵` send, `⌘T` new tab, `⌘W` close tab
+- `⌘↵` send, `⌘S` save, `⌘T` new tab, `⌘W` close tab
 
 ## Roadmap
 

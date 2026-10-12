@@ -6,9 +6,11 @@ type Props = {
   onChange: (rows: KV[]) => void;
   keyPlaceholder?: string;
   valuePlaceholder?: string;
+  /** Show a per-row "secret" toggle (value is kept out of Git). */
+  secrets?: boolean;
 };
 
-export function KVEditor({ rows, onChange, keyPlaceholder = "Key", valuePlaceholder = "Value" }: Props) {
+export function KVEditor({ rows, onChange, keyPlaceholder = "Key", valuePlaceholder = "Value", secrets }: Props) {
   const update = (id: string, patch: Partial<KV>) => {
     const next = rows.map((r) => (r.id === id ? { ...r, ...patch } : r));
     const last = next[next.length - 1];
@@ -40,9 +42,19 @@ export function KVEditor({ rows, onChange, keyPlaceholder = "Key", valuePlacehol
             className="cell"
             placeholder={valuePlaceholder}
             value={r.value}
+            type={secrets && r.secret ? "password" : "text"}
             spellCheck={false}
             onChange={(e) => update(r.id, { value: e.target.value })}
           />
+          {secrets && (
+            <button
+              className={`icon-btn lock ${r.secret ? "on" : ""}`}
+              title={r.secret ? "Secret: stored locally, never committed" : "Mark as secret"}
+              onClick={() => update(r.id, { secret: !r.secret })}
+            >
+              {r.secret ? "🔒" : "🔓"}
+            </button>
+          )}
           <button className="icon-btn" onClick={() => remove(r.id)} aria-label="Remove row">
             ×
           </button>

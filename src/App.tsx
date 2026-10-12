@@ -1,7 +1,31 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { KVEditor } from "./KVEditor";
-import type { AuthMode, BodyMode, Environment, HistoryItem, RequestTab, ResponseData } from "./lib/types";
+import { Dialog, type DialogState } from "./Dialog";
+import { Tree } from "./Tree";
+import {
+  basename,
+  dirname,
+  listTree,
+  makeDir,
+  pickFolder,
+  readText,
+  removePath,
+  renamePath,
+  writeText,
+} from "./lib/fs";
+import {
+  initCollection,
+  loadEnvironments,
+  parseRequest,
+  readCollectionName,
+  requestPath,
+  saveEnvironment,
+  serializeRequest,
+  slug,
+  uniquePath,
+} from "./lib/collection";
+import type { AuthMode, BodyMode, Collection, Environment, HistoryItem, RequestTab, ResponseData, TreeNode } from "./lib/types";
 import {
   METHODS,
   buildRequest,
@@ -15,11 +39,12 @@ import {
   tryPrettyJson,
   uid,
 } from "./lib/util";
+import { looksLikeCurl, parseCurl } from "./lib/curl";
 import "./styles.css";
 
 type ReqSection = "params" | "headers" | "body" | "auth" | "settings";
 type ResSection = "body" | "headers";
-type SideSection = "history" | "environments";
+type SideSection = "collections" | "history" | "environments";
 
 const defaultEnvs: Environment[] = [
   { id: "env-local", name: "Local", vars: [emptyKV()] },
@@ -38,23 +63,269 @@ export default function App() {
   const [loading, setLoading] = useState<Record<string, boolean>>({});
   const [reqSection, setReqSection] = useState<ReqSection>("params");
   const [resSection, setResSection] = useState<ResSection>("body");
-  const [side, setSide] = useState<SideSection>("history");
+  const [side, setSide] = useState<SideSection>(() => load("rq.side", "collections"));
+  const [collection, setCollection] = useState<Collection | null>(() => load("rq.collection", null));
+  const [tree, setTree] = useState<TreeNode[]>([]);
+  const [selectedDir, setSelectedDir] = useState<string>(() => load<Collection | null>("rq.collection", null)?.root ?? "");
+  const [dialog, setDialog] = useState<DialogState | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const writtenEnvs = useRef<Map<string, string>>(new Map());
+  const tabsRef = useRef<RequestTab[]>([]);
   const [rawView, setRawView] = useState(false);
 
   const active = tabs.find((t) => t.id === activeId) ?? tabs[0];
   const env = envs.find((e) => e.id === envId);
   const response = active ? responses[active.id] : null;
 
-  useEffect(() => save("rq.tabs", tabs), [tabs]);
+  useEffect(() => {
+    tabsRef.current = tabs;
+    save("rq.tabs", tabs);
+  }, [tabs]);
   useEffect(() => save("rq.active", active?.id ?? ""), [active?.id]);
-  useEffect(() => save("rq.envs", envs), [envs]);
+  useEffect(() => {
+    if (!collection) save("rq.envs", envs);
+  }, [envs, collection]);
+  useEffect(() => save("rq.side", side), [side]);
+  useEffect(() => save("rq.collection", collection), [collection]);
   useEffect(() => save("rq.envId", envId), [envId]);
   useEffect(() => save("rq.history", history.slice(0, 100)), [history]);
+
+  const ask = (title: string, initial = "", confirm = "Create", label?: string) =>
+    new Promise<string | null>((resolve) =>
+      setDialog({ kind: "prompt", title, initial, confirm, label, resolve: (v) => (setDialog(null), resolve(v)) }),
+    );
+  const confirmDialog = (title: string, message: string, confirm = "Delete") =>
+    new Promise<boolean>((resolve) =>
+      setDialog({ kind: "confirm", title, message, confirm, danger: true, resolve: (v) => (setDialog(null), resolve(v)) }),
+    );
+  const info = (title: string, message: string) =>
+    new Promise<void>((resolve) => setDialog({ kind: "info", title, message, resolve: () => (setDialog(null), resolve()) }));
+  const flash = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast((t) => (t === msg ? null : t)), 1800);
+  };
+  const guard = async (fn: () => Promise<void>) => {
+    try {
+      await fn();
+    } catch (e) {
+      await info("Something went wrong", String(e));
+    }
+  };
+
+  const refreshTree = useCallback(async () => {
+    if (!collection) return setTree([]);
+    try {
+      setTree(await listTree(collection.root));
+    } catch {
+      setTree([]);
+    }
+  }, [collection]);
+
+  const loadCollection = async (root: string) => {
+    const name = (await readCollectionName(root)) ?? basename(root);
+    setCollection({ root, name });
+    setSelectedDir(root);
+    const loaded = await loadEnvironments(root);
+    writtenEnvs.current = new Map();
+    setEnvs(loaded.length ? loaded : []);
+    setEnvId(loaded[0]?.id ?? "");
+    setSide("collections");
+  };
+
+  const openCollection = () =>
+    guard(async () => {
+      const root = await pickFolder("Open a collection folder");
+      if (!root) return;
+      if ((await readCollectionName(root)) === null) {
+        const ok = await confirmDialog(
+          "Not a Reqnest collection yet",
+          `"${basename(root)}" has no reqnest.yaml. Turn this folder into a collection? Existing files are left untouched.`,
+        ).catch(() => false);
+        if (!ok) return;
+        await initCollection(root, basename(root));
+      }
+      await loadCollection(root);
+    });
+
+  const newCollection = () =>
+    guard(async () => {
+      const parent = await pickFolder("Choose where to create the collection");
+      if (!parent) return;
+      const name = await ask("New collection", "My API", "Create");
+      if (!name) return;
+      const root = await uniquePath(parent, slug(name), "");
+      await makeDir(root);
+      await initCollection(root, name);
+      await loadCollection(root);
+    });
+
+  const closeCollection = () => {
+    setCollection(null);
+    setTree([]);
+    setEnvs(load("rq.envs", defaultEnvs));
+    setEnvId("env-local");
+  };
+
+  const openFile = (path: string) =>
+    guard(async () => {
+      const existing = tabs.find((t) => t.file === path);
+      if (existing) return setActiveId(existing.id);
+      const text = await readText(path);
+      if (text === null) throw new Error("File no longer exists");
+      addTab(parseRequest(text, path));
+    });
+
+  const writeTab = async (tab: RequestTab, file: string) => {
+    const text = serializeRequest(tab);
+    await writeText(file, text);
+    setTabs((ts) => ts.map((t) => (t.id === tab.id ? { ...t, file, saved: text } : t)));
+  };
+
+  const saveTab = (tab: RequestTab) =>
+    guard(async () => {
+      if (tab.file) {
+        await writeTab(tab, tab.file);
+        return flash("Saved");
+      }
+      if (!collection) {
+        await info("Open a collection first", "Create or open a collection folder (Collections tab) to save requests as files.");
+        return setSide("collections");
+      }
+      const name = await ask("Save request", tab.name === "New request" ? "" : tab.name, "Save", "Saved as a plain YAML file in your collection.");
+      if (!name) return;
+      const file = await requestPath(selectedDir || collection.root, name);
+      await writeTab({ ...tab, name }, file);
+      setTabs((ts) => ts.map((t) => (t.id === tab.id ? { ...t, name } : t)));
+      await refreshTree();
+      flash("Saved");
+    });
+
+  const newRequestIn = (dir: string) =>
+    guard(async () => {
+      const name = await ask("New request", "", "Create");
+      if (!name) return;
+      const file = await requestPath(dir, name);
+      const tab = { ...newTab(), name };
+      await writeTab(tab, file);
+      await refreshTree();
+      addTab({ ...tab, file, saved: serializeRequest(tab) });
+    });
+
+  const newFolderIn = (dir: string) =>
+    guard(async () => {
+      const name = await ask("New folder", "", "Create");
+      if (!name) return;
+      await makeDir(await uniquePath(dir, slug(name), ""));
+      await refreshTree();
+    });
+
+  const renameNode = (node: TreeNode) =>
+    guard(async () => {
+      const isReq = !node.isDir;
+      const current = isReq ? node.name.replace(/\.req\.ya?ml$/, "") : node.name;
+      const name = await ask(isReq ? "Rename request" : "Rename folder", current, "Rename");
+      if (!name || name === current) return;
+      const dir = dirname(node.path);
+      const target = isReq ? await requestPath(dir, name) : await uniquePath(dir, slug(name), "");
+      if (isReq) {
+        const text = await readText(node.path);
+        const tab = parseRequest(text ?? "", node.path);
+        const renamed = serializeRequest({ ...tab, name });
+        await writeText(target, renamed);
+        await removePath(node.path);
+        setTabs((ts) => ts.map((t) => (t.file === node.path ? { ...t, file: target, name, saved: renamed } : t)));
+      } else {
+        await renamePath(node.path, target);
+        setTabs((ts) => ts.map((t) => (t.file?.startsWith(node.path + "/") ? { ...t, file: target + t.file.slice(node.path.length) } : t)));
+        if (selectedDir.startsWith(node.path)) setSelectedDir(collection!.root);
+      }
+      await refreshTree();
+    });
+
+  const duplicateNode = (node: TreeNode) =>
+    guard(async () => {
+      const text = await readText(node.path);
+      const tab = parseRequest(text ?? "", node.path);
+      const name = `${tab.name} copy`;
+      await writeText(await requestPath(dirname(node.path), name), serializeRequest({ ...tab, name }));
+      await refreshTree();
+    });
+
+  const deleteNode = (node: TreeNode) =>
+    guard(async () => {
+      const ok = await confirmDialog(
+        node.isDir ? "Delete folder" : "Delete request",
+        node.isDir ? `"${node.name}" and everything inside it will be deleted from disk.` : `"${node.name}" will be deleted from disk.`,
+      );
+      if (!ok) return;
+      await removePath(node.path);
+      setTabs((ts) => {
+        const keep = ts.filter((t) => !(t.file === node.path || t.file?.startsWith(node.path + "/")));
+        return keep.length ? keep : [newTab()];
+      });
+      if (selectedDir === node.path) setSelectedDir(collection!.root);
+      await refreshTree();
+    });
 
   const patch = useCallback(
     (p: Partial<RequestTab>) => setTabs((ts) => ts.map((t) => (t.id === active.id ? { ...t, ...p } : t))),
     [active?.id],
   );
+
+  // Initial load of the collection remembered from last session.
+  useEffect(() => {
+    if (collection) {
+      loadEnvironments(collection.root).then((e) => {
+        setEnvs(e);
+        setEnvId((cur) => (e.some((x) => x.id === cur) ? cur : (e[0]?.id ?? "")));
+      }).catch(() => {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    refreshTree();
+  }, [refreshTree]);
+
+  // Pick up changes made outside the app (git pull, editor): refresh tree and reload clean tabs.
+  useEffect(() => {
+    const onFocus = async () => {
+      await refreshTree();
+      const current = tabsRef.current;
+      for (const t of current) {
+        if (!t.file || t.saved == null || serializeRequest(t) !== t.saved) continue;
+        const text = await readText(t.file).catch(() => null);
+        if (text !== null && text !== t.saved) {
+          const fresh = parseRequest(text, t.file);
+          setTabs((ts) => ts.map((x) => (x.id === t.id ? { ...fresh, id: t.id } : x)));
+        }
+      }
+    };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [refreshTree]);
+
+  // Persist environment edits into the collection (debounced).
+  useEffect(() => {
+    if (!collection) return;
+    const timer = setTimeout(async () => {
+      for (const e of envs) {
+        const sig = JSON.stringify([e.name, e.vars.map((v) => [v.key, v.value, v.enabled, v.secret])]);
+        if (writtenEnvs.current.get(e.id) === sig) continue;
+        try {
+          const file = await saveEnvironment(collection.root, e);
+          writtenEnvs.current.set(e.id, sig);
+          if (e.file !== file) {
+            writtenEnvs.current.set(file, sig);
+            setEnvs((all) => all.map((x) => (x.id === e.id ? { ...x, id: file, file } : x)));
+            setEnvId((cur) => (cur === e.id ? file : cur));
+          }
+        } catch {
+          /* surfaced on next explicit action */
+        }
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [envs, collection]);
 
   const addTab = (t?: RequestTab) => {
     const tab = t ?? newTab();
@@ -101,6 +372,10 @@ export default function App() {
         e.preventDefault();
         send();
       }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        saveTab(active);
+      }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "t") {
         e.preventDefault();
         addTab();
@@ -114,6 +389,8 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKey);
   });
 
+  const isDirty = (t: RequestTab) => !!t.file && t.saved != null && serializeRequest(t) !== t.saved;
+  const dirtyFiles = useMemo(() => new Set(tabs.filter(isDirty).map((t) => t.file!)), [tabs]);
   const tabTitle = (t: RequestTab) => t.name !== "New request" ? t.name : t.url.replace(/^https?:\/\//, "") || "New request";
 
   const counts = useMemo(
@@ -138,6 +415,9 @@ export default function App() {
           <span className="logo">◆</span> Reqnest
         </div>
         <div className="seg">
+          <button className={side === "collections" ? "on" : ""} onClick={() => setSide("collections")}>
+            Collections
+          </button>
           <button className={side === "history" ? "on" : ""} onClick={() => setSide("history")}>
             History
           </button>
@@ -146,11 +426,48 @@ export default function App() {
           </button>
         </div>
         <div className="side-body">
+          {side === "collections" && (
+            <>
+              {!collection ? (
+                <div className="pad empty">
+                  <p>Collections are plain folders of YAML files you can commit to Git.</p>
+                  <button className="btn primary block" onClick={newCollection}>New collection…</button>
+                  <button className="btn block" onClick={openCollection}>Open folder…</button>
+                </div>
+              ) : (
+                <>
+                  <div className="coll-head">
+                    <span className="coll-name" title={collection.root}>{collection.name}</span>
+                    <span className="row-actions always">
+                      <button title="New request" onClick={() => newRequestIn(selectedDir || collection.root)}>＋</button>
+                      <button title="New folder" onClick={() => newFolderIn(selectedDir || collection.root)}>▤</button>
+                      <button title="Open another collection" onClick={openCollection}>⌂</button>
+                      <button title="Close collection" onClick={closeCollection}>×</button>
+                    </span>
+                  </div>
+                  {tree.length === 0 && <p className="muted pad">No requests yet. Click ＋ to add one, or press ⌘S on a request.</p>}
+                  <Tree
+                    nodes={tree}
+                    activeFile={active.file ?? null}
+                    selectedDir={selectedDir}
+                    dirty={dirtyFiles}
+                    onOpen={openFile}
+                    onSelectDir={setSelectedDir}
+                    onNewRequest={newRequestIn}
+                    onNewFolder={newFolderIn}
+                    onRename={renameNode}
+                    onDuplicate={duplicateNode}
+                    onDelete={deleteNode}
+                  />
+                </>
+              )}
+            </>
+          )}
           {side === "history" && (
             <>
               {history.length === 0 && <p className="muted pad">Sent requests will show up here.</p>}
               {history.map((h) => (
-                <button key={h.id} className="hist" onClick={() => addTab({ ...h.tab, id: uid() })}>
+                <button key={h.id} className="hist" onClick={() => addTab({ ...h.tab, id: uid(), file: null, saved: null })}>
                   <span className={`m m-${h.method}`}>{h.method}</span>
                   <span className="hist-url">{h.url.replace(/^https?:\/\//, "")}</span>
                   {h.status !== null && <span className={`dot ${statusClass(h.status)}`}>{h.status}</span>}
@@ -176,7 +493,7 @@ export default function App() {
                 <button
                   className="btn small"
                   onClick={() => {
-                    const e: Environment = { id: uid(), name: `Env ${envs.length + 1}`, vars: [emptyKV()] };
+                    const e: Environment = { id: uid(), name: envs.length ? `Env ${envs.length + 1}` : "Local", vars: [emptyKV()] };
                     setEnvs([...envs, e]);
                     setEnvId(e.id);
                   }}
@@ -184,6 +501,7 @@ export default function App() {
                   + New
                 </button>
               </div>
+              {!env && <p className="muted">No environments yet. Create one to use {"{{variables}}"}.</p>}
               {env && (
                 <>
                   <input
@@ -193,12 +511,26 @@ export default function App() {
                   />
                   <p className="muted">
                     Use variables as <code>{"{{name}}"}</code> in URL, headers, body and auth.
+                    {collection ? " Saved in environments/. 🔒 secrets stay local and are never committed." : ""}
                   </p>
                   <KVEditor
+                    secrets={!!collection}
                     rows={env.vars}
                     keyPlaceholder="Variable"
                     onChange={(vars) => setEnvs(envs.map((x) => (x.id === env.id ? { ...x, vars } : x)))}
                   />
+                  <button
+                    className="link"
+                    onClick={async () => {
+                      if (!(await confirmDialog("Delete environment", `"${env.name}" will be removed.`))) return;
+                      if (env.file) await removePath(env.file).catch(() => {});
+                      const rest = envs.filter((x) => x.id !== env.id);
+                      setEnvs(rest);
+                      setEnvId(rest[0]?.id ?? "");
+                    }}
+                  >
+                    Delete environment
+                  </button>
                 </>
               )}
             </div>
@@ -212,6 +544,7 @@ export default function App() {
             <div key={t.id} className={`tab ${t.id === active.id ? "on" : ""}`} onClick={() => setActiveId(t.id)}>
               <span className={`m m-${t.method}`}>{t.method}</span>
               <span className="tab-title">{tabTitle(t)}</span>
+              {isDirty(t) && <b className="unsaved">●</b>}
               <button
                 className="icon-btn"
                 onClick={(e) => {
@@ -248,7 +581,18 @@ export default function App() {
             placeholder="Enter URL, e.g. https://api.example.com/users  (use {{vars}})"
             value={active.url}
             spellCheck={false}
-            onChange={(e) => patch({ url: e.target.value })}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (looksLikeCurl(v)) {
+                const { tab: c, notes } = parseCurl(v);
+                patch({
+                  method: c.method, url: c.url, headers: c.headers, params: [emptyKV()], bodyMode: c.bodyMode, body: c.body,
+                  authMode: c.authMode, authUser: c.authUser, authPass: c.authPass, authToken: "",
+                  insecure: c.insecure, followRedirects: c.followRedirects, timeoutMs: c.timeoutMs,
+                });
+                flash(notes.length ? `Imported cURL — ${notes[0]}` : "Imported cURL command");
+              } else patch({ url: v });
+            }}
             onKeyDown={(e) => e.key === "Enter" && send()}
           />
           <button className="btn primary" onClick={send} disabled={loading[active.id]}>
@@ -404,6 +748,8 @@ export default function App() {
           </div>
         </section>
       </main>
+      <Dialog state={dialog} />
+      {toast && <div className="toast">{toast}</div>}
     </div>
   );
 }
