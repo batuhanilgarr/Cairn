@@ -23,6 +23,8 @@ import { CodeGenModal } from "./CodeGenModal";
 import { DiffModal, type HistEntry } from "./DiffModal";
 import { ExamplesPanel } from "./ExamplesPanel";
 import { MockModal } from "./MockModal";
+import { Welcome } from "./Welcome";
+import { Logo } from "./Logo";
 import { buildRoutes, mockStart, mockStop, type MockHit } from "./lib/mock";
 import { BinaryView, suggestFileName } from "./BinaryView";
 import { parseSetCookie } from "./lib/cookies";
@@ -168,6 +170,10 @@ export default function App() {
   const env = envs.find((e) => e.id === envId);
   const sections = SECTIONS[active?.kind ?? "http"];
   const section: ReqSection = sections.includes(reqSection) ? reqSection : sections[0];
+  const isBlank = (t: RequestTab) =>
+    t.kind === "http" && !t.url.trim() && !t.body && !t.file && t.params.every((r) => !r.key) && t.headers.every((r) => !r.key) &&
+    (t.authMode === "none" || t.authMode === "inherit") && !t.preScript && !t.postScript && !t.assertions.length && !t.examples.length;
+  const showWelcome = !!active && isBlank(active) && !responses[active.id] && !loading[active.id] && !streams[active.id];
   const isStreamKind = active?.kind === "ws" || active?.kind === "sse" || active?.kind === "grpc";
   const streamState = (active && streams[active.id]) || EMPTY_STREAM;
   const streamStatus = streamState.status;
@@ -1124,7 +1130,7 @@ export default function App() {
       <aside className="sidebar">
         <div className="titlebar-drag" data-tauri-drag-region />
         <div className="brand">
-          <span className="logo">◆</span> Reqnest
+          <Logo size={20} /> Reqnest
         </div>
         <div className="seg">
           <button className={side === "collections" ? "on" : ""} onClick={() => setSide("collections")}>
@@ -1354,6 +1360,25 @@ export default function App() {
           </button>
         </div>
 
+        {showWelcome ? (
+          <div className="launch">
+            <Welcome
+              hasCollection={!!collection}
+              onCurl={() => fire("focus-url")}
+              onSample={(k) => {
+                if (k === "get") patch({ url: "https://httpbin.org/get?hello=reqnest", method: "GET" });
+                else if (k === "post") patch({ url: "https://httpbin.org/post", method: "POST", bodyMode: "json", body: '{\n  "name": "Reqnest",\n  "message": "Hello"\n}' });
+                else patch({ kind: "graphql", url: "https://countries.trevorblades.com/graphql", gql: { query: "query {\n  country(code: \"TR\") {\n    name\n    capital\n    languages { name }\n  }\n}", variables: "", operation: "" } });
+              }}
+              onNewCollection={() => fire("new-collection")}
+              onOpenCollection={() => fire("open-collection")}
+              onImport={() => fire("import")}
+              onPalette={() => fire("palette")}
+              onSettings={() => fire("settings")}
+            />
+          </div>
+        ) : (
+        <>
         <section className="panel req" ref={reqPanel} style={{ flex: `0 0 ${splitPct}%` }}>
           <nav className="subtabs">
             {sections.map((s) => (
@@ -1572,7 +1597,7 @@ export default function App() {
           )}
           <div className={`panel-body ${resSection === "body" && response && !("error" in response) ? "fill" : ""}`}>
             {loading[active.id] && <p className="muted">Sending request…</p>}
-            {!loading[active.id] && !response && <p className="muted center">Hit <kbd>⌘↵</kbd> to send a request.</p>}
+            {!loading[active.id] && !response && active.url.trim() && <p className="muted center">Hit <kbd>⌘↵</kbd> to send a request.</p>}
             {response && "error" in response && resSection !== "tests" && resSection !== "console" && <pre className="err">{response.error}</pre>}
             {resSection === "tests" && run && (
               <div className="tests-list">
@@ -1673,6 +1698,8 @@ export default function App() {
             )}
           </div>
         </section>
+        )}
+        </>
         )}
       </main>
       {mockOpen && collection && (

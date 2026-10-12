@@ -410,3 +410,23 @@ h4 { margin: 4px 0; font-size: 12px; text-transform: uppercase; letter-spacing: 
 .mock-hit .pill { min-width: 28px; }
 .row-actions button.live { color: var(--ok); }
 .examples-wrap { padding: 4px 2px; overflow: auto; height: 100%; }
+
+/* welcome */
+.logo-svg { vertical-align: -4px; margin-right: 2px; }
+.brand { display: flex; align-items: center; gap: 8px; }
+.welcome { max-width: 760px; margin: 0 auto; padding: 18px 12px 6px; }
+.welcome-head { display: flex; gap: 16px; align-items: center; margin-bottom: 18px; }
+.welcome-head h2 { margin: 0 0 2px; font-size: 20px; letter-spacing: -.01em; }
+.welcome-head p { margin: 0; }
+.welcome-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.welcome-grid h4 { margin: 0 0 8px; }
+.wcard { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; text-align: left; border: 1px solid var(--border); background: var(--bg-input); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; cursor: pointer; }
+.wcard:hover { border-color: var(--accent); background: var(--hover); }
+.wcard span { color: var(--muted); font-size: 12px; }
+.wkeys { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 12px; font-size: 12px; color: var(--muted); }
+.wkeys button { border: 0; background: none; padding: 0; cursor: pointer; color: var(--muted); }
+.wkeys button:hover { color: var(--text); }
+.wkeys kbd { opacity: 1; background: var(--hover); border: 1px solid var(--border); border-radius: 5px; padding: 0 6px; margin: 0 4px 0 0; }
+.welcome-foot { margin-top: 10px; }
+.launch { flex: 1; overflow: auto; display: flex; align-items: center; justify-content: center; padding: 20px; border-top: 1px solid var(--border); }
+.launch .welcome { width: 100%; }
