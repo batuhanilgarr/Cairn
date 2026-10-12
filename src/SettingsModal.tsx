@@ -3,13 +3,15 @@ import { getVersion } from "@tauri-apps/api/app";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { ACCENTS, DEFAULT_SETTINGS, type Settings } from "./lib/settings";
 import { pickFile } from "./lib/fs";
+import { CookiesPanel } from "./CookiesPanel";
 
-export type SettingsSection = "general" | "appearance" | "network" | "shortcuts" | "data" | "about";
+export type SettingsSection = "general" | "appearance" | "network" | "cookies" | "shortcuts" | "data" | "about";
 
 const NAV: { id: SettingsSection; label: string; icon: string }[] = [
   { id: "general", label: "Requests", icon: "⇄" },
   { id: "appearance", label: "Appearance", icon: "◐" },
   { id: "network", label: "Network", icon: "☍" },
+  { id: "cookies", label: "Cookies", icon: "◍" },
   { id: "shortcuts", label: "Shortcuts", icon: "⌘" },
   { id: "data", label: "Data", icon: "▤" },
   { id: "about", label: "About", icon: "ⓘ" },
@@ -155,6 +157,14 @@ export function SettingsModal({ settings: s, onChange, section, onSection, onClo
               {row("Client certificate", "For mutual TLS. PEM certificate (and key, below).", pathField("clientCert", "Not set", ["pem", "crt", "cer"]))}
               {row("Client key", "PEM private key, if separate from the certificate.", pathField("clientKey", "Not set", ["pem", "key"]))}
               {row("User agent", "Leave empty for the default.", <input className="cell" placeholder="Reqnest/0.1.0" value={s.userAgent} spellCheck={false} onChange={(e) => onChange({ userAgent: e.target.value })} />)}
+            </>
+          )}
+
+          {section === "cookies" && (
+            <>
+              <h2>Cookies</h2>
+              {row("Store and send cookies", "Like a browser: cookies from responses are saved and sent with later requests to the same site. Kept on this Mac.", toggle("cookies"))}
+              <CookiesPanel />
             </>
           )}
 

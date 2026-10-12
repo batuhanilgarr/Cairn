@@ -42,6 +42,9 @@ hyper-rustls = { version = "0.27.10", default-features = false, features = ["htt
 hyper-util = { version = "0.1.21", features = ["client-legacy", "tokio", "http2"] }
 tower = { version = "0.5.3", features = ["util"] }
 http = "1.5.0"
+cookie_store = { version = "0.22.1", features = ["serde_json"] }
+url = "2.5.8"
+time = "0.3.55"
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration

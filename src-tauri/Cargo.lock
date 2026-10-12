@@ -3386,6 +3386,7 @@ name = "reqnest"
 version = "0.1.0"
 dependencies = [
  "base64 0.23.1",
+ "cookie_store",
  "futures-util",
  "http",
  "hyper-rustls",
@@ -3403,12 +3404,14 @@ dependencies = [
  "tauri-build",
  "tauri-plugin-dialog",
  "tauri-plugin-opener",
+ "time",
  "tokio",
  "tokio-stream",
  "tokio-tungstenite",
  "tonic",
  "tonic-reflection",
  "tower",
+ "url",
  "webpki-roots 1.0.9",
 ]
 

@@ -1,8 +1,10 @@
 use serde::{Deserialize, Serialize};
+pub mod cookies;
 pub mod grpc;
 pub mod streams;
 use std::fs;
 use std::path::Path;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 #[derive(Deserialize, Clone)]
@@ -33,6 +35,8 @@ pub struct NetworkSettings {
     pub client_cert: String,
     pub client_key: String,
     pub user_agent: String,
+    /// Cookies are stored and sent automatically unless this is set.
+    pub cookies_disabled: bool,
 }
 
 #[derive(Serialize)]
@@ -182,6 +186,10 @@ pub(crate) fn build_client(spec: &RequestSpec, redirect: reqwest::redirect::Poli
     // A stream is meant to stay open: only the connection attempt is time-limited, not the whole body.
     let limit = Duration::from_millis(spec.timeout_ms.unwrap_or(30_000));
     b = if streaming { b.connect_timeout(limit) } else { b.timeout(limit) };
+
+    if !n.cookies_disabled {
+        b = b.cookie_provider(Arc::new(cookies::jar()));
+    }
 
     match n.proxy_mode.as_str() {
         "none" => b = b.no_proxy(),
@@ -448,6 +456,12 @@ pub fn run() {
         .manage(streams::Streams::default())
         .manage(grpc::Pools::default())
         .setup(|app| {
+            {
+                use tauri::Manager;
+                if let Ok(dir) = app.path().app_data_dir() {
+                    cookies::init(dir.join("cookies.json"));
+                }
+            }
             let menu = build_menu(app.handle())?;
             app.set_menu(menu)?;
             Ok(())
@@ -477,7 +491,11 @@ pub fn run() {
             remove_path,
             rename_path,
             path_exists,
-            save_bytes
+            save_bytes,
+            cookies::cookies_list,
+            cookies::cookies_delete,
+            cookies::cookies_clear,
+            cookies::cookies_add
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

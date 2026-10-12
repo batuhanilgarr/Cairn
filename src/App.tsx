@@ -21,6 +21,7 @@ import { GraphQLPanel } from "./GraphQLPanel";
 import { StreamLog } from "./StreamLog";
 import { CodeGenModal } from "./CodeGenModal";
 import { BinaryView, suggestFileName } from "./BinaryView";
+import { parseSetCookie } from "./lib/cookies";
 import { GrpcPanel, type GrpcSchema } from "./GrpcPanel";
 import { WsPanel, type WsMode } from "./WsPanel";
 import { EMPTY_STREAM, MAX_ENTRIES, grpcCall, grpcDescribe, grpcEnd, grpcSend, sseConnect, streamStop, subscribe, unsubscribe, wsClose, wsConnect, wsSend, type StreamEntry, type StreamEvent, type StreamState } from "./lib/stream";
@@ -93,7 +94,7 @@ const SECTIONS: Record<RequestKind, ReqSection[]> = {
 };
 const KIND_LABEL: Record<RequestKind, string> = { http: "HTTP", graphql: "GraphQL", sse: "SSE", ws: "WebSocket", grpc: "gRPC" };
 const pillOf = (t: RequestTab) => (t.kind === "http" ? t.method : t.kind === "graphql" ? "GQL" : t.kind === "grpc" ? "gRPC" : t.kind.toUpperCase());
-type ResSection = "body" | "headers" | "tests" | "console";
+type ResSection = "body" | "headers" | "cookies" | "tests" | "console";
 type SideSection = "collections" | "history" | "environments";
 
 const defaultEnvs: Environment[] = [
@@ -1043,6 +1044,11 @@ export default function App() {
     return "text";
   }, [response]);
 
+  const setCookies = useMemo(
+    () => (!response || "error" in response ? [] : response.headers.filter(([k]) => k.toLowerCase() === "set-cookie").map(([, v]) => parseSetCookie(v))),
+    [response],
+  );
+
   const resBody = useMemo(() => {
     if (!response || "error" in response) return null;
     const pretty = tryPrettyJson(response.body);
@@ -1448,6 +1454,11 @@ export default function App() {
             <button className={resSection === "headers" ? "on" : ""} onClick={() => setResSection("headers")}>
               Headers{response && !("error" in response) && <i>{response.headers.length}</i>}
             </button>
+            {setCookies.length > 0 && (
+              <button className={resSection === "cookies" ? "on" : ""} onClick={() => setResSection("cookies")}>
+                Cookies<i>{setCookies.length}</i>
+              </button>
+            )}
             <button className={resSection === "tests" ? "on" : ""} onClick={() => setResSection("tests")}>
               Tests
               {run && run.tests.length > 0 && (
@@ -1543,6 +1554,21 @@ export default function App() {
                 </div>
                 )}
               </>
+            )}
+            {response && !("error" in response) && resSection === "cookies" && (
+              <table className="htable">
+                <tbody>
+                  {setCookies.map((c, i) => (
+                    <tr key={i}>
+                      <td>{c.name}</td>
+                      <td>
+                        {c.value}
+                        {c.attrs.length > 0 && <div className="muted small">{c.attrs.join(" · ")}</div>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             )}
             {response && !("error" in response) && resSection === "headers" && (
               <table className="htable">

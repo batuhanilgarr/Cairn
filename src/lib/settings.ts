@@ -19,6 +19,7 @@ export type Settings = {
   clientCert: string;
   clientKey: string;
   userAgent: string;
+  cookies: boolean;
 };
 
 export const ACCENTS: { name: string; light: string; dark: string }[] = [
@@ -47,6 +48,7 @@ export const DEFAULT_SETTINGS: Settings = {
   clientCert: "",
   clientKey: "",
   userAgent: "",
+  cookies: true,
 };
 
 export const loadSettings = (): Settings => ({ ...DEFAULT_SETTINGS, ...load<Partial<Settings>>("rq.settings", {}) });
@@ -70,4 +72,5 @@ export const networkOf = (s: Settings) => ({
   clientCert: s.clientCert,
   clientKey: s.clientKey,
   userAgent: s.userAgent,
+  cookiesDisabled: !s.cookies,
 });
