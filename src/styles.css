@@ -346,3 +346,15 @@ h4 { margin: 4px 0; font-size: 12px; text-transform: uppercase; letter-spacing: 
 .bin-media img, .bin-media video { max-width: 100%; max-height: 52vh; border-radius: 4px; }
 .bin-pdf { width: 100%; height: 100%; min-height: 300px; border: 0; }
 .bin-hex .code { white-space: pre; overflow: auto; }
+
+/* code generation */
+.code-btn { font-family: var(--mono); font-size: 12px; padding: 7px 10px; }
+.codegen { width: 820px; max-width: 94vw; height: 560px; max-height: 88vh; display: flex; background: var(--bg); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; box-shadow: 0 24px 80px rgba(0,0,0,.4); }
+.codegen-langs { width: 200px; flex: none; background: var(--bg-side); border-right: 1px solid var(--border); padding: 16px 10px; display: flex; flex-direction: column; gap: 2px; overflow: auto; }
+.codegen-langs h3 { margin: 0 8px 10px; font-size: 15px; }
+.codegen-langs button { border: 0; background: transparent; text-align: left; padding: 6px 10px; border-radius: 8px; cursor: pointer; color: var(--text); }
+.codegen-langs button:hover { background: var(--hover); }
+.codegen-langs button.on { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); font-weight: 600; }
+.codegen-body { flex: 1; display: flex; flex-direction: column; padding: 14px 16px; min-width: 0; gap: 8px; }
+.codegen-body .tools { margin-bottom: 0; }
+.codegen-body > .cm-host { flex: 1; }

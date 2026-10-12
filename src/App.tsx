@@ -19,6 +19,7 @@ import { RunnerModal, type RunState } from "./RunnerModal";
 import { DefaultsModal } from "./DefaultsModal";
 import { GraphQLPanel } from "./GraphQLPanel";
 import { StreamLog } from "./StreamLog";
+import { CodeGenModal } from "./CodeGenModal";
 import { BinaryView, suggestFileName } from "./BinaryView";
 import { GrpcPanel, type GrpcSchema } from "./GrpcPanel";
 import { WsPanel, type WsMode } from "./WsPanel";
@@ -26,6 +27,7 @@ import { EMPTY_STREAM, MAX_ENTRIES, grpcCall, grpcDescribe, grpcEnd, grpcSend, s
 import { cachedSchema, loadGraphQL, storeSchema } from "./lib/graphql";
 import { applyDefaults, type Layer } from "./lib/inherit";
 import { executeRequest, prepareRequest, resolveOAuth, withSession } from "./lib/pipeline";
+import { buildRequest } from "./lib/util";
 import { getToken, tokenKey, type TokenCache } from "./lib/oauth";
 import {
   basename,
@@ -127,6 +129,7 @@ export default function App() {
   const [runs, setRuns] = useState<Record<string, RunOutput | null>>({});
   const [oauthBusy, setOauthBusy] = useState(false);
   const [streams, setStreams] = useState<Record<string, StreamState>>({});
+  const [codegenOpen, setCodegenOpen] = useState(false);
   const [grpcSchemas, setGrpcSchemas] = useState<Record<string, GrpcSchema>>({});
   const entryN = useRef(0);
   const queue = useRef<Record<string, { entries: StreamEntry[]; patch: Partial<StreamState> }>>({});
@@ -824,6 +827,14 @@ export default function App() {
     }
   };
 
+  /** The request as the code generator sees it: inherited headers/auth applied, variables resolved or left as {{name}}. */
+  const buildSnippet = (resolve: boolean) => {
+    const t = inherited?.tab ?? active;
+    const extra: [string, string][] = t.authMode === "oauth2" ? [["Authorization", `${t.oauth.prefix || "Bearer"} <access_token>`]] : [];
+    const spec = buildRequest(t, resolve ? withSession(env, sessionRef.current) : undefined, extra);
+    return { method: spec.method, url: spec.url, headers: spec.headers, body: spec.body };
+  };
+
   const oauthToken = effOAuth ? tokensRef.current.get(tokenKey(resolveOAuth(effOAuth, withSession(env, sessionRef.current)))) : undefined;
 
   const getTokenNow = async () => {
@@ -914,6 +925,7 @@ export default function App() {
     "prev-tab": () => nextTab(-1),
     "run-collection": () => (collection ? void runFolder(collection.root, `Run ${collection.name}`) : void info("No collection open", "Open a collection to run its requests.")),
     palette: () => setPaletteOpen(true),
+    codegen: () => (active.kind === "ws" || active.kind === "grpc" ? flash("Code generation isn't available for this request type") : setCodegenOpen(true)),
     "toggle-sidebar": () => setSidebarOpen((v) => !v),
     "zoom-in": () => zoomBy(0.1),
     "zoom-out": () => zoomBy(-0.1),
@@ -942,6 +954,10 @@ export default function App() {
     const map: Record<string, string> = { Enter: "send", s: "save", t: "new-request", w: "close-tab", k: "palette", l: "focus-url", b: "toggle-sidebar", d: "duplicate-tab", ",": "settings", "/": "shortcuts", o: "open-collection", "=": "zoom-in", "-": "zoom-out", "0": "zoom-reset" };
     const onKey = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
+      if (e.shiftKey && e.key.toLowerCase() === "g") {
+        e.preventDefault();
+        return fire("codegen");
+      }
       const id = map[e.key.length === 1 ? e.key.toLowerCase() : e.key];
       if (!id) return;
       e.preventDefault();
@@ -985,6 +1001,7 @@ export default function App() {
     { id: "a:newc", group: "Action", title: "New collection…", run: () => fire("new-collection") },
     { id: "a:import", group: "Action", title: "Import OpenAPI, Postman, Bruno…", run: () => fire("import") },
     { id: "a:run", group: "Action", title: "Run collection", run: () => fire("run-collection") },
+    { id: "a:code", group: "Action", title: "Generate code for this request", hint: "⇧⌘G", run: () => fire("codegen") },
     { id: "a:side", group: "View", title: "Toggle sidebar", hint: "⌘B", run: () => fire("toggle-sidebar") },
     { id: "a:set", group: "App", title: "Settings", hint: "⌘,", run: () => fire("settings") },
     { id: "a:keys", group: "App", title: "Keyboard shortcuts", hint: "⌘/", run: () => fire("shortcuts") },
@@ -1251,6 +1268,11 @@ export default function App() {
             }}
             onChange={(v) => (looksLikeCurl(v) ? applyCurl(v) : patch({ url: v }))}
           />
+          {active.kind !== "ws" && active.kind !== "grpc" && (
+            <button className="btn code-btn" onClick={() => fire("codegen")} title="Generate code (⇧⌘G)" aria-label="Generate code">
+              {"</>"}
+            </button>
+          )}
           <button
             className={`btn primary ${isStreamKind && streamStatus === "open" ? "stop" : ""}`}
             onClick={() => (isStreamKind && (streamStatus === "open" || streamStatus === "connecting") ? void disconnectStream(active) : void send())}
@@ -1538,6 +1560,7 @@ export default function App() {
         </section>
         )}
       </main>
+      {codegenOpen && <CodeGenModal build={buildSnippet} onClose={() => setCodegenOpen(false)} />}
       {paletteOpen && <CommandPalette commands={commands} onClose={() => setPaletteOpen(false)} />}
       {settingsOpen && (
         <SettingsModal
