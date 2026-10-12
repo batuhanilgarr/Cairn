@@ -1,6 +1,6 @@
 import { parse } from "yaml";
 import type { AuthMode, BodyMode, KV, RequestTab } from "./types";
-import { emptyKV, newTab, tryPrettyJson } from "./util";
+import { defaultOAuth, emptyKV, newTab, tryPrettyJson } from "./util";
 
 export type ImportedRequest = {
   /** Folder segments under the collection root (derived from tags). */
@@ -192,11 +192,32 @@ export function parseOpenApi(text: string): ImportResult {
         } else if (sch.type === "apiKey" && sch.in === "query") {
           t.params = [{ ...emptyKV(), key: sch.name, value: "{{apiKey}}" }, ...t.params];
           vars.apiKey ??= "";
-        } else if (sch.type === "oauth2" || sch.type === "openIdConnect") {
+        } else if (sch.type === "oauth2") {
+          // OpenAPI 3 keeps flows under `flows`; Swagger 2 puts one flow on the scheme itself.
+          const f = sch.flows ?? {};
+          const ac = f.authorizationCode ?? (sch.flow === "accessCode" ? sch : undefined);
+          const cc = f.clientCredentials ?? (sch.flow === "application" ? sch : undefined);
+          const flow = ac ?? cc ?? f.password ?? f.implicit;
+          authMode = "oauth2";
+          t.oauth = {
+            ...defaultOAuth(),
+            grant: ac ? "authorization_code" : f.password ? "password" : "client_credentials",
+            authUrl: String(ac?.authorizationUrl ?? ""),
+            tokenUrl: String(flow?.tokenUrl ?? ""),
+            clientId: "{{clientId}}",
+            clientSecret: "{{clientSecret}}",
+            scope: Object.keys(flow?.scopes ?? {}).join(" "),
+          };
+          vars.clientId ??= "";
+          vars.clientSecret ??= "";
+          if (!ac && !cc && !f.password) {
+            notes.push(`${t.source}: ${flow ? "implicit" : "unknown"} OAuth2 flow isn't supported, fill in the token URL yourself`);
+          }
+        } else if (sch.type === "openIdConnect") {
           authMode = "bearer";
           t.authToken = "{{token}}";
           vars.token ??= "";
-          notes.push("OAuth2 flows aren't built in yet: requests use a {{token}} variable you fill in");
+          notes.push("OpenID Connect discovery isn't supported yet: requests use a {{token}} variable you fill in");
         }
       }
       t.authMode = authMode;

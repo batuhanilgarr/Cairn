@@ -78,6 +78,42 @@ async fn send_request(spec: RequestSpec) -> Result<ResponseData, String> {
     })
 }
 
+/// Wait for the OAuth redirect on http://127.0.0.1:<port>/callback and return its query string.
+/// Loopback only, handles one successful callback, gives up after `timeout_secs`.
+#[tauri::command]
+async fn oauth_listen(port: u16, timeout_secs: u64) -> Result<String, String> {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let listener = tokio::net::TcpListener::bind(("127.0.0.1", port))
+        .await
+        .map_err(|e| format!("Can't listen on 127.0.0.1:{port} for the OAuth redirect ({e}). Is another app using that port? Change the redirect port in the auth settings."))?;
+
+    let wait = async {
+        loop {
+            let (mut stream, _) = listener.accept().await.map_err(|e| e.to_string())?;
+            let mut buf = vec![0u8; 8192];
+            let n = stream.read(&mut buf).await.map_err(|e| e.to_string())?;
+            let head = String::from_utf8_lossy(&buf[..n]).to_string();
+            let target = head.lines().next().and_then(|l| l.split_whitespace().nth(1)).unwrap_or("").to_string();
+            let (path, query) = target.split_once('?').unwrap_or((target.as_str(), ""));
+            if path != "/callback" || query.is_empty() {
+                let _ = stream.write_all(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").await;
+                continue; // favicon and other noise
+            }
+            let ok = !query.split('&').any(|kv| kv.starts_with("error="));
+            let page = format!(
+                "<!doctype html><meta charset=utf-8><title>Reqnest</title><body style=\"font:16px -apple-system,system-ui,sans-serif;display:grid;place-items:center;height:100vh;margin:0;background:#17171a;color:#ececf1\"><div style=\"text-align:center\"><div style=\"font-size:42px;color:#8b74ff\">&#9670;</div><h2>{}</h2><p style=\"color:#8e8e99\">You can close this tab and return to Reqnest.</p></div>",
+                if ok { "Signed in" } else { "Sign-in failed" }
+            );
+            let resp = format!("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", page.len(), page);
+            let _ = stream.write_all(resp.as_bytes()).await;
+            return Ok::<String, String>(query.to_string());
+        }
+    };
+    tokio::time::timeout(Duration::from_secs(timeout_secs), wait)
+        .await
+        .map_err(|_| "Timed out waiting for the browser sign-in to finish".to_string())?
+}
+
 fn describe_error(e: reqwest::Error) -> String {
     let mut msg = e.to_string();
     let mut src = std::error::Error::source(&e);
@@ -215,6 +251,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             send_request,
+            oauth_listen,
             list_tree,
             list_files,
             list_files_recursive,
@@ -266,5 +303,43 @@ mod tests {
         assert!(rename_path(f.clone(), format!("{root}/y.req.yaml")).is_err());
         remove_path(f.clone()).unwrap();
         assert_eq!(read_text(f).unwrap(), None);
+    }
+}
+
+#[cfg(test)]
+mod oauth_tests {
+    use super::*;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    async fn get(port: u16, path: &str) -> String {
+        let mut s = tokio::net::TcpStream::connect(("127.0.0.1", port)).await.unwrap();
+        s.write_all(format!("GET {path} HTTP/1.1\r\nHost: x\r\n\r\n").as_bytes()).await.unwrap();
+        let mut out = String::new();
+        s.read_to_string(&mut out).await.unwrap();
+        out
+    }
+
+    #[tokio::test]
+    async fn callback_ignores_noise_and_returns_query() {
+        let port = {
+            let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+            l.local_addr().unwrap().port()
+        };
+        let task = tokio::spawn(oauth_listen(port, 5));
+        tokio::time::sleep(Duration::from_millis(150)).await;
+        assert!(get(port, "/favicon.ico").await.starts_with("HTTP/1.1 404"));
+        let page = get(port, "/callback?code=abc&state=xyz").await;
+        assert!(page.contains("Signed in"));
+        assert_eq!(task.await.unwrap().unwrap(), "code=abc&state=xyz");
+    }
+
+    #[tokio::test]
+    async fn callback_times_out() {
+        let port = {
+            let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+            l.local_addr().unwrap().port()
+        };
+        let err = oauth_listen(port, 1).await.unwrap_err();
+        assert!(err.contains("Timed out"));
     }
 }

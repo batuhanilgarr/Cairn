@@ -1,6 +1,34 @@
 export type KV = { id: string; key: string; value: string; enabled: boolean; secret?: boolean };
 export type BodyMode = "none" | "json" | "text" | "form";
-export type AuthMode = "none" | "bearer" | "basic";
+export type AuthMode = "none" | "bearer" | "basic" | "oauth2";
+
+export type OAuthGrant = "client_credentials" | "authorization_code" | "password";
+export type OAuthConfig = {
+  grant: OAuthGrant;
+  authUrl: string;
+  tokenUrl: string;
+  clientId: string;
+  clientSecret: string;
+  scope: string;
+  /** Loopback port the system-browser redirect comes back to (http://127.0.0.1:<port>/callback). */
+  redirectPort: number;
+  pkce: boolean;
+  /** Where the client credentials go on the token request. */
+  clientAuth: "basic" | "body";
+  username: string;
+  password: string;
+  /** Extra token-request fields, e.g. audience, resource. */
+  extra: KV[];
+  /** Authorization header prefix. */
+  prefix: string;
+};
+
+export type AssertKind = "status" | "json" | "header" | "body" | "time";
+export type AssertOp = "eq" | "neq" | "contains" | "matches" | "exists" | "lt" | "gt";
+export type Assertion = { id: string; enabled: boolean; kind: AssertKind; path: string; op: AssertOp; value: string };
+export type Capture = { id: string; variable: string; from: "json" | "header"; path: string };
+export type TestResult = { name: string; passed: boolean; error?: string };
+export type RunOutput = { tests: TestResult[]; logs: string[]; scriptError?: string; captured: Record<string, string> };
 
 export type RequestTab = {
   id: string;
@@ -18,6 +46,11 @@ export type RequestTab = {
   insecure: boolean;
   followRedirects: boolean;
   timeoutMs: number;
+  preScript: string;
+  postScript: string;
+  assertions: Assertion[];
+  captures: Capture[];
+  oauth: OAuthConfig;
   /** Origin of an imported request, e.g. "POST /pets" for OpenAPI. Lets re-import match it up again. */
   source?: string;
   /** Absolute path of the .req.yaml this tab is bound to (null = unsaved scratch request). */

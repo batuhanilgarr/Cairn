@@ -1,6 +1,6 @@
 import { parse, stringify } from "yaml";
-import type { AuthMode, BodyMode, Environment, KV, RequestTab } from "./types";
-import { emptyKV, newTab, uid } from "./util";
+import type { AuthMode, BodyMode, Environment, KV, OAuthConfig, RequestTab } from "./types";
+import { defaultOAuth, emptyKV, newTab, uid } from "./util";
 import { basename, dirname, join, listFiles, makeDir, pathExists, readText, writeText } from "./fs";
 
 /**
@@ -26,12 +26,51 @@ export function serializeRequest(t: RequestTab): string {
   if (t.bodyMode !== "none") doc.body = { mode: t.bodyMode, content: t.body };
   if (t.authMode === "bearer") doc.auth = { mode: "bearer", token: t.authToken };
   if (t.authMode === "basic") doc.auth = { mode: "basic", username: t.authUser, password: t.authPass };
+  if (t.authMode === "oauth2") doc.auth = { mode: "oauth2", ...oauthOut(t.oauth) };
+  const tests = t.assertions.map((a) => ({
+    kind: a.kind,
+    ...(a.path ? { path: a.path } : {}),
+    op: a.op,
+    ...(a.op === "exists" ? {} : { value: a.value }),
+    ...(a.enabled ? {} : { enabled: false }),
+  }));
+  if (tests.length) doc.tests = tests;
+  if (t.captures.length) doc.capture = t.captures.map((c) => ({ variable: c.variable, from: c.from, path: c.path }));
+  const scripts: Record<string, string> = {};
+  if (t.preScript.trim()) scripts.pre = t.preScript;
+  if (t.postScript.trim()) scripts.post = t.postScript;
+  if (Object.keys(scripts).length) doc.scripts = scripts;
   const settings: Record<string, unknown> = {};
   if (!t.followRedirects) settings.followRedirects = false;
   if (t.insecure) settings.insecure = true;
   if (t.timeoutMs !== 30000) settings.timeoutMs = t.timeoutMs;
   if (Object.keys(settings).length) doc.settings = settings;
   return stringify(doc, YAML_OPTS);
+}
+
+/** Only non-default OAuth fields are written, so a plain client_credentials setup stays a few lines. */
+function oauthOut(o: OAuthConfig): Record<string, unknown> {
+  const d = defaultOAuth();
+  const out: Record<string, unknown> = { grant: o.grant };
+  const keep = (k: keyof OAuthConfig) => o[k] !== "" && o[k] !== d[k];
+  if (o.grant === "authorization_code" && o.authUrl) out.authUrl = o.authUrl;
+  out.tokenUrl = o.tokenUrl;
+  out.clientId = o.clientId;
+  if (o.clientSecret) out.clientSecret = o.clientSecret;
+  if (o.scope) out.scope = o.scope;
+  if (o.grant === "password") {
+    out.username = o.username;
+    out.password = o.password;
+  }
+  if (o.grant === "authorization_code") {
+    if (o.redirectPort !== d.redirectPort) out.redirectPort = o.redirectPort;
+    if (!o.pkce) out.pkce = false;
+  }
+  if (keep("clientAuth")) out.clientAuth = o.clientAuth;
+  if (keep("prefix")) out.prefix = o.prefix;
+  const extra = kvOut(o.extra);
+  if (extra.length) out.extra = extra;
+  return out;
 }
 
 const kvIn = (rows: unknown): KV[] => {
@@ -64,6 +103,41 @@ export function parseRequest(text: string, file: string): RequestTab {
     authToken: String(d.auth?.token ?? ""),
     authUser: String(d.auth?.username ?? ""),
     authPass: String(d.auth?.password ?? ""),
+    oauth:
+      d.auth?.mode === "oauth2"
+        ? {
+            ...defaultOAuth(),
+            grant: d.auth.grant ?? "client_credentials",
+            authUrl: String(d.auth.authUrl ?? ""),
+            tokenUrl: String(d.auth.tokenUrl ?? ""),
+            clientId: String(d.auth.clientId ?? ""),
+            clientSecret: String(d.auth.clientSecret ?? ""),
+            scope: String(d.auth.scope ?? ""),
+            username: String(d.auth.username ?? ""),
+            password: String(d.auth.password ?? ""),
+            redirectPort: Number(d.auth.redirectPort ?? 8976),
+            pkce: d.auth.pkce !== false,
+            clientAuth: d.auth.clientAuth === "body" ? "body" : "basic",
+            prefix: String(d.auth.prefix ?? "Bearer"),
+            extra: kvIn(d.auth.extra),
+          }
+        : defaultOAuth(),
+    assertions: (Array.isArray(d.tests) ? d.tests : []).map((a: any) => ({
+      id: uid(),
+      enabled: a?.enabled !== false,
+      kind: a?.kind ?? "status",
+      path: String(a?.path ?? ""),
+      op: a?.op ?? "eq",
+      value: String(a?.value ?? ""),
+    })),
+    captures: (Array.isArray(d.capture) ? d.capture : []).map((c: any) => ({
+      id: uid(),
+      variable: String(c?.variable ?? ""),
+      from: c?.from === "header" ? "header" : "json",
+      path: String(c?.path ?? ""),
+    })),
+    preScript: String(d.scripts?.pre ?? ""),
+    postScript: String(d.scripts?.post ?? ""),
     followRedirects: d.settings?.followRedirects !== false,
     insecure: d.settings?.insecure === true,
     timeoutMs: Number(d.settings?.timeoutMs ?? 30000),

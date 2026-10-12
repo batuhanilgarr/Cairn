@@ -1,7 +1,23 @@
-import type { Environment, KV, RequestTab } from "./types";
+import type { Environment, KV, OAuthConfig, RequestTab } from "./types";
 
 export const uid = () => Math.random().toString(36).slice(2, 10);
 export const emptyKV = (): KV => ({ id: uid(), key: "", value: "", enabled: true });
+
+export const defaultOAuth = (): OAuthConfig => ({
+  grant: "client_credentials",
+  authUrl: "",
+  tokenUrl: "",
+  clientId: "",
+  clientSecret: "",
+  scope: "",
+  redirectPort: 8976,
+  pkce: true,
+  clientAuth: "basic",
+  username: "",
+  password: "",
+  extra: [emptyKV()],
+  prefix: "Bearer",
+});
 
 export const newTab = (): RequestTab => ({
   id: uid(),
@@ -19,7 +35,18 @@ export const newTab = (): RequestTab => ({
   insecure: false,
   followRedirects: true,
   timeoutMs: 30000,
+  preScript: "",
+  postScript: "",
+  assertions: [],
+  captures: [],
+  oauth: defaultOAuth(),
 });
+
+/** Fill in fields added by newer versions, so tabs saved by an older build still load. */
+export const normalizeTab = (t: Partial<RequestTab>): RequestTab => {
+  const base = newTab();
+  return { ...base, ...t, oauth: { ...base.oauth, ...(t.oauth ?? {}) } } as RequestTab;
+};
 
 export const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"];
 
@@ -29,7 +56,7 @@ export function interpolate(text: string, env: Environment | undefined): string 
   return text.replace(/\{\{\s*([\w.\-]+)\s*\}\}/g, (m, k) => (map.has(k) ? map.get(k)! : m));
 }
 
-export function buildRequest(tab: RequestTab, env: Environment | undefined) {
+export function buildRequest(tab: RequestTab, env: Environment | undefined, extraHeaders: [string, string][] = []) {
   const sub = (s: string) => interpolate(s, env);
   let url = sub(tab.url.trim());
   const params = tab.params.filter((p) => p.enabled && p.key);
@@ -50,6 +77,8 @@ export function buildRequest(tab: RequestTab, env: Environment | undefined) {
     headers.push(["Authorization", `Bearer ${sub(tab.authToken)}`]);
   if (tab.authMode === "basic" && !has("authorization"))
     headers.push(["Authorization", `Basic ${btoa(unescape(encodeURIComponent(`${sub(tab.authUser)}:${sub(tab.authPass)}`)))}`]);
+
+  for (const [k, v] of extraHeaders) if (!has(k.toLowerCase())) headers.push([k, v]);
 
   let body: string | undefined;
   if (tab.bodyMode !== "none" && !["GET", "HEAD"].includes(tab.method)) {

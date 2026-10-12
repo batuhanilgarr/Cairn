@@ -3,6 +3,12 @@ import { invoke } from "@tauri-apps/api/core";
 import { KVEditor } from "./KVEditor";
 import { Dialog, type DialogState } from "./Dialog";
 import { Tree } from "./Tree";
+import { AuthPanel } from "./AuthPanel";
+import { ScriptsPanel } from "./ScriptsPanel";
+import { TestsPanel } from "./TestsPanel";
+import { RunnerModal, type RunState } from "./RunnerModal";
+import { executeRequest, resolveOAuth, withSession } from "./lib/pipeline";
+import { getToken, tokenKey, type TokenCache } from "./lib/oauth";
 import {
   basename,
   dirname,
@@ -29,15 +35,15 @@ import {
   slug,
   uniquePath,
 } from "./lib/collection";
-import type { AuthMode, BodyMode, Collection, Environment, HistoryItem, RequestTab, ResponseData, TreeNode } from "./lib/types";
+import type { BodyMode, Collection, Environment, HistoryItem, RequestTab, ResponseData, RunOutput, TreeNode } from "./lib/types";
 import {
   METHODS,
-  buildRequest,
   emptyKV,
   formatBytes,
   highlightJson,
   load,
   newTab,
+  normalizeTab,
   save,
   statusClass,
   tryPrettyJson,
@@ -50,8 +56,8 @@ import { parseBru, parseBruEnv } from "./lib/bruno";
 import { ensureEnvironment, writeImport } from "./lib/importer";
 import "./styles.css";
 
-type ReqSection = "params" | "headers" | "body" | "auth" | "settings";
-type ResSection = "body" | "headers";
+type ReqSection = "params" | "headers" | "body" | "auth" | "scripts" | "tests" | "settings";
+type ResSection = "body" | "headers" | "tests" | "console";
 type SideSection = "collections" | "history" | "environments";
 
 const defaultEnvs: Environment[] = [
@@ -60,13 +66,13 @@ const defaultEnvs: Environment[] = [
 
 export default function App() {
   const [tabs, setTabs] = useState<RequestTab[]>(() => {
-    const t = load<RequestTab[]>("rq.tabs", []);
+    const t = load<RequestTab[]>("rq.tabs", []).map(normalizeTab);
     return t.length ? t : [newTab()];
   });
   const [activeId, setActiveId] = useState<string>(() => load("rq.active", "") || "");
   const [envs, setEnvs] = useState<Environment[]>(() => load("rq.envs", defaultEnvs));
   const [envId, setEnvId] = useState<string>(() => load("rq.envId", "env-local"));
-  const [history, setHistory] = useState<HistoryItem[]>(() => load("rq.history", []));
+  const [history, setHistory] = useState<HistoryItem[]>(() => load<HistoryItem[]>("rq.history", []).map((h) => ({ ...h, tab: normalizeTab(h.tab) })));
   const [responses, setResponses] = useState<Record<string, ResponseData | { error: string } | null>>({});
   const [loading, setLoading] = useState<Record<string, boolean>>({});
   const [reqSection, setReqSection] = useState<ReqSection>("params");
@@ -79,11 +85,20 @@ export default function App() {
   const [toast, setToast] = useState<string | null>(null);
   const writtenEnvs = useRef<Map<string, string>>(new Map());
   const tabsRef = useRef<RequestTab[]>([]);
+  const sessionRef = useRef<Record<string, string>>({});
+  const tokensRef = useRef<TokenCache>(new Map());
+  const stopRef = useRef(false);
+  const [, setTick] = useState(0);
+  const bump = () => setTick((t) => t + 1);
+  const [runs, setRuns] = useState<Record<string, RunOutput | null>>({});
+  const [oauthBusy, setOauthBusy] = useState(false);
+  const [runner, setRunner] = useState<RunState | null>(null);
   const [rawView, setRawView] = useState(false);
 
   const active = tabs.find((t) => t.id === activeId) ?? tabs[0];
   const env = envs.find((e) => e.id === envId);
   const response = active ? responses[active.id] : null;
+  const run = active ? runs[active.id] : null;
 
   useEffect(() => {
     tabsRef.current = tabs;
@@ -244,7 +259,7 @@ export default function App() {
     if (text === null) throw new Error(`Couldn't read ${source}`);
     const parsed = parseOpenApi(text);
     const summary = await writeImport(collection.root, parsed.requests, sync);
-    const env = await ensureEnvironment(collection.root, parsed.title, parsed.vars);
+    const env = await ensureEnvironment(collection.root, parsed.title, parsed.vars, ["clientSecret", "token", "password", "apiKey"]);
     const meta = (await readCollectionMeta(collection.root)) ?? { name: collection.name };
     await writeCollectionMeta(collection.root, { ...meta, openapi: { source } });
     await reloadEnvs(env.id);
@@ -472,13 +487,14 @@ export default function App() {
     const tab = active;
     setLoading((l) => ({ ...l, [tab.id]: true }));
     setResponses((r) => ({ ...r, [tab.id]: null }));
+    setRuns((r) => ({ ...r, [tab.id]: null }));
     let status: number | null = null;
     try {
-      const res = await invoke<ResponseData>("send_request", { spec: buildRequest(tab, env) });
-      status = res.status;
-      setResponses((r) => ({ ...r, [tab.id]: res }));
-    } catch (e) {
-      setResponses((r) => ({ ...r, [tab.id]: { error: String(e) } }));
+      const out = await executeRequest(tab, { env, session: sessionRef.current, tokens: tokensRef.current, onSession: bump });
+      status = out.response?.status ?? null;
+      setResponses((r) => ({ ...r, [tab.id]: out.response ?? { error: out.error ?? "Request failed" } }));
+      setRuns((r) => ({ ...r, [tab.id]: out.run }));
+      if (out.run.scriptError || out.run.tests.some((t) => !t.passed)) setResSection("tests");
     } finally {
       setLoading((l) => ({ ...l, [tab.id]: false }));
       setHistory((h) =>
@@ -486,6 +502,55 @@ export default function App() {
       );
     }
   }, [active, env]);
+
+  const oauthToken = active?.authMode === "oauth2" ? tokensRef.current.get(tokenKey(resolveOAuth(active.oauth, withSession(env, sessionRef.current)))) : undefined;
+
+  const getTokenNow = async () => {
+    setOauthBusy(true);
+    try {
+      await getToken(resolveOAuth(active.oauth, withSession(env, sessionRef.current)), tokensRef.current, { force: true });
+    } catch (e) {
+      await info("OAuth 2.0", String((e as Error).message ?? e));
+    } finally {
+      setOauthBusy(false);
+      bump();
+    }
+  };
+  const resetToken = () => {
+    tokensRef.current.delete(tokenKey(resolveOAuth(active.oauth, withSession(env, sessionRef.current))));
+    bump();
+  };
+
+  /** Run every request under a folder (or the whole collection), in file order, sharing session variables. */
+  const runFolder = (dir: string, title: string) =>
+    guard(async () => {
+      const files = await listFilesRecursive(dir, ".req.yaml");
+      if (!files.length) return info("Nothing to run", "There are no requests in here yet.");
+      stopRef.current = false;
+      const items: RunState["items"] = files.map((f) => ({ name: basename(f).replace(/\.req\.ya?ml$/, ""), state: "pending", passed: 0, failed: 0, failures: [] }));
+      const render = (done = false) => setRunner({ title, items: items.map((i) => ({ ...i })), done });
+      render();
+      for (let i = 0; i < files.length && !stopRef.current; i++) {
+        items[i].state = "running";
+        render();
+        try {
+          const tab = parseRequest((await readText(files[i])) ?? "", files[i]);
+          items[i].name = tab.name;
+          const out = await executeRequest(tab, { env, session: sessionRef.current, tokens: tokensRef.current, onSession: bump });
+          items[i].status = out.response?.status;
+          items[i].ms = out.response?.timeMs;
+          items[i].error = out.error;
+          items[i].passed = out.run.tests.filter((t) => t.passed).length;
+          items[i].failed = out.run.tests.filter((t) => !t.passed).length;
+          items[i].failures = out.run.tests.filter((t) => !t.passed).map((t) => `${t.name}${t.error ? `: ${t.error}` : ""}`);
+        } catch (e) {
+          items[i].error = String(e);
+        }
+        items[i].state = "done";
+        render();
+      }
+      render(true);
+    });
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -562,6 +627,7 @@ export default function App() {
                     <span className="row-actions always">
                       <button title="New request" onClick={() => newRequestIn(selectedDir || collection.root)}>＋</button>
                       <button title="New folder" onClick={() => newFolderIn(selectedDir || collection.root)}>▤</button>
+                      <button title="Run all requests" onClick={() => runFolder(collection.root, `Run ${collection.name}`)}>▶</button>
                       <button title="Import (OpenAPI, Postman, Bruno)" onClick={importMenu}>⇩</button>
                       <button title="Open another collection" onClick={openCollection}>⌂</button>
                       <button title="Close collection" onClick={closeCollection}>×</button>
@@ -575,6 +641,7 @@ export default function App() {
                     dirty={dirtyFiles}
                     onOpen={openFile}
                     onSelectDir={setSelectedDir}
+                    onRun={(dir) => runFolder(dir, `Run ${basename(dir)}`)}
                     onNewRequest={newRequestIn}
                     onNewFolder={newFolderIn}
                     onRename={renameNode}
@@ -623,6 +690,21 @@ export default function App() {
                   + New
                 </button>
               </div>
+              {Object.keys(sessionRef.current).length > 0 && (
+                <div className="session">
+                  <div className="row">
+                    <b>Session variables</b>
+                    <button className="link" onClick={() => { sessionRef.current = {}; tokensRef.current = new Map(); bump(); }}>Clear</button>
+                  </div>
+                  <p className="muted small">Set by scripts and captures. In memory only, never saved.</p>
+                  {Object.entries(sessionRef.current).map(([k, v]) => (
+                    <div key={k} className="sess-row" title={v}>
+                      <code>{k}</code>
+                      <span>{v.length > 40 ? v.slice(0, 40) + "…" : v}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
               {!env && <p className="muted">No environments yet. Create one to use {"{{variables}}"}.</p>}
               {env && (
                 <>
@@ -722,11 +804,13 @@ export default function App() {
 
         <section className="panel req">
           <nav className="subtabs">
-            {(["params", "headers", "body", "auth", "settings"] as ReqSection[]).map((s) => (
+            {(["params", "headers", "body", "auth", "scripts", "tests", "settings"] as ReqSection[]).map((s) => (
               <button key={s} className={reqSection === s ? "on" : ""} onClick={() => setReqSection(s)}>
                 {s[0].toUpperCase() + s.slice(1)}
                 {s === "params" && counts.params > 0 && <i>{counts.params}</i>}
                 {s === "headers" && counts.headers > 0 && <i>{counts.headers}</i>}
+                {s === "scripts" && (active.preScript.trim() || active.postScript.trim()) && <i>●</i>}
+                {s === "tests" && active.assertions.length + active.captures.length > 0 && <i>{active.assertions.length + active.captures.length}</i>}
               </button>
             ))}
           </nav>
@@ -768,23 +852,10 @@ export default function App() {
               </div>
             )}
             {reqSection === "auth" && (
-              <div className="col">
-                <select value={active.authMode} onChange={(e) => patch({ authMode: e.target.value as AuthMode })}>
-                  <option value="none">No auth</option>
-                  <option value="bearer">Bearer token</option>
-                  <option value="basic">Basic auth</option>
-                </select>
-                {active.authMode === "bearer" && (
-                  <input className="cell" placeholder="Token" value={active.authToken} onChange={(e) => patch({ authToken: e.target.value })} />
-                )}
-                {active.authMode === "basic" && (
-                  <>
-                    <input className="cell" placeholder="Username" value={active.authUser} onChange={(e) => patch({ authUser: e.target.value })} />
-                    <input className="cell" type="password" placeholder="Password" value={active.authPass} onChange={(e) => patch({ authPass: e.target.value })} />
-                  </>
-                )}
-              </div>
+              <AuthPanel tab={active} patch={patch} token={oauthToken} busy={oauthBusy} onGetToken={getTokenNow} onResetToken={resetToken} />
             )}
+            {reqSection === "scripts" && <ScriptsPanel tab={active} patch={patch} />}
+            {reqSection === "tests" && <TestsPanel tab={active} patch={patch} />}
             {reqSection === "settings" && (
               <div className="col">
                 <label className="check">
@@ -817,6 +888,20 @@ export default function App() {
             <button className={resSection === "headers" ? "on" : ""} onClick={() => setResSection("headers")}>
               Headers{response && !("error" in response) && <i>{response.headers.length}</i>}
             </button>
+            <button className={resSection === "tests" ? "on" : ""} onClick={() => setResSection("tests")}>
+              Tests
+              {run && run.tests.length > 0 && (
+                <i className={run.tests.some((t) => !t.passed) ? "bad" : "good"}>
+                  {run.tests.filter((t) => t.passed).length}/{run.tests.length}
+                </i>
+              )}
+              {run?.scriptError && !run.tests.length && <i className="bad">!</i>}
+            </button>
+            {run && run.logs.length > 0 && (
+              <button className={resSection === "console" ? "on" : ""} onClick={() => setResSection("console")}>
+                Console<i>{run.logs.length}</i>
+              </button>
+            )}
             <div className="spacer" />
             {response && !("error" in response) && (
               <div className="meta">
@@ -832,7 +917,27 @@ export default function App() {
           <div className="panel-body">
             {loading[active.id] && <p className="muted">Sending request…</p>}
             {!loading[active.id] && !response && <p className="muted center">Hit <kbd>⌘↵</kbd> to send a request.</p>}
-            {response && "error" in response && <pre className="err">{response.error}</pre>}
+            {response && "error" in response && resSection !== "tests" && resSection !== "console" && <pre className="err">{response.error}</pre>}
+            {resSection === "tests" && run && (
+              <div className="tests-list">
+                {run.scriptError && <pre className="err">{run.scriptError}</pre>}
+                {run.tests.length === 0 && !run.scriptError && <p className="muted">No tests ran. Add assertions in the Tests tab or <code>test()</code> calls in a script.</p>}
+                {run.tests.map((t, i) => (
+                  <div key={i} className={`test ${t.passed ? "pass" : "fail"}`}>
+                    <span>{t.passed ? "✓" : "✗"}</span>
+                    <div>
+                      {t.name}
+                      {t.error && <div className="run-err">{t.error}</div>}
+                    </div>
+                  </div>
+                ))}
+                {Object.keys(run.captured).length > 0 && (
+                  <p className="muted small">Set variables: {Object.keys(run.captured).map((k) => `{{${k}}}`).join("  ")}</p>
+                )}
+              </div>
+            )}
+            {resSection === "tests" && !run && !loading[active.id] && <p className="muted">Send the request to see test results.</p>}
+            {resSection === "console" && run && <pre className="code">{run.logs.join("\n")}</pre>}
             {response && !("error" in response) && resSection === "body" && resBody && (
               <>
                 <div className="row tools">
@@ -868,6 +973,7 @@ export default function App() {
         </section>
       </main>
       <Dialog state={dialog} />
+      {runner && <RunnerModal run={runner} onStop={() => (stopRef.current = true)} onClose={() => setRunner(null)} />}
       {toast && <div className="toast">{toast}</div>}
     </div>
   );

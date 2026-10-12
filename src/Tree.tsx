@@ -8,6 +8,7 @@ type Props = {
   dirty: Set<string>;
   onOpen: (path: string) => void;
   onSelectDir: (path: string) => void;
+  onRun: (dir: string) => void;
   onNewRequest: (dir: string) => void;
   onNewFolder: (dir: string) => void;
   onRename: (node: TreeNode) => void;
@@ -49,6 +50,7 @@ function Row({ node, depth, ...p }: Props & { node: TreeNode; depth: number }) {
         <span className="row-actions" onClick={(e) => e.stopPropagation()}>
           {node.isDir && (
             <>
+              <button title="Run folder" onClick={() => p.onRun(node.path)}>▶</button>
               <button title="New request" onClick={() => p.onNewRequest(node.path)}>＋</button>
               <button title="New folder" onClick={() => p.onNewFolder(node.path)}>▤</button>
             </>
