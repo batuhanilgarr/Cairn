@@ -42,9 +42,31 @@ pub struct ResponseData {
     pub status_text: String,
     pub headers: Vec<(String, String)>,
     pub body: String,
+    /// Set instead of `body` for binary responses (images, PDFs, archives, anything that isn't valid UTF-8).
+    pub body_base64: Option<String>,
+    pub content_type: String,
     pub size_bytes: usize,
     pub time_ms: u128,
+    /// Time until the response headers arrived.
+    pub ttfb_ms: u128,
     pub http_version: String,
+}
+
+fn is_binary(content_type: &str, bytes: &[u8]) -> bool {
+    let ct = content_type.to_lowercase();
+    let texty = ct.starts_with("text/")
+        || ct.contains("json")
+        || ct.contains("xml")
+        || ct.contains("javascript")
+        || ct.contains("x-www-form-urlencoded")
+        || ct.contains("graphql")
+        || ct.contains("yaml")
+        || ct.contains("csv");
+    if texty {
+        return false;
+    }
+    let declared_binary = ct.starts_with("image/") || ct.starts_with("audio/") || ct.starts_with("video/") || ct.starts_with("font/") || ct.contains("pdf") || ct.contains("octet-stream") || ct.contains("zip") || ct.contains("protobuf") || ct.contains("msgpack");
+    declared_binary || std::str::from_utf8(bytes).is_err()
 }
 
 #[tauri::command]
@@ -70,6 +92,7 @@ async fn send_request(spec: RequestSpec) -> Result<ResponseData, String> {
 
     let started = Instant::now();
     let res = req.send().await.map_err(describe_error)?;
+    let ttfb_ms = started.elapsed().as_millis();
 
     let status = res.status();
     let http_version = format!("{:?}", res.version());
@@ -78,16 +101,33 @@ async fn send_request(spec: RequestSpec) -> Result<ResponseData, String> {
         .iter()
         .map(|(k, v)| (k.to_string(), String::from_utf8_lossy(v.as_bytes()).to_string()))
         .collect();
+    let content_type = res
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_string();
     let bytes = res.bytes().await.map_err(describe_error)?;
     let time_ms = started.elapsed().as_millis();
+
+    let binary = !bytes.is_empty() && is_binary(&content_type, &bytes);
+    let (body, body_base64) = if binary {
+        use base64::Engine;
+        (String::new(), Some(base64::engine::general_purpose::STANDARD.encode(&bytes)))
+    } else {
+        (String::from_utf8_lossy(&bytes).to_string(), None)
+    };
 
     Ok(ResponseData {
         status: status.as_u16(),
         status_text: status.canonical_reason().unwrap_or("").to_string(),
         headers,
         size_bytes: bytes.len(),
-        body: String::from_utf8_lossy(&bytes).to_string(),
+        body,
+        body_base64,
+        content_type,
         time_ms,
+        ttfb_ms,
         http_version,
     })
 }
@@ -298,6 +338,18 @@ fn rename_path(from: String, to: String) -> Result<(), String> {
     fs::rename(&from, &to).map_err(|e| format!("{from}: {e}"))
 }
 
+/// Save a response body chosen by the user in a save dialog. Accepts base64 (binary) or plain text.
+#[tauri::command]
+fn save_bytes(path: String, base64: Option<String>, text: Option<String>) -> Result<(), String> {
+    use base64::Engine;
+    let bytes = match (base64, text) {
+        (Some(b), _) => base64::engine::general_purpose::STANDARD.decode(b).map_err(|e| format!("Not valid base64: {e}"))?,
+        (None, Some(t)) => t.into_bytes(),
+        _ => return Err("Nothing to save".into()),
+    };
+    fs::write(&path, bytes).map_err(|e| format!("{path}: {e}"))
+}
+
 #[tauri::command]
 fn path_exists(path: String) -> bool {
     Path::new(&path).exists()
@@ -424,7 +476,8 @@ pub fn run() {
             make_dir,
             remove_path,
             rename_path,
-            path_exists
+            path_exists,
+            save_bytes
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -556,6 +609,57 @@ mod network_tests {
         let head = seen.await.unwrap();
         assert!(head.starts_with("GET http://api.invalid/path?q=1 HTTP/1.1"), "got: {head}");
         assert!(head.to_lowercase().contains("user-agent: reqnesttest/9"));
+    }
+
+    async fn serve_once(content_type: &str, body: Vec<u8>) -> u16 {
+        let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = l.local_addr().unwrap().port();
+        let ct = content_type.to_string();
+        tokio::spawn(async move {
+            let (mut s, _) = l.accept().await.unwrap();
+            let mut buf = vec![0u8; 4096];
+            let _ = s.read(&mut buf).await.unwrap();
+            let head = format!("HTTP/1.1 200 OK\r\nContent-Type: {ct}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len());
+            s.write_all(head.as_bytes()).await.unwrap();
+            s.write_all(&body).await.unwrap();
+        });
+        port
+    }
+
+    #[tokio::test]
+    async fn binary_bodies_come_back_as_base64_and_text_stays_text() {
+        let png = vec![0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a, 0xff, 0x00];
+        let port = serve_once("image/png", png.clone()).await;
+        let res = send_request(spec(&format!("http://127.0.0.1:{port}/a.png"), Default::default())).await.unwrap();
+        assert!(res.body.is_empty());
+        use base64::Engine;
+        assert_eq!(base64::engine::general_purpose::STANDARD.decode(res.body_base64.unwrap()).unwrap(), png);
+        assert_eq!(res.content_type, "image/png");
+        assert_eq!(res.size_bytes, 10);
+        assert!(res.ttfb_ms <= res.time_ms);
+
+        let port = serve_once("application/json", "{\"é\":1}".as_bytes().to_vec()).await;
+        let res = send_request(spec(&format!("http://127.0.0.1:{port}/"), Default::default())).await.unwrap();
+        assert_eq!(res.body, "{\"é\":1}");
+        assert!(res.body_base64.is_none());
+
+        // unknown type + invalid UTF-8 is treated as binary too
+        let port = serve_once("application/x-whatever", vec![0xff, 0xfe, 0x00]).await;
+        let res = send_request(spec(&format!("http://127.0.0.1:{port}/"), Default::default())).await.unwrap();
+        assert!(res.body_base64.is_some());
+    }
+
+    #[test]
+    fn save_bytes_writes_text_and_binary() {
+        let dir = std::env::temp_dir().join(format!("reqnest-save-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let t = dir.join("a.txt").to_string_lossy().to_string();
+        save_bytes(t.clone(), None, Some("hi".into())).unwrap();
+        assert_eq!(std::fs::read(&t).unwrap(), b"hi");
+        let b = dir.join("b.bin").to_string_lossy().to_string();
+        save_bytes(b.clone(), Some("AQID".into()), None).unwrap();
+        assert_eq!(std::fs::read(&b).unwrap(), vec![1, 2, 3]);
+        assert!(save_bytes(b, None, None).is_err());
     }
 
     #[tokio::test]

@@ -85,8 +85,12 @@ export type ResponseData = {
   statusText: string;
   headers: [string, string][];
   body: string;
+  /** Present instead of `body` for binary responses. */
+  bodyBase64?: string | null;
+  contentType?: string;
   sizeBytes: number;
   timeMs: number;
+  ttfbMs?: number;
   httpVersion: string;
 };
 

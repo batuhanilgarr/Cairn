@@ -19,6 +19,7 @@ import { RunnerModal, type RunState } from "./RunnerModal";
 import { DefaultsModal } from "./DefaultsModal";
 import { GraphQLPanel } from "./GraphQLPanel";
 import { StreamLog } from "./StreamLog";
+import { BinaryView, suggestFileName } from "./BinaryView";
 import { GrpcPanel, type GrpcSchema } from "./GrpcPanel";
 import { WsPanel, type WsMode } from "./WsPanel";
 import { EMPTY_STREAM, MAX_ENTRIES, grpcCall, grpcDescribe, grpcEnd, grpcSend, sseConnect, streamStop, subscribe, unsubscribe, wsClose, wsConnect, wsSend, type StreamEntry, type StreamEvent, type StreamState } from "./lib/stream";
@@ -34,6 +35,7 @@ import {
   makeDir,
   pickFile,
   pickFolder,
+  saveResponse,
   readText,
   removePath,
   renamePath,
@@ -1444,7 +1446,8 @@ export default function App() {
                 <span className={`pill ${statusClass(response.status)}`}>
                   {response.status} {response.statusText}
                 </span>
-                <span>{response.timeMs} ms</span>
+                <span title="Total time">{response.timeMs} ms</span>
+                {response.ttfbMs !== undefined && <span className="muted" title="Time to first byte">TTFB {response.ttfbMs} ms</span>}
                 <span>{formatBytes(response.sizeBytes)}</span>
                 <span>{response.httpVersion}</span>
               </div>
@@ -1485,10 +1488,27 @@ export default function App() {
                   <label className="check">
                     <input type="checkbox" checked={wrapRes} onChange={(e) => setWrapRes(e.target.checked)} /> Wrap
                   </label>
-                  <button className="btn small" onClick={() => navigator.clipboard.writeText(resBody.pretty ?? resBody.text)}>
-                    Copy
+                  {!response.bodyBase64 && (
+                    <button className="btn small" onClick={() => navigator.clipboard.writeText(resBody.pretty ?? resBody.text)}>
+                      Copy
+                    </button>
+                  )}
+                  <button
+                    className="btn small"
+                    onClick={() =>
+                      guard(async () => {
+                        const name = suggestFileName(active.url, response.headers, response.contentType ?? "");
+                        const path = await saveResponse(name, { base64: response.bodyBase64, text: resBody.text });
+                        if (path) flash(`Saved to ${path.split("/").pop()}`);
+                      })
+                    }
+                  >
+                    Save…
                   </button>
                 </div>
+                {response.bodyBase64 ? (
+                  <div className="editor-slot scroll"><BinaryView base64={response.bodyBase64} contentType={response.contentType ?? ""} size={response.sizeBytes} /></div>
+                ) : (
                 <div className="editor-slot">
                   <CodeEditor
                     readOnly
@@ -1499,6 +1519,7 @@ export default function App() {
                     className="fill"
                   />
                 </div>
+                )}
               </>
             )}
             {response && !("error" in response) && resSection === "headers" && (
