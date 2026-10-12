@@ -21,6 +21,9 @@ import { GraphQLPanel } from "./GraphQLPanel";
 import { StreamLog } from "./StreamLog";
 import { CodeGenModal } from "./CodeGenModal";
 import { DiffModal, type HistEntry } from "./DiffModal";
+import { ExamplesPanel } from "./ExamplesPanel";
+import { MockModal } from "./MockModal";
+import { buildRoutes, mockStart, mockStop, type MockHit } from "./lib/mock";
 import { BinaryView, suggestFileName } from "./BinaryView";
 import { parseSetCookie } from "./lib/cookies";
 import { GrpcPanel, type GrpcSchema } from "./GrpcPanel";
@@ -84,11 +87,11 @@ import { parseBru, parseBruEnv } from "./lib/bruno";
 import { ensureEnvironment, writeImport } from "./lib/importer";
 import "./styles.css";
 
-type ReqSection = "params" | "headers" | "body" | "query" | "message" | "auth" | "scripts" | "tests" | "settings";
+type ReqSection = "params" | "headers" | "body" | "query" | "message" | "examples" | "auth" | "scripts" | "tests" | "settings";
 
 const SECTIONS: Record<RequestKind, ReqSection[]> = {
-  http: ["params", "headers", "body", "auth", "scripts", "tests", "settings"],
-  graphql: ["query", "headers", "auth", "scripts", "tests", "settings"],
+  http: ["params", "headers", "body", "auth", "scripts", "tests", "examples", "settings"],
+  graphql: ["query", "headers", "auth", "scripts", "tests", "examples", "settings"],
   sse: ["params", "headers", "body", "auth", "scripts", "settings"],
   ws: ["message", "headers", "auth", "settings"],
   grpc: ["message", "headers", "auth", "settings"],
@@ -135,6 +138,9 @@ export default function App() {
   const [respHist, setRespHist] = useState<Record<string, HistEntry[]>>({});
   const [viewing, setViewing] = useState<Record<string, number | null>>({});
   const [diffOpen, setDiffOpen] = useState(false);
+  const [mockOpen, setMockOpen] = useState(false);
+  const [mockPort, setMockPort] = useState<number | null>(null);
+  const [mockLog, setMockLog] = useState<MockHit[]>([]);
   const [grpcSchemas, setGrpcSchemas] = useState<Record<string, GrpcSchema>>({});
   const entryN = useRef(0);
   const queue = useRef<Record<string, { entries: StreamEntry[]; patch: Partial<StreamState> }>>({});
@@ -769,6 +775,49 @@ export default function App() {
     }
   };
 
+  /* ------------------------------ mock server ------------------------------ */
+
+  const mockListening = useRef(false);
+  /** Subscribed on first start (not at launch), and kept for the session so the log survives closing the dialog. */
+  const ensureMockListener = async () => {
+    if (mockListening.current) return;
+    mockListening.current = true;
+    try {
+      await listen<Omit<MockHit, "n" | "at">>("mock", (e) => setMockLog((l) => [...l, { ...e.payload, n: ++entryN.current, at: Date.now() }].slice(-300)));
+    } catch {
+      mockListening.current = false;
+    }
+  };
+
+  const startMock = async (port: number, includeEmpty: boolean) => {
+    if (!collection) return;
+    const routes = await buildRoutes(collection.root, includeEmpty);
+    if (!routes.length) throw new Error("No requests with examples to serve");
+    await ensureMockListener();
+    setMockPort(await mockStart(port, routes));
+  };
+  const stopMock = () => {
+    void mockStop();
+    setMockPort(null);
+  };
+
+  /** Keep the response as a documented example (and the mock's answer for this request). */
+  const saveAsExample = () =>
+    guard(async () => {
+      if (!response || "error" in response) return;
+      const name = await ask("Save as example", `${response.status} ${response.statusText}`.trim(), "Save", "Examples are stored in the request file and served by the mock server.");
+      if (!name) return;
+      const drop = new Set(["content-length", "transfer-encoding", "connection", "content-encoding", "date", "server", "set-cookie", "keep-alive", "vary", "etag", "age"]);
+      const headers = response.headers.filter(([k]) => !drop.has(k.toLowerCase())).map(([key, value]) => ({ ...emptyKV(), key, value }));
+      patch({
+        examples: [
+          ...active.examples,
+          { id: uid(), name, status: response.status, headers: [...headers, emptyKV()], body: response.bodyBase64 ? "" : (resBody?.pretty ?? response.body), delayMs: 0 },
+        ],
+      });
+      flash(response.bodyBase64 ? "Saved (binary bodies aren't stored, only status and headers)" : "Saved as example", 2600);
+    });
+
   const send = useCallback(async () => {
     if (!active || (!active.url.trim() && !(active.kind === "grpc" && active.grpc.source === "proto"))) return;
     const tab = active;
@@ -938,6 +987,7 @@ export default function App() {
     "prev-tab": () => nextTab(-1),
     "run-collection": () => (collection ? void runFolder(collection.root, `Run ${collection.name}`) : void info("No collection open", "Open a collection to run its requests.")),
     palette: () => setPaletteOpen(true),
+    mock: () => (collection ? setMockOpen(true) : void info("Open a collection first", "The mock server serves the saved examples of a collection's requests.")),
     codegen: () => (active.kind === "ws" || active.kind === "grpc" ? flash("Code generation isn't available for this request type") : setCodegenOpen(true)),
     "toggle-sidebar": () => setSidebarOpen((v) => !v),
     "zoom-in": () => zoomBy(0.1),
@@ -1014,6 +1064,7 @@ export default function App() {
     { id: "a:newc", group: "Action", title: "New collection…", run: () => fire("new-collection") },
     { id: "a:import", group: "Action", title: "Import OpenAPI, Postman, Bruno…", run: () => fire("import") },
     { id: "a:run", group: "Action", title: "Run collection", run: () => fire("run-collection") },
+    { id: "a:mock", group: "Action", title: mockPort ? `Mock server (running on :${mockPort})` : "Mock server…", run: () => fire("mock") },
     { id: "a:diff", group: "Action", title: "Compare responses of this request", run: () => (hist.length > 1 ? setDiffOpen(true) : flash("Send the request at least twice to compare responses")) },
     { id: "a:code", group: "Action", title: "Generate code for this request", hint: "⇧⌘G", run: () => fire("codegen") },
     { id: "a:side", group: "View", title: "Toggle sidebar", hint: "⌘B", run: () => fire("toggle-sidebar") },
@@ -1103,6 +1154,7 @@ export default function App() {
                       <button title="New request" onClick={() => newRequestIn(selectedDir || collection.root)}>＋</button>
                       <button title="New folder" onClick={() => newFolderIn(selectedDir || collection.root)}>▤</button>
                       <button title="Collection defaults (headers, auth, scripts)" onClick={() => openDefaults(collection.root, `Defaults for “${collection.name}”`)}>⚙</button>
+                      <button title={mockPort ? `Mock server (running on :${mockPort})` : "Mock server"} onClick={() => fire("mock")} className={mockPort ? "live" : ""}>⚑</button>
                       <button title="Run all requests" onClick={() => runFolder(collection.root, `Run ${collection.name}`)}>▶</button>
                       <button title="Import (OpenAPI, Postman, Bruno)" onClick={importMenu}>⇩</button>
                       <button title="Open another collection" onClick={openCollection}>⌂</button>
@@ -1310,6 +1362,7 @@ export default function App() {
                 {s === "params" && counts.params > 0 && <i>{counts.params}</i>}
                 {s === "headers" && counts.headers > 0 && <i>{counts.headers}</i>}
                 {s === "scripts" && (active.preScript.trim() || active.postScript.trim()) && <i>●</i>}
+                {s === "examples" && active.examples.length > 0 && <i>{active.examples.length}</i>}
                 {s === "tests" && active.assertions.length + active.captures.length > 0 && <i>{active.assertions.length + active.captures.length}</i>}
               </button>
             ))}
@@ -1371,6 +1424,7 @@ export default function App() {
                 )}
               </div>
             )}
+            {section === "examples" && <div className="examples-wrap"><ExamplesPanel tab={active} patch={patch} vars={varMap} /></div>}
             {section === "message" && active.kind === "grpc" && (
               <GrpcPanel
                 tab={active}
@@ -1568,6 +1622,11 @@ export default function App() {
                   >
                     Save…
                   </button>
+                  {(active.kind === "http" || active.kind === "graphql") && (
+                    <button className="btn small" onClick={saveAsExample} title="Keep this response as a documented example; the mock server will serve it">
+                      Save as example
+                    </button>
+                  )}
                 </div>
                 {response.bodyBase64 ? (
                   <div className="editor-slot scroll"><BinaryView base64={response.bodyBase64} contentType={response.contentType ?? ""} size={response.sizeBytes} /></div>
@@ -1616,6 +1675,9 @@ export default function App() {
         </section>
         )}
       </main>
+      {mockOpen && collection && (
+        <MockModal root={collection.root} name={collection.name} port={mockPort} log={mockLog} onStart={startMock} onStop={stopMock} onClearLog={() => setMockLog([])} onClose={() => setMockOpen(false)} />
+      )}
       {diffOpen && hist.length > 1 && <DiffModal items={hist} onClose={() => setDiffOpen(false)} />}
       {codegenOpen && <CodeGenModal build={buildSnippet} onClose={() => setCodegenOpen(false)} />}
       {paletteOpen && <CommandPalette commands={commands} onClose={() => setPaletteOpen(false)} />}

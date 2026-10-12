@@ -45,6 +45,10 @@ http = "1.5.0"
 cookie_store = { version = "0.22.1", features = ["serde_json"] }
 url = "2.5.8"
 time = "0.3.55"
+hyper = { version = "1.12.0", features = ["server", "http1"] }
+http-body-util = "0.1.5"
+bytes = "1.12.1"
+uuid = { version = "1.28.0", features = ["v4"] }
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration

@@ -31,6 +31,7 @@ export const defaultGrpc = (): RequestTab["grpc"] => ({ source: "reflection", pr
 
 export const newTab = (): RequestTab => ({
   kind: "http",
+  examples: [],
   gql: defaultGql(),
   ws: defaultWs(),
   grpc: defaultGrpc(),

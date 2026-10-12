@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 pub mod cookies;
 pub mod grpc;
+pub mod mock;
 pub mod streams;
 use std::fs;
 use std::path::Path;
@@ -455,6 +456,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage(streams::Streams::default())
         .manage(grpc::Pools::default())
+        .manage(mock::MockState::default())
         .setup(|app| {
             {
                 use tauri::Manager;
@@ -495,7 +497,9 @@ pub fn run() {
             cookies::cookies_list,
             cookies::cookies_delete,
             cookies::cookies_clear,
-            cookies::cookies_add
+            cookies::cookies_add,
+            mock::mock_start,
+            mock::mock_stop
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

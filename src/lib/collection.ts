@@ -48,6 +48,15 @@ export function serializeRequest(t: RequestTab): string {
       ...(t.grpc.tls ? {} : { tls: false }),
     };
   }
+  if (t.examples.length) {
+    doc.examples = t.examples.map((e) => ({
+      name: e.name,
+      status: e.status,
+      ...(kvOut(e.headers).length ? { headers: kvOut(e.headers) } : {}),
+      ...(e.body ? { body: e.body } : {}),
+      ...(e.delayMs ? { delay: e.delayMs } : {}),
+    }));
+  }
   const tests = t.assertions.map((a) => ({
     kind: a.kind,
     ...(a.path ? { path: a.path } : {}),
@@ -176,6 +185,14 @@ function parseRequestRaw(text: string, file: string): RequestTab {
     bodyMode: (d.body?.mode ?? "none") as BodyMode,
     body: String(d.body?.content ?? ""),
     ...authIn(d.auth),
+    examples: (Array.isArray(d.examples) ? d.examples : []).map((e: any) => ({
+      id: uid(),
+      name: String(e?.name ?? "Example"),
+      status: Number(e?.status ?? 200),
+      headers: kvIn(e?.headers),
+      body: String(e?.body ?? ""),
+      delayMs: Number(e?.delay ?? 0),
+    })),
     assertions: (Array.isArray(d.tests) ? d.tests : []).map((a: any) => ({
       id: uid(),
       enabled: a?.enabled !== false,

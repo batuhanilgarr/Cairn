@@ -31,6 +31,9 @@ export type Capture = { id: string; variable: string; from: "json" | "header"; p
 export type TestResult = { name: string; passed: boolean; error?: string };
 export type RunOutput = { tests: TestResult[]; logs: string[]; scriptError?: string; captured: Record<string, string> };
 
+/** A saved response. Examples document the API and are what the mock server answers with. */
+export type ResponseExample = { id: string; name: string; status: number; headers: KV[]; body: string; delayMs: number };
+
 export type RequestKind = "http" | "graphql" | "sse" | "ws" | "grpc";
 
 export type GraphQLConfig = { query: string; variables: string; operation: string };
@@ -49,6 +52,7 @@ export type GrpcConfig = {
 
 export type RequestTab = {
   kind: RequestKind;
+  examples: ResponseExample[];
   gql: GraphQLConfig;
   ws: WsConfig;
   grpc: GrpcConfig;

@@ -1,6 +1,6 @@
 import { parse } from "yaml";
-import type { AuthMode, BodyMode, KV, RequestTab } from "./types";
-import { defaultOAuth, emptyKV, newTab, tryPrettyJson } from "./util";
+import type { AuthMode, BodyMode, KV, RequestTab, ResponseExample } from "./types";
+import { defaultOAuth, emptyKV, newTab, tryPrettyJson, uid } from "./util";
 
 export type ImportedRequest = {
   /** Folder segments under the collection root (derived from tags). */
@@ -83,6 +83,32 @@ function baseUrlOf(spec: Obj): string {
   }
   if (spec.host) return `${(spec.schemes ?? ["https"])[0]}://${spec.host}${spec.basePath ?? ""}`.replace(/\/$/, "");
   return "";
+}
+
+/** One example per documented response: the spec's own example if it has one, otherwise a sample built from the schema. */
+function examplesFrom(spec: Obj, op: Obj, isV2: boolean): ResponseExample[] {
+  const out: ResponseExample[] = [];
+  const codes = Object.keys(op.responses ?? {}).sort((a, b) => (a.startsWith("2") ? 0 : 1) - (b.startsWith("2") ? 0 : 1) || a.localeCompare(b));
+  for (const code of codes) {
+    const resp = deref(spec, op.responses[code]) ?? {};
+    let sample: unknown;
+    if (isV2) {
+      sample = resp.examples?.["application/json"] ?? (resp.schema ? sampleFromSchema(spec, resp.schema) : undefined);
+    } else if (resp.content) {
+      const media = resp.content["application/json"] ?? Object.entries<any>(resp.content).find(([k]) => k.includes("json"))?.[1];
+      if (media) sample = media.example ?? Object.values<any>(media.examples ?? {})[0]?.value ?? (media.schema ? sampleFromSchema(spec, media.schema) : undefined);
+    }
+    const body = sample === undefined || sample === null ? "" : typeof sample === "string" ? sample : JSON.stringify(sample, null, 2);
+    out.push({
+      id: uid(),
+      name: `${code}${resp.description ? ` ${String(resp.description).split("\n")[0]}` : ""}`.slice(0, 60),
+      status: /^\d{3}$/.test(code) ? Number(code) : 200,
+      headers: body ? [{ ...emptyKV(), key: "Content-Type", value: "application/json" }, emptyKV()] : [emptyKV()],
+      body,
+      delayMs: 0,
+    });
+  }
+  return out;
 }
 
 export function parseOpenApi(text: string): ImportResult {
@@ -223,6 +249,8 @@ export function parseOpenApi(text: string): ImportResult {
       t.authMode = authMode;
       t.headers = [...headers, emptyKV()];
 
+      t.examples = examplesFrom(spec, op, isV2);
+
       const tag = String(op.tags?.[0] ?? "");
       requests.push({
         folder: tag ? [tag] : [],
@@ -259,6 +287,9 @@ export function mergeSpecInto(existing: RequestTab, fresh: RequestTab): RequestT
     return [...filled, ...add, emptyKV()];
   };
   const out: RequestTab = { ...existing, method: fresh.method, source: fresh.source };
+  // new documented responses are added; ones you've edited or kept stay as they are
+  const have = new Set(existing.examples.map((e) => e.name));
+  out.examples = [...existing.examples, ...fresh.examples.filter((e) => !have.has(e.name))];
   out.params = addRows(existing.params, fresh.params);
   out.headers = addRows(existing.headers, fresh.headers);
   if (existing.bodyMode === "none" || !existing.body.trim()) {

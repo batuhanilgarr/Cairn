@@ -30,6 +30,7 @@ No account, no cloud, no telemetry. Fast startup, tiny footprint.
 - **Cookie jar**: stored on this Mac, sent automatically, viewable and editable in Settings > Cookies; per-response Set-Cookie tab
 - **Response history & diff**: the last 20 responses per request, side-by-side body/header comparison (free, unlike some alternatives)
 - **CLI for CI** (`cli/`): `reqnest run ./collection --env Staging --junit results.xml`: the same pipeline as the app (inheritance, captures, scripts, assertions, OAuth, cookies), data-driven runs, JUnit/JSON/HTML reports, a GitHub Action. See [cli/README.md](cli/README.md)
+- **Response examples & mock server**: save any response as an example (stored in the request file); imported OpenAPI specs get examples built from their schemas, kept across re-syncs. One click serves the collection locally with path params, `{{params.id}}` / `{{query.x}}` / `{{$uuid}}` templating, delays, CORS, picking an example per call (`X-Mock-Example`, `X-Mock-Status`) and a live request log
 - **Command palette** (⌘K): jump to any request, tab or environment, run actions
 - **Auto-save** (optional) writes request edits to disk as you type
 - Draggable split between request and response
