@@ -138,6 +138,31 @@ fn list_files(dir: String, suffix: String) -> Result<Vec<String>, String> {
     Ok(out)
 }
 
+fn walk_files(dir: &Path, suffix: &str, out: &mut Vec<String>) {
+    if let Ok(entries) = fs::read_dir(dir) {
+        for e in entries.flatten() {
+            let n = e.file_name().to_string_lossy().to_string();
+            if n.starts_with('.') || n == "node_modules" {
+                continue;
+            }
+            let p = e.path();
+            if p.is_dir() {
+                walk_files(&p, suffix, out);
+            } else if n.ends_with(suffix) {
+                out.push(p.to_string_lossy().to_string());
+            }
+        }
+    }
+}
+
+#[tauri::command]
+fn list_files_recursive(dir: String, suffix: String) -> Vec<String> {
+    let mut out = Vec::new();
+    walk_files(Path::new(&dir), &suffix, &mut out);
+    out.sort();
+    out
+}
+
 #[tauri::command]
 fn read_text(path: String) -> Result<Option<String>, String> {
     match fs::read_to_string(&path) {
@@ -192,6 +217,7 @@ pub fn run() {
             send_request,
             list_tree,
             list_files,
+            list_files_recursive,
             read_text,
             write_text,
             make_dir,

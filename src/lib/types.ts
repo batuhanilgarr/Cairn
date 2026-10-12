@@ -18,6 +18,8 @@ export type RequestTab = {
   insecure: boolean;
   followRedirects: boolean;
   timeoutMs: number;
+  /** Origin of an imported request, e.g. "POST /pets" for OpenAPI. Lets re-import match it up again. */
+  source?: string;
   /** Absolute path of the .req.yaml this tab is bound to (null = unsaved scratch request). */
   file?: string | null;
   /** Serialized form last written to / read from disk, used to detect unsaved changes. */

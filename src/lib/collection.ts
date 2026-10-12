@@ -18,6 +18,7 @@ const kvOut = (rows: KV[]) =>
 
 export function serializeRequest(t: RequestTab): string {
   const doc: Record<string, unknown> = { name: t.name, method: t.method, url: t.url };
+  if (t.source) doc.source = t.source;
   const params = kvOut(t.params);
   const headers = kvOut(t.headers);
   if (params.length) doc.params = params;
@@ -54,6 +55,7 @@ export function parseRequest(text: string, file: string): RequestTab {
     name: String(d.name ?? basename(file).replace(/\.req\.ya?ml$/, "")),
     method: String(d.method ?? "GET").toUpperCase(),
     url: String(d.url ?? ""),
+    source: d.source ? String(d.source) : undefined,
     params: kvIn(d.params),
     headers: kvIn(d.headers),
     bodyMode: (d.body?.mode ?? "none") as BodyMode,
@@ -94,6 +96,19 @@ export async function initCollection(root: string, name: string) {
   const cur = (await readText(gi)) ?? "";
   if (!/^\.reqnest\/?$/m.test(cur)) await writeText(gi, cur + (cur && !cur.endsWith("\n") ? "\n" : "") + ".reqnest/\n");
   await makeDir(join(root, "environments"));
+}
+
+export type CollectionMeta = { name: string; openapi?: { source: string } };
+
+export async function readCollectionMeta(root: string): Promise<CollectionMeta | null> {
+  const t = await readText(join(root, "reqnest.yaml"));
+  if (t === null) return null;
+  const d: any = parse(t) ?? {};
+  return { name: String(d.name ?? basename(root)), openapi: d.openapi?.source ? { source: String(d.openapi.source) } : undefined };
+}
+
+export async function writeCollectionMeta(root: string, meta: CollectionMeta) {
+  await writeText(join(root, "reqnest.yaml"), stringify(meta, YAML_OPTS));
 }
 
 export async function readCollectionName(root: string): Promise<string | null> {

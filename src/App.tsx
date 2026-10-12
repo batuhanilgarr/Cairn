@@ -6,8 +6,10 @@ import { Tree } from "./Tree";
 import {
   basename,
   dirname,
+  listFilesRecursive,
   listTree,
   makeDir,
+  pickFile,
   pickFolder,
   readText,
   removePath,
@@ -17,6 +19,8 @@ import {
 import {
   initCollection,
   loadEnvironments,
+  readCollectionMeta,
+  writeCollectionMeta,
   parseRequest,
   readCollectionName,
   requestPath,
@@ -40,6 +44,10 @@ import {
   uid,
 } from "./lib/util";
 import { looksLikeCurl, parseCurl } from "./lib/curl";
+import { parseOpenApi, type ImportedRequest } from "./lib/openapi";
+import { parsePostman } from "./lib/postman";
+import { parseBru, parseBruEnv } from "./lib/bruno";
+import { ensureEnvironment, writeImport } from "./lib/importer";
 import "./styles.css";
 
 type ReqSection = "params" | "headers" | "body" | "auth" | "settings";
@@ -97,6 +105,10 @@ export default function App() {
   const confirmDialog = (title: string, message: string, confirm = "Delete") =>
     new Promise<boolean>((resolve) =>
       setDialog({ kind: "confirm", title, message, confirm, danger: true, resolve: (v) => (setDialog(null), resolve(v)) }),
+    );
+  const choose = (title: string, options: { id: string; label: string; hint?: string }[]) =>
+    new Promise<string | null>((resolve) =>
+      setDialog({ kind: "menu", title, options, resolve: (v) => (setDialog(null), resolve(v)) }),
     );
   const info = (title: string, message: string) =>
     new Promise<void>((resolve) => setDialog({ kind: "info", title, message, resolve: () => (setDialog(null), resolve()) }));
@@ -199,6 +211,115 @@ export default function App() {
       await refreshTree();
       flash("Saved");
     });
+
+  /* ------------------------------- import ------------------------------- */
+
+  const reloadEnvs = async (preferFile?: string) => {
+    if (!collection) return;
+    const loaded = await loadEnvironments(collection.root);
+    writtenEnvs.current = new Map();
+    setEnvs(loaded);
+    setEnvId(preferFile && loaded.some((e) => e.id === preferFile) ? preferFile : (loaded.find((e) => e.id === envId)?.id ?? loaded[0]?.id ?? ""));
+  };
+
+  const summarize = (head: string, s: { created: number; updated: number; unchanged: number; removed: string[] }, notes: string[]) => {
+    const lines = [head, "", `Created ${s.created}, updated ${s.updated}, unchanged ${s.unchanged}.`];
+    if (s.removed.length)
+      lines.push("", `No longer in the spec (kept, delete if unwanted): ${s.removed.slice(0, 6).join(", ")}${s.removed.length > 6 ? `, +${s.removed.length - 6} more` : ""}`);
+    if (notes.length) lines.push("", ...notes.slice(0, 5).map((n) => `• ${n}`), ...(notes.length > 5 ? [`• +${notes.length - 5} more`] : []));
+    return lines.join("\n");
+  };
+
+  const fetchSpec = async (url: string) => {
+    const res = await invoke<ResponseData>("send_request", {
+      spec: { method: "GET", url, headers: [["Accept", "application/json, application/yaml, text/yaml, */*"]], body: null, timeoutMs: 30000, insecure: false, followRedirects: true },
+    });
+    if (res.status >= 400) throw new Error(`Fetching the spec failed: HTTP ${res.status} ${res.statusText}`);
+    return res.body;
+  };
+
+  const importOpenApi = async (source: string, sync: boolean) => {
+    if (!collection) return;
+    const text = /^https?:\/\//i.test(source) ? await fetchSpec(source) : await readText(source);
+    if (text === null) throw new Error(`Couldn't read ${source}`);
+    const parsed = parseOpenApi(text);
+    const summary = await writeImport(collection.root, parsed.requests, sync);
+    const env = await ensureEnvironment(collection.root, parsed.title, parsed.vars);
+    const meta = (await readCollectionMeta(collection.root)) ?? { name: collection.name };
+    await writeCollectionMeta(collection.root, { ...meta, openapi: { source } });
+    await reloadEnvs(env.id);
+    await refreshTree();
+    await info(`${parsed.title}: imported`, summarize(`Environment "${env.name}" has {{baseUrl}} and the variables the requests use.`, summary, parsed.notes));
+  };
+
+  const importMenu = () =>
+    guard(async () => {
+      if (!collection) return;
+      const meta = await readCollectionMeta(collection.root);
+      const choice = await choose("Import into this collection", [
+        ...(meta?.openapi ? [{ id: "resync", label: "Re-sync OpenAPI", hint: meta.openapi.source }] : []),
+        { id: "oas-url", label: "OpenAPI / Swagger from URL", hint: "JSON or YAML, v2 or v3" },
+        { id: "oas-file", label: "OpenAPI / Swagger from file" },
+        { id: "postman", label: "Postman collection", hint: "v2.0 / v2.1 JSON export" },
+        { id: "bruno", label: "Bruno collection", hint: "pick the collection folder" },
+      ]);
+      if (!choice) return;
+      if (choice === "resync" && meta?.openapi) return importOpenApi(meta.openapi.source, true);
+      if (choice === "oas-url") {
+        const url = await ask("OpenAPI URL", "", "Import", "e.g. https://petstore3.swagger.io/api/v3/openapi.json");
+        if (url) await importOpenApi(url, true);
+      }
+      if (choice === "oas-file") {
+        const f = await pickFile("Choose an OpenAPI file", ["json", "yaml", "yml"]);
+        if (f) await importOpenApi(f, true);
+      }
+      if (choice === "postman") {
+        const f = await pickFile("Choose a Postman collection", ["json"]);
+        if (!f) return;
+        const parsed = parsePostman((await readText(f)) ?? "");
+        const summary = await writeImport(collection.root, parsed.requests, false);
+        if (Object.keys(parsed.vars).length) await reloadEnvs((await ensureEnvironment(collection.root, parsed.title, parsed.vars)).id);
+        await refreshTree();
+        await info(`${parsed.title}: imported`, summarize("Postman collection imported.", summary, parsed.notes));
+      }
+      if (choice === "bruno") {
+        const dir = await pickFolder("Choose the Bruno collection folder");
+        if (!dir) return;
+        const reqs: ImportedRequest[] = [];
+        const notes: string[] = [];
+        let envFile: string | undefined;
+        for (const file of await listFilesRecursive(dir, ".bru")) {
+          const rel = file.slice(dir.length + 1).split("/");
+          const text = (await readText(file)) ?? "";
+          if (rel[0] === "environments") {
+            const { vars } = parseBruEnv(text);
+            const name = rel[rel.length - 1].replace(/\.bru$/, "");
+            const secrets = vars.filter((v) => v.secret).map((v) => v.key);
+            envFile = (await ensureEnvironment(collection.root, name, Object.fromEntries(vars.map((v) => [v.key, v.value])), secrets)).id;
+            continue;
+          }
+          const r = parseBru(text, rel.slice(0, -1), rel[rel.length - 1]);
+          if (r) {
+            reqs.push(r.req);
+            notes.push(...r.notes);
+          }
+        }
+        const summary = await writeImport(collection.root, reqs, false);
+        await reloadEnvs(envFile);
+        await refreshTree();
+        await info("Bruno collection imported", summarize(`${basename(dir)} imported.`, summary, notes));
+      }
+    });
+
+  const applyCurl = (text: string) => {
+    const { tab: c, notes } = parseCurl(text);
+    patch({
+      method: c.method, url: c.url, headers: c.headers, params: [emptyKV()], bodyMode: c.bodyMode, body: c.body,
+      authMode: c.authMode, authUser: c.authUser, authPass: c.authPass, authToken: "",
+      insecure: c.insecure, followRedirects: c.followRedirects, timeoutMs: c.timeoutMs,
+    });
+    flash(notes.length ? `Imported cURL — ${notes[0]}` : "Imported cURL command");
+  };
 
   const newRequestIn = (dir: string) =>
     guard(async () => {
@@ -441,6 +562,7 @@ export default function App() {
                     <span className="row-actions always">
                       <button title="New request" onClick={() => newRequestIn(selectedDir || collection.root)}>＋</button>
                       <button title="New folder" onClick={() => newFolderIn(selectedDir || collection.root)}>▤</button>
+                      <button title="Import (OpenAPI, Postman, Bruno)" onClick={importMenu}>⇩</button>
                       <button title="Open another collection" onClick={openCollection}>⌂</button>
                       <button title="Close collection" onClick={closeCollection}>×</button>
                     </span>
@@ -581,18 +703,15 @@ export default function App() {
             placeholder="Enter URL, e.g. https://api.example.com/users  (use {{vars}})"
             value={active.url}
             spellCheck={false}
-            onChange={(e) => {
-              const v = e.target.value;
-              if (looksLikeCurl(v)) {
-                const { tab: c, notes } = parseCurl(v);
-                patch({
-                  method: c.method, url: c.url, headers: c.headers, params: [emptyKV()], bodyMode: c.bodyMode, body: c.body,
-                  authMode: c.authMode, authUser: c.authUser, authPass: c.authPass, authToken: "",
-                  insecure: c.insecure, followRedirects: c.followRedirects, timeoutMs: c.timeoutMs,
-                });
-                flash(notes.length ? `Imported cURL — ${notes[0]}` : "Imported cURL command");
-              } else patch({ url: v });
+            onPaste={(e) => {
+              // Intercept before the <input> flattens multi-line text.
+              const text = e.clipboardData.getData("text");
+              if (looksLikeCurl(text)) {
+                e.preventDefault();
+                applyCurl(text);
+              }
             }}
+            onChange={(e) => (looksLikeCurl(e.target.value) ? applyCurl(e.target.value) : patch({ url: e.target.value }))}
             onKeyDown={(e) => e.key === "Enter" && send()}
           />
           <button className="btn primary" onClick={send} disabled={loading[active.id]}>

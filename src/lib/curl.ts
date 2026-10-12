@@ -32,6 +32,12 @@ export function tokenize(input: string): string[] {
         else cur += s[i];
       }
       has = true;
+    } else if (c === "\\" && i + 1 < s.length && /\s/.test(s[i + 1])) {
+      // A backslash before whitespace is a line continuation whose newline got flattened by a
+      // single-line input. (An escaped space is vanishingly rare in curl commands.)
+      if (has) out.push(cur);
+      cur = "";
+      has = false;
     } else if (c === "\\" && i + 1 < s.length) {
       cur += s[++i];
       has = true;
