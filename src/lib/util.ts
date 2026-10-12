@@ -29,12 +29,15 @@ export const defaultGql = () => ({ query: "", variables: "", operation: "" });
 export const defaultWs = () => ({ composer: "", messages: [], protocols: "" });
 export const defaultGrpc = (): RequestTab["grpc"] => ({ source: "reflection", protoFiles: [], importPaths: [], method: "", message: "{}", tls: true });
 
+export const defaultMcp = (): RequestTab["mcp"] => ({ transport: "http", command: "", args: "", env: [emptyKV()] });
+
 export const newTab = (): RequestTab => ({
   kind: "http",
   examples: [],
   gql: defaultGql(),
   ws: defaultWs(),
   grpc: defaultGrpc(),
+  mcp: defaultMcp(),
   id: uid(),
   name: "New request",
   method: "GET",
@@ -67,6 +70,7 @@ export const normalizeTab = (t: Partial<RequestTab>): RequestTab => {
     gql: { ...base.gql, ...(t.gql ?? {}) },
     ws: { ...base.ws, ...(t.ws ?? {}) },
     grpc: { ...base.grpc, ...(t.grpc ?? {}) },
+    mcp: { ...base.mcp, ...(t.mcp ?? {}) },
   } as RequestTab;
 };
 

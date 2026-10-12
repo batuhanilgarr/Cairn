@@ -29,6 +29,8 @@ import { buildRoutes, mockStart, mockStop, type MockHit } from "./lib/mock";
 import { BinaryView, suggestFileName } from "./BinaryView";
 import { parseSetCookie } from "./lib/cookies";
 import { GrpcPanel, type GrpcSchema } from "./GrpcPanel";
+import { McpPanel } from "./McpPanel";
+import { loadInfo, mcpClose, mcpConnect, mcpRequest, rpcLabel, splitArgs, type McpInfo } from "./lib/mcp";
 import { WsPanel, type WsMode } from "./WsPanel";
 import { EMPTY_STREAM, MAX_ENTRIES, grpcCall, grpcDescribe, grpcEnd, grpcSend, sseConnect, streamStop, subscribe, unsubscribe, wsClose, wsConnect, wsSend, type StreamEntry, type StreamEvent, type StreamState } from "./lib/stream";
 import { cachedSchema, loadGraphQL, storeSchema } from "./lib/graphql";
@@ -89,7 +91,7 @@ import { parseBru, parseBruEnv } from "./lib/bruno";
 import { ensureEnvironment, writeImport } from "./lib/importer";
 import "./styles.css";
 
-type ReqSection = "params" | "headers" | "body" | "query" | "message" | "examples" | "auth" | "scripts" | "tests" | "settings";
+type ReqSection = "params" | "headers" | "body" | "query" | "message" | "examples" | "explore" | "auth" | "scripts" | "tests" | "settings";
 
 const SECTIONS: Record<RequestKind, ReqSection[]> = {
   http: ["params", "headers", "body", "auth", "scripts", "tests", "examples", "settings"],
@@ -97,9 +99,10 @@ const SECTIONS: Record<RequestKind, ReqSection[]> = {
   sse: ["params", "headers", "body", "auth", "scripts", "settings"],
   ws: ["message", "headers", "auth", "settings"],
   grpc: ["message", "headers", "auth", "settings"],
+  mcp: ["explore", "headers", "auth", "settings"],
 };
-const KIND_LABEL: Record<RequestKind, string> = { http: "HTTP", graphql: "GraphQL", sse: "SSE", ws: "WebSocket", grpc: "gRPC" };
-const pillOf = (t: RequestTab) => (t.kind === "http" ? t.method : t.kind === "graphql" ? "GQL" : t.kind === "grpc" ? "gRPC" : t.kind.toUpperCase());
+const KIND_LABEL: Record<RequestKind, string> = { http: "HTTP", graphql: "GraphQL", sse: "SSE", ws: "WebSocket", grpc: "gRPC", mcp: "MCP" };
+const pillOf = (t: RequestTab) => (t.kind === "http" ? t.method : t.kind === "graphql" ? "GQL" : t.kind === "grpc" ? "gRPC" : t.kind === "mcp" ? "MCP" : t.kind.toUpperCase());
 type ResSection = "body" | "headers" | "cookies" | "tests" | "console";
 type SideSection = "collections" | "history" | "environments";
 
@@ -143,6 +146,7 @@ export default function App() {
   const [mockOpen, setMockOpen] = useState(false);
   const [mockPort, setMockPort] = useState<number | null>(null);
   const [mockLog, setMockLog] = useState<MockHit[]>([]);
+  const [mcpInfo, setMcpInfo] = useState<Record<string, McpInfo>>({});
   const [grpcSchemas, setGrpcSchemas] = useState<Record<string, GrpcSchema>>({});
   const entryN = useRef(0);
   const queue = useRef<Record<string, { entries: StreamEntry[]; patch: Partial<StreamState> }>>({});
@@ -174,7 +178,7 @@ export default function App() {
     t.kind === "http" && !t.url.trim() && !t.body && !t.file && t.params.every((r) => !r.key) && t.headers.every((r) => !r.key) &&
     (t.authMode === "none" || t.authMode === "inherit") && !t.preScript && !t.postScript && !t.assertions.length && !t.examples.length;
   const showWelcome = !!active && isBlank(active) && !responses[active.id] && !loading[active.id] && !streams[active.id];
-  const isStreamKind = active?.kind === "ws" || active?.kind === "sse" || active?.kind === "grpc";
+  const isStreamKind = active?.kind === "ws" || active?.kind === "sse" || active?.kind === "grpc" || active?.kind === "mcp";
   const streamState = (active && streams[active.id]) || EMPTY_STREAM;
   const streamStatus = streamState.status;
   const hist = (active && respHist[active.id]) || [];
@@ -592,6 +596,7 @@ export default function App() {
   const closeTab = (id: string) => {
     if (streams[id]) {
       streamStop(id).catch(() => {});
+      mcpClose(id).catch(() => {});
       unsubscribe(id);
       setStreams((m) => {
         const { [id]: _drop, ...rest } = m;
@@ -661,6 +666,12 @@ export default function App() {
         }
         pushStream(id, [{ dir: "sys", label: "connected", text: e.protocol ? `Subprotocol: ${e.protocol}` : `HTTP ${e.status} ${e.statusText ?? ""}`.trim() }], { status: "open", info: e.sse === false ? `HTTP ${e.status} (not an event stream)` : e.status ? `HTTP ${e.status}` : e.protocol ? `protocol ${e.protocol}` : "", startedAt: Date.now() });
         break;
+      case "sent":
+        pushStream(id, [{ dir: "out", label: rpcLabel(e.text), text: e.text, size: new TextEncoder().encode(e.text).length }]);
+        break;
+      case "stderr":
+        pushStream(id, [{ dir: "sys", label: "stderr", text: e.text }]);
+        break;
       case "event":
         pushStream(id, [{ dir: "in", label: e.event, text: e.data, size: new TextEncoder().encode(e.data).length }]);
         break;
@@ -668,7 +679,7 @@ export default function App() {
         pushStream(id, [{ dir: "in", label: "data", text: e.text, size: new TextEncoder().encode(e.text).length }]);
         break;
       case "message":
-        pushStream(id, [{ dir: "in", label: "text", text: e.text, size: new TextEncoder().encode(e.text).length }]);
+        pushStream(id, [{ dir: "in", label: tabsRef.current.find((t) => t.id === id)?.kind === "mcp" ? rpcLabel(e.text) : "text", text: e.text, size: new TextEncoder().encode(e.text).length }]);
         break;
       case "binary":
         pushStream(id, [{ dir: "in", label: "binary", text: e.preview, size: e.size }]);
@@ -714,7 +725,7 @@ export default function App() {
   };
 
   const connectStream = async (tab: RequestTab) => {
-    if (!tab.url.trim() && !(tab.kind === "grpc" && tab.grpc.source === "proto")) return;
+    if (!tab.url.trim() && !(tab.kind === "grpc" && tab.grpc.source === "proto") && !(tab.kind === "mcp" && tab.mcp.transport === "stdio")) return;
     if (tab.kind === "grpc" && !tab.grpc.method.trim()) return flash("Pick a method first", 2500);
     streamStop(tab.id).catch(() => {});
     pushStream(tab.id, [], { status: "connecting", info: "" });
@@ -723,7 +734,19 @@ export default function App() {
     setHistory((h) => [{ id: uid(), at: Date.now(), method: tab.method, url: tab.url, status: null, tab }, ...h].slice(0, settings.historyLimit));
     try {
       await subscribe(tab.id, (e) => onStreamEvent(tab.id, e));
-      if (tab.kind === "grpc") {
+      if (tab.kind === "mcp") {
+        const sub = (x: string) => interpolate(x, prep.eff());
+        const m = tab.mcp;
+        const cfg =
+          m.transport === "http"
+            ? ({ transport: "http", url: prep.spec.url, headers: prep.spec.headers, insecure: tab.insecure, timeoutMs: tab.timeoutMs } as const)
+            : ({ transport: "stdio", command: sub(m.command), args: splitArgs(sub(m.args)), env: m.env.filter((r) => r.enabled && r.key).map((r) => [r.key, sub(r.value)] as [string, string]) } as const);
+        const init = await mcpConnect(tab.id, cfg);
+        pushStream(tab.id, [{ dir: "sys", label: "connected", text: `${init?.serverInfo?.name ?? "MCP server"} ${init?.serverInfo?.version ?? ""} (protocol ${init?.protocolVersion})`.trim() }], { status: "open", info: init?.serverInfo?.name ?? "" });
+        setMcpInfo((i) => ({ ...i, [tab.id]: { init, tools: [], resources: [], templates: [], prompts: [] } }));
+        const full = await loadInfo(tab.id, init);
+        setMcpInfo((i) => ({ ...i, [tab.id]: full }));
+      } else if (tab.kind === "grpc") {
         const msg = interpolate(tab.grpc.message, prep.eff());
         pushStream(tab.id, [{ dir: "out", label: tab.grpc.method.split("/")[1] ?? "request", text: msg, size: new TextEncoder().encode(msg).length }]);
         await grpcCall(tab.id, {
@@ -748,7 +771,15 @@ export default function App() {
 
   const disconnectStream = async (tab: RequestTab) => {
     try {
-      if (tab.kind === "ws") await wsClose(tab.id);
+      if (tab.kind === "mcp") {
+        await mcpClose(tab.id);
+        setMcpInfo((i) => {
+          const { [tab.id]: _x, ...rest } = i;
+          return rest;
+        });
+        unsubscribe(tab.id);
+        pushStream(tab.id, [{ dir: "sys", label: "disconnected", text: "You disconnected" }], { status: "closed" });
+      } else if (tab.kind === "ws") await wsClose(tab.id);
       else {
         await streamStop(tab.id);
         unsubscribe(tab.id);
@@ -825,9 +856,9 @@ export default function App() {
     });
 
   const send = useCallback(async () => {
-    if (!active || (!active.url.trim() && !(active.kind === "grpc" && active.grpc.source === "proto"))) return;
+    if (!active || (!active.url.trim() && !(active.kind === "grpc" && active.grpc.source === "proto") && !(active.kind === "mcp" && active.mcp.transport === "stdio"))) return;
     const tab = active;
-    if (tab.kind === "ws" || tab.kind === "sse" || tab.kind === "grpc") {
+    if (tab.kind === "ws" || tab.kind === "sse" || tab.kind === "grpc" || tab.kind === "mcp") {
       const st = streams[tab.id]?.status;
       if (tab.kind === "ws" && st === "open" && tab.ws.composer.trim()) {
         let isJson = true;
@@ -1319,7 +1350,7 @@ export default function App() {
 
         <div className="urlbar">
           <select className="kind" value={active.kind} onChange={(e) => patch({ kind: e.target.value as RequestKind })} title="Request type">
-            {(["http", "graphql", "sse", "ws", "grpc"] as RequestKind[]).map((k) => (
+            {(["http", "graphql", "sse", "ws", "grpc", "mcp"] as RequestKind[]).map((k) => (
               <option key={k} value={k}>{KIND_LABEL[k]}</option>
             ))}
           </select>
@@ -1330,13 +1361,18 @@ export default function App() {
             ))}
           </select>
           )}
+          {active.kind === "mcp" && active.mcp.transport === "stdio" ? (
+            <div className="url-static" title="Configured in the Explore tab">
+              <span className="muted">stdio</span> {active.mcp.command || "command"} {active.mcp.args}
+            </div>
+          ) : (
           <CodeEditor
             singleLine
             className="url"
             value={active.url}
             vars={varMap}
             editorRef={urlView}
-            placeholder={active.kind === "grpc" ? "localhost:50051  or  grpcs://api.example.com:443" : active.kind === "ws" ? "wss://example.com/socket" : "Enter URL, or paste a cURL command  (use {{variables}})"}
+            placeholder={active.kind === "mcp" ? "https://example.com/mcp" : active.kind === "grpc" ? "localhost:50051  or  grpcs://api.example.com:443" : active.kind === "ws" ? "wss://example.com/socket" : "Enter URL, or paste a cURL command  (use {{variables}})"}
             onSubmit={send}
             onPasteText={(text) => {
               if (!looksLikeCurl(text)) return false;
@@ -1345,6 +1381,7 @@ export default function App() {
             }}
             onChange={(v) => (looksLikeCurl(v) ? applyCurl(v) : patch({ url: v }))}
           />
+          )}
           {active.kind !== "ws" && active.kind !== "grpc" && (
             <button className="btn code-btn" onClick={() => fire("codegen")} title="Generate code (⇧⌘G)" aria-label="Generate code">
               {"</>"}
@@ -1449,6 +1486,17 @@ export default function App() {
                 )}
               </div>
             )}
+            {section === "explore" && (
+              <McpPanel
+                tab={active}
+                patch={patch}
+                vars={varMap}
+                connected={streamStatus === "open"}
+                connecting={streamStatus === "connecting"}
+                info={mcpInfo[active.id]}
+                call={(method, params) => mcpRequest(active.id, method, params)}
+              />
+            )}
             {section === "examples" && <div className="examples-wrap"><ExamplesPanel tab={active} patch={patch} vars={varMap} /></div>}
             {section === "message" && active.kind === "grpc" && (
               <GrpcPanel
@@ -1534,7 +1582,7 @@ export default function App() {
             <StreamLog
               state={streamState}
               onClear={() => setStreams((m) => ({ ...m, [active.id]: { ...(m[active.id] ?? EMPTY_STREAM), entries: [], dropped: 0, sent: 0, received: 0 } }))}
-              emptyHint={active.kind === "ws" ? "Connect, then send a message. Everything in both directions shows up here." : active.kind === "grpc" ? "Pick a method and hit Invoke. Requests, responses, headers and the final status appear here." : "Connect to start receiving events."}
+              emptyHint={active.kind === "ws" ? "Connect, then send a message. Everything in both directions shows up here." : active.kind === "mcp" ? "Connect to a server. Every JSON-RPC message in both directions is logged here, plus the server's stderr for local commands." : active.kind === "grpc" ? "Pick a method and hit Invoke. Requests, responses, headers and the final status appear here." : "Connect to start receiving events."}
             />
           </div>
         ) : (

@@ -34,7 +34,9 @@ export type RunOutput = { tests: TestResult[]; logs: string[]; scriptError?: str
 /** A saved response. Examples document the API and are what the mock server answers with. */
 export type ResponseExample = { id: string; name: string; status: number; headers: KV[]; body: string; delayMs: number };
 
-export type RequestKind = "http" | "graphql" | "sse" | "ws" | "grpc";
+export type RequestKind = "http" | "graphql" | "sse" | "ws" | "grpc" | "mcp";
+
+export type McpConfig = { transport: "http" | "stdio"; command: string; args: string; env: KV[] };
 
 export type GraphQLConfig = { query: string; variables: string; operation: string };
 export type SavedMessage = { id: string; name: string; body: string };
@@ -56,6 +58,7 @@ export type RequestTab = {
   gql: GraphQLConfig;
   ws: WsConfig;
   grpc: GrpcConfig;
+  mcp: McpConfig;
   id: string;
   name: string;
   method: string;

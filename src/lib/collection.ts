@@ -19,7 +19,7 @@ const kvOut = (rows: KV[]) =>
 export function serializeRequest(t: RequestTab): string {
   const doc: Record<string, unknown> = { name: t.name };
   if (t.kind !== "http") doc.type = t.kind;
-  if (t.kind !== "graphql" && t.kind !== "ws" && t.kind !== "grpc") doc.method = t.method;
+  if (t.kind !== "graphql" && t.kind !== "ws" && t.kind !== "grpc" && t.kind !== "mcp") doc.method = t.method;
   doc.url = t.url;
   if (t.source) doc.source = t.source;
   const params = kvOut(t.params);
@@ -37,6 +37,12 @@ export function serializeRequest(t: RequestTab): string {
       ...(t.ws.protocols.trim() ? { protocols: t.ws.protocols } : {}),
       ...(t.ws.composer.trim() ? { message: t.ws.composer } : {}),
       ...(t.ws.messages.length ? { saved: t.ws.messages.map((m) => ({ name: m.name, body: m.body })) } : {}),
+    };
+  }
+  if (t.kind === "mcp") {
+    doc.mcp = {
+      transport: t.mcp.transport,
+      ...(t.mcp.transport === "stdio" ? { command: t.mcp.command, ...(t.mcp.args.trim() ? { args: t.mcp.args } : {}), ...(kvOut(t.mcp.env).length ? { env: kvOut(t.mcp.env) } : {}) } : {}),
     };
   }
   if (t.kind === "grpc") {
@@ -162,7 +168,7 @@ function parseRequestRaw(text: string, file: string): RequestTab {
   return {
     ...t,
     name: String(d.name ?? basename(file).replace(/\.req\.ya?ml$/, "")),
-    kind: (["graphql", "sse", "ws", "grpc"].includes(d.type) ? d.type : "http") as RequestKind,
+    kind: (["graphql", "sse", "ws", "grpc", "mcp"].includes(d.type) ? d.type : "http") as RequestKind,
     method: String(d.method ?? "GET").toUpperCase(),
     url: String(d.url ?? ""),
     gql: { query: String(d.graphql?.query ?? ""), variables: String(d.graphql?.variables ?? ""), operation: String(d.graphql?.operation ?? "") },
@@ -171,6 +177,7 @@ function parseRequestRaw(text: string, file: string): RequestTab {
       protocols: String(d.websocket?.protocols ?? ""),
       messages: (Array.isArray(d.websocket?.saved) ? d.websocket.saved : []).map((m: any) => ({ id: uid(), name: String(m?.name ?? ""), body: String(m?.body ?? "") })),
     },
+    mcp: { transport: d.mcp?.transport === "stdio" ? "stdio" : "http", command: String(d.mcp?.command ?? ""), args: String(d.mcp?.args ?? ""), env: kvIn(d.mcp?.env) },
     grpc: {
       source: d.grpc?.source === "proto" ? "proto" : "reflection",
       protoFiles: Array.isArray(d.grpc?.protoFiles) ? d.grpc.protoFiles.map(String) : [],
