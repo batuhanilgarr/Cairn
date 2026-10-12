@@ -31,13 +31,38 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": [
+      "app",
+      "dmg"
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "category": "DeveloperTool",
+    "shortDescription": "Local-first API client",
+    "longDescription": "Reqnest is a local-first API client for REST, GraphQL, gRPC, WebSocket and SSE. Collections are plain files you can commit to Git. No account, no cloud, no telemetry.",
+    "copyright": "Copyright \u00a9 2026 Reqnest contributors",
+    "macOS": {
+      "minimumSystemVersion": "11.0",
+      "dmg": {
+        "windowSize": {
+          "width": 620,
+          "height": 380
+        },
+        "appPosition": {
+          "x": 170,
+          "y": 190
+        },
+        "applicationFolderPosition": {
+          "x": 450,
+          "y": 190
+        }
+      },
+      "signingIdentity": "-"
+    }
   }
 }

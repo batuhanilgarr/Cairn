@@ -41,7 +41,7 @@ No account, no cloud, no telemetry. Fast startup, tiny footprint.
 
 ## Roadmap
 
-gRPC / WebSocket / SSE / GraphQL, mock server, MCP support, team sync (self-hostable).
+MCP support, optional self-hostable team sync, Windows and Linux builds, collection docs export.
 
 ## Develop
 
@@ -50,5 +50,6 @@ Requires Node 20+ and Rust (rustup).
 ```bash
 npm install
 npm run tauri dev      # run the app
-npm run tauri build    # produce a .app / .dmg
+npm run tauri build    # produce a .app / .dmg (the .app is about 10 MB)
+npm run build --prefix cli   # the CI runner: see cli/README.md
 ```

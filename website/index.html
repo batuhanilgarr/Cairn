@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Reqnest: the API client that lives in your repo</title>
+  <meta name="description" content="A fast, local-first API client for macOS. REST, GraphQL, gRPC, WebSocket and SSE. Collections are plain files you commit to Git. No account, no cloud, no telemetry.">
+  <meta property="og:title" content="Reqnest: the API client that lives in your repo">
+  <meta property="og:description" content="Local-first API client for REST, GraphQL, gRPC, WebSocket and SSE. Plain-file collections, a CI runner and a mock server built in.">
+  <meta property="og:image" content="https://batuhanilgarr.github.io/Reqnest/assets/og.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="theme-color" content="#6c4cf5">
+  <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="nav">
+  <a class="brand" href="#top" aria-label="Reqnest home"><img src="assets/logo.svg" alt="" width="26" height="26"><span>Reqnest</span></a>
+  <nav>
+    <a href="#why">Why</a>
+    <a href="#features">Features</a>
+    <a href="#files">Plain files</a>
+    <a href="#compare">Compare</a>
+    <a href="#faq">FAQ</a>
+    <a class="gh" href="https://github.com/batuhanilgarr/Reqnest" rel="noopener">GitHub</a>
+    <a class="btn small" href="#download">Download</a>
+  </nav>
+</header>
+
+<main id="top">
+  <section class="hero">
+    <p class="eyebrow">Native macOS app · no account · no cloud</p>
+    <h1>The API client that<br><span class="grad">lives in your repo.</span></h1>
+    <p class="lead">Reqnest is a fast, native-feeling API client for REST, GraphQL, gRPC, WebSocket and SSE. Your collections are plain files you review in pull requests. Nothing leaves your Mac unless you send it.</p>
+    <div class="cta">
+      <a class="btn big" href="#download">Download for macOS</a>
+      <a class="btn big ghost" href="https://github.com/batuhanilgarr/Reqnest" rel="noopener">View on GitHub</a>
+    </div>
+    <p class="fine">A small download (under 15 MB) for macOS 11 or later, Apple silicon and Intel.</p>
+
+    <div class="appmock" aria-hidden="true">
+      <div class="chrome"><i></i><i></i><i></i><span>Reqnest</span></div>
+      <div class="app">
+        <aside>
+          <div class="logo-row"><img src="assets/logo.svg" alt="" width="16" height="16"> Reqnest</div>
+          <div class="seg"><b>Collections</b><span>History</span><span>Envs</span></div>
+          <div class="coll">Payments API <em>⚑ ▶</em></div>
+          <ul>
+            <li class="f">▾ auth</li>
+            <li><s class="post">POST</s> login</li>
+            <li><s class="post">POST</s> refresh</li>
+            <li class="f">▾ invoices</li>
+            <li class="on"><s class="get">GET</s> list invoices</li>
+            <li><s class="get">GET</s> get invoice</li>
+            <li><s class="post">POST</s> create invoice</li>
+            <li><s class="del">DEL</s> void invoice</li>
+          </ul>
+        </aside>
+        <section>
+          <div class="tabs"><span class="tab on"><s class="get">GET</s> list invoices</span><span class="tab"><s class="gql">GQL</s> customers</span><span class="tab"><s class="ws">WS</s> live prices</span></div>
+          <div class="urlbar"><span class="sel">HTTP</span><span class="sel get">GET</span><span class="url"><u>{{baseUrl}}</u>/v1/invoices?status=open&amp;limit=2</span><span class="send">Send ⌘↵</span></div>
+          <div class="subtabs"><span>Params</span><span>Headers</span><span>Auth</span><span>Scripts</span><span class="on">Tests <i>3</i></span><span>Examples</span></div>
+          <div class="resp">
+            <div class="rhead"><span class="on">Response</span><span>Headers <i>9</i></span><span>Tests <i class="good">3/3</i></span><em class="pill">200 OK</em><em>84 ms</em><em>1.2 KB</em></div>
+<pre><b>1</b>{
+<b>2</b>  <k>"data"</k>: [
+<b>3</b>    {
+<b>4</b>      <k>"id"</k>: <v>"inv_8f2k1"</v>,
+<b>5</b>      <k>"status"</k>: <v>"open"</v>,
+<b>6</b>      <k>"amount"</k>: <n>12900</n>,
+<b>7</b>      <k>"currency"</k>: <v>"usd"</v>
+<b>8</b>    }
+<b>9</b>  ],
+<b>10</b>  <k>"has_more"</k>: <t>true</t>
+<b>11</b>}</pre>
+          </div>
+        </section>
+      </div>
+    </div>
+  </section>
+
+  <section id="why" class="band">
+    <div class="wrap">
+      <h2>Built around three ideas</h2>
+      <div class="three">
+        <article><div class="ico">◫</div><h3>Local-first</h3><p>No sign-in, nothing to sync by default. Your requests, environments and history stay on your machine. Secrets are kept in a git-ignored file.</p></article>
+        <article><div class="ico">⎇</div><h3>Git-native</h3><p>Every request is a small YAML file with stable keys and no generated IDs, so diffs are readable, reviews are real and merges are boring.</p></article>
+        <article><div class="ico">⚡</div><h3>Fast and small</h3><p>A Rust core and a native webview. It opens instantly, handles large responses and installs as a small native app.</p></article>
+      </div>
+    </div>
+  </section>
+
+  <section id="features" class="wrap">
+    <h2>Everything you reach for, built in</h2>
+    <p class="sub">No plugins to hunt for. One app covers the whole request lifecycle.</p>
+    <div class="grid">
+      <article><h3>REST, GraphQL, gRPC, WebSocket, SSE</h3><p>One tool for every protocol. GraphQL gets schema-aware autocomplete and a docs browser; gRPC works from reflection or your .proto files, including streaming.</p></article>
+      <article><h3>OAuth 2.0 that just works</h3><p>Client credentials, authorization code with PKCE in your real browser, and password grants. Tokens refresh themselves; reset them when you need to.</p></article>
+      <article><h3>Tests without code, or with it</h3><p>Point-and-click assertions and variable captures, plus pre- and post-response JavaScript in an isolated sandbox.</p></article>
+      <article><h3>Folder-level defaults</h3><p>Set headers, auth and scripts once on a collection or folder. Requests inherit them, and can override or switch them off.</p></article>
+      <article><h3>Import what you have</h3><p>OpenAPI and Swagger (with non-destructive re-sync), Postman collections, Bruno collections and cURL. Paste a curl command into the URL bar and it just fills in.</p></article>
+      <article><h3>A CLI for CI</h3><p>Run any collection in your pipeline with the exact same engine. Data-driven runs, JUnit, JSON and HTML reports, and a GitHub Action.</p></article>
+      <article><h3>Mock server in one click</h3><p>Save responses as examples (OpenAPI imports come with them) and serve your collection locally with path params, templating, delays and CORS.</p></article>
+      <article><h3>Response history and diff</h3><p>Compare any two responses side by side, bodies or headers. Binary responses preview inline; save anything to disk.</p></article>
+      <article><h3>Code in 14 languages</h3><p>cURL, fetch, axios, Python, Go, Java, Kotlin, Swift, C#, PHP, Ruby, Rust, PowerShell and HTTPie, with variables resolved or kept.</p></article>
+      <article><h3>Made for the Mac</h3><p>Native menus, ⌘K command palette, full keyboard control, light and dark themes, proxy and custom CA support, client certificates.</p></article>
+    </div>
+  </section>
+
+  <section id="files" class="band">
+    <div class="wrap two">
+      <div>
+        <h2>Your collection is just a folder</h2>
+        <p class="sub left">Open it in any editor. Review it in a pull request. Run it in CI. If you stop using Reqnest tomorrow, you still have readable files.</p>
+        <ul class="ticks">
+          <li>Stable key order, no IDs, no sequence numbers</li>
+          <li>Multi-line bodies as literal blocks, so diffs are line-by-line</li>
+          <li>Secrets stay in <code>.reqnest/secrets.yaml</code> (git-ignored)</li>
+          <li>Edits made outside the app are picked up live</li>
+        </ul>
+      </div>
+      <div class="code" role="img" aria-label="Example request file and CLI run">
+<pre><span class="c"># invoices/create-invoice.req.yaml</span>
+<k>name</k>: Create invoice
+<k>method</k>: POST
+<k>url</k>: <v>"{{baseUrl}}/v1/invoices"</v>
+<k>auth</k>:
+  <k>mode</k>: inherit
+<k>body</k>:
+  <k>mode</k>: json
+  <k>content</k>: |-
+    {
+      "customer": "{{customerId}}",
+      "amount": 12900
+    }
+<k>tests</k>:
+  - <k>kind</k>: status
+    <k>op</k>: eq
+    <k>value</k>: <v>"201"</v>
+<k>capture</k>:
+  - <k>variable</k>: invoiceId
+    <k>from</k>: json
+    <k>path</k>: $.id</pre>
+<pre class="term"><span class="c">$</span> reqnest run ./payments --env Staging --junit results.xml
+
+<span class="ok">✓</span> auth/login            POST  200   92 ms  2/2 tests
+<span class="ok">✓</span> invoices/create       POST  201  141 ms  1/1 tests
+<span class="ok">✓</span> invoices/list         GET   200   84 ms  3/3 tests
+
+<b>Summary</b>  3 requests, 0 failed · 6 tests passed</pre>
+      </div>
+    </div>
+  </section>
+
+  <section id="compare" class="wrap">
+    <h2>How it compares</h2>
+    <p class="sub">A good API client is a great tool. Here is what Reqnest chooses to be.</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th></th><th class="us">Reqnest</th><th>Cloud-first clients</th><th>File-based clients</th></tr></thead>
+        <tbody>
+          <tr><td>Works without an account</td><td class="us">✓</td><td>Varies</td><td>✓</td></tr>
+          <tr><td>Collections are plain, diff-friendly files</td><td class="us">✓</td><td>Exports are JSON blobs</td><td>✓</td></tr>
+          <tr><td>REST + GraphQL + gRPC + WebSocket + SSE</td><td class="us">✓ all included</td><td>✓</td><td>Varies</td></tr>
+          <tr><td>OpenAPI import with re-sync</td><td class="us">✓ keeps your edits</td><td>Import</td><td>Import</td></tr>
+          <tr><td>CLI runner for CI</td><td class="us">✓ same engine</td><td>✓</td><td>✓</td></tr>
+          <tr><td>Mock server from examples</td><td class="us">✓ built in</td><td>Varies</td><td>Limited</td></tr>
+          <tr><td>Response history and diff</td><td class="us">✓ built in</td><td>Varies</td><td>Varies</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="fine center">Comparisons describe categories of tools in general terms. Features and pricing of other products change, so check them yourself.</p>
+  </section>
+
+  <section id="download" class="band cta-band">
+    <div class="wrap center">
+      <img src="assets/icon.svg" alt="" width="96" height="96" class="bigicon">
+      <h2>Get Reqnest</h2>
+      <p class="sub">macOS 11 or later. Universal build for Apple silicon and Intel.</p>
+      <div class="cta">
+        <a class="btn big" href="https://github.com/batuhanilgarr/Reqnest/releases/latest" rel="noopener">Download the latest release</a>
+        <a class="btn big ghost" href="#build">Build from source</a>
+      </div>
+      <p class="fine">First launch on an unsigned build: right-click the app and choose Open, or run <code>xattr -dr com.apple.quarantine /Applications/Reqnest.app</code>.</p>
+      <div id="build" class="build">
+        <div class="codeblock"><button class="copy" data-copy="git clone https://github.com/batuhanilgarr/Reqnest.git &amp;&amp; cd Reqnest &amp;&amp; npm install &amp;&amp; npm run tauri build">Copy</button>
+<pre><span class="c"># needs Node 20+ and Rust (rustup)</span>
+git clone https://github.com/batuhanilgarr/Reqnest.git
+cd Reqnest &amp;&amp; npm install
+npm run tauri build</pre></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="faq" class="wrap narrow">
+    <h2>Questions</h2>
+    <details><summary>What does it cost?</summary><p>Pricing is announced on this page and in the releases. Your collections are plain files, so you are never locked in: they stay readable without Reqnest.</p></details>
+    <details><summary>What does it send to your servers?</summary><p>Nothing. There is no account, no analytics and no telemetry. Requests go straight from your Mac to the API you are calling.</p></details>
+    <details><summary>How do I move over from Postman, Bruno or Insomnia?</summary><p>Collections → Import: pick a Postman collection, a Bruno folder or an OpenAPI spec. Paste any curl command straight into the URL bar.</p></details>
+    <details><summary>Where are my secrets stored?</summary><p>Variables marked as secret live in <code>.reqnest/secrets.yaml</code>, which Reqnest adds to <code>.gitignore</code>. Tokens fetched by OAuth stay in memory only.</p></details>
+    <details><summary>Windows and Linux?</summary><p>The app is built on Tauri, so other platforms are possible. Today it targets macOS. The CLI already runs anywhere Node 20 does.</p></details>
+    <details><summary>Can scripts access my files?</summary><p>In the app, scripts run in an isolated sandbox with a time limit and cannot reach your files or secrets. The CLI runs them in a Node worker, so treat CLI scripts like the rest of your CI code.</p></details>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap foot">
+    <a class="brand" href="#top"><img src="assets/logo.svg" alt="" width="22" height="22"><span>Reqnest</span></a>
+    <span class="muted">Source on GitHub</span>
+    <span class="spacer"></span>
+    <a href="https://github.com/batuhanilgarr/Reqnest" rel="noopener">GitHub</a>
+    <a href="https://github.com/batuhanilgarr/Reqnest/issues" rel="noopener">Issues</a>
+    <a href="https://github.com/batuhanilgarr/Reqnest/blob/main/cli/README.md" rel="noopener">CLI docs</a>
+  </div>
+</footer>
+<script src="main.js"></script>
+</body>
+</html>
