@@ -56,17 +56,24 @@ function applyScriptEdits(spec: ReturnType<typeof buildRequest>, before: ScriptR
   }
 }
 
-export async function executeRequest(
-  rawTab: RequestTab,
-  deps: {
-    env: Environment | undefined;
-    session: Session;
-    tokens: TokenCache;
-    onSession: () => void;
-    /** Defaults of the request's folders, outermost first. */
-    layers?: Layer[];
-  },
-): Promise<Outcome> {
+type Deps = {
+  env: Environment | undefined;
+  session: Session;
+  tokens: TokenCache;
+  onSession: () => void;
+  /** Defaults of the request's folders, outermost first. */
+  layers?: Layer[];
+};
+
+export type Prepared =
+  | { error: string; run: RunOutput }
+  | { error?: undefined; spec: ReturnType<typeof buildRequest>; tab: RequestTab; post: string[]; run: RunOutput; setVars: (v: Record<string, string>) => void; eff: () => Environment };
+
+/**
+ * Everything that happens before bytes leave: inherited defaults, pre-request scripts, OAuth, building the final request.
+ * Shared by HTTP and the streaming kinds (SSE, WebSocket), so they all get the same auth and variables.
+ */
+export async function prepareRequest(rawTab: RequestTab, deps: Deps): Promise<Prepared> {
   const { tab, pre, post } = applyDefaults(rawTab, deps.layers ?? []);
   const run: RunOutput = { tests: [], logs: [], captured: {} };
   const setVars = (vars: Record<string, string>) => {
@@ -75,7 +82,7 @@ export async function executeRequest(
     Object.assign(run.captured, vars);
     deps.onSession();
   };
-  const fail = (error: string): Outcome => ({ error, run });
+  const fail = (error: string): Prepared => ({ error, run });
   const eff = () => withSession(deps.env, deps.session);
 
   // 1. pre-request scripts (collection, folders, request): env.set() feeds {{variables}},
@@ -115,7 +122,7 @@ export async function executeRequest(
     }
   }
 
-  // 3. send
+  // 3. build
   let spec: ReturnType<typeof buildRequest>;
   try {
     spec = buildRequest(tab, eff(), extra);
@@ -123,6 +130,14 @@ export async function executeRequest(
     return fail((e as Error).message);
   }
   if (edits) applyScriptEdits(spec, edits.before, edits.after);
+  return { spec, tab, post, run, setVars, eff };
+}
+
+export async function executeRequest(rawTab: RequestTab, deps: Deps): Promise<Outcome> {
+  const prep = await prepareRequest(rawTab, deps);
+  if (prep.error !== undefined) return { error: prep.error, run: prep.run };
+  const { spec, tab, post, run, setVars, eff } = prep;
+
   let response: ResponseData;
   try {
     response = await sendRaw(spec);
@@ -130,7 +145,7 @@ export async function executeRequest(
     return { error: String(e), run, sent: spec };
   }
 
-  // 4. captures, assertions, post-response scripts
+  // captures, assertions, post-response scripts
   const cap = runCaptures(tab.captures, response);
   setVars(cap.values);
   for (const v of cap.missed) run.logs.push(`capture: nothing found for "${v}"`);

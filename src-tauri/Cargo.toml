@@ -23,8 +23,14 @@ tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1.53.2", features = ["rt-multi-thread", "macros", "net", "io-util", "time"] }
-reqwest = { version = "0.13.5", default-features = false, features = ["rustls", "gzip", "brotli", "deflate", "cookies"] }
+reqwest = { version = "0.13.5", default-features = false, features = ["rustls", "gzip", "brotli", "deflate", "cookies", "stream"] }
 tauri-plugin-dialog = "2.8.2"
+futures-util = "0.3.34"
+base64 = "0.23.1"
+rustls-pemfile = "2.2.0"
+webpki-roots = "1.0.9"
+tokio-tungstenite = { version = "0.30.0", default-features = false, features = ["connect", "rustls-tls-webpki-roots"] }
+rustls = { version = "0.23.45", default-features = false, features = ["aws_lc_rs", "std", "tls12"] }
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration

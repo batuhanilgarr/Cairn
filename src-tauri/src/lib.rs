@@ -1,9 +1,10 @@
 use serde::{Deserialize, Serialize};
+pub mod streams;
 use std::fs;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct RequestSpec {
     pub method: String,
@@ -56,7 +57,7 @@ async fn send_request(spec: RequestSpec) -> Result<ResponseData, String> {
         reqwest::redirect::Policy::none()
     };
 
-    let client = build_client(&spec, redirect)?;
+    let client = build_client(&spec, redirect, false)?;
 
     let mut req = client.request(method, &spec.url);
     for (k, v) in spec.headers.iter().filter(|(k, _)| !k.trim().is_empty()) {
@@ -126,7 +127,7 @@ async fn oauth_listen(port: u16, timeout_secs: u64) -> Result<String, String> {
         .map_err(|_| "Timed out waiting for the browser sign-in to finish".to_string())?
 }
 
-fn build_client(spec: &RequestSpec, redirect: reqwest::redirect::Policy) -> Result<reqwest::Client, String> {
+pub(crate) fn build_client(spec: &RequestSpec, redirect: reqwest::redirect::Policy, streaming: bool) -> Result<reqwest::Client, String> {
     let n = &spec.network;
     let ua = if n.user_agent.trim().is_empty() {
         concat!("Reqnest/", env!("CARGO_PKG_VERSION")).to_string()
@@ -136,8 +137,10 @@ fn build_client(spec: &RequestSpec, redirect: reqwest::redirect::Policy) -> Resu
     let mut b = reqwest::Client::builder()
         .danger_accept_invalid_certs(spec.insecure)
         .redirect(redirect)
-        .timeout(Duration::from_millis(spec.timeout_ms.unwrap_or(30_000)))
         .user_agent(ua);
+    // A stream is meant to stay open: only the connection attempt is time-limited, not the whole body.
+    let limit = Duration::from_millis(spec.timeout_ms.unwrap_or(30_000));
+    b = if streaming { b.connect_timeout(limit) } else { b.timeout(limit) };
 
     match n.proxy_mode.as_str() {
         "none" => b = b.no_proxy(),
@@ -169,7 +172,7 @@ fn build_client(spec: &RequestSpec, redirect: reqwest::redirect::Policy) -> Resu
     b.build().map_err(|e| e.to_string())
 }
 
-fn describe_error(e: reqwest::Error) -> String {
+pub(crate) fn describe_error(e: reqwest::Error) -> String {
     let mut msg = e.to_string();
     let mut src = std::error::Error::source(&e);
     while let Some(s) = src {
@@ -389,6 +392,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .manage(streams::Streams::default())
         .setup(|app| {
             let menu = build_menu(app.handle())?;
             app.set_menu(menu)?;
@@ -400,6 +404,11 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             send_request,
+            streams::sse_connect,
+            streams::ws_connect,
+            streams::ws_send,
+            streams::ws_close,
+            streams::stream_stop,
             oauth_listen,
             list_tree,
             list_files,

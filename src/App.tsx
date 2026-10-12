@@ -18,9 +18,12 @@ import { TestsPanel } from "./TestsPanel";
 import { RunnerModal, type RunState } from "./RunnerModal";
 import { DefaultsModal } from "./DefaultsModal";
 import { GraphQLPanel } from "./GraphQLPanel";
+import { StreamLog } from "./StreamLog";
+import { WsPanel, type WsMode } from "./WsPanel";
+import { EMPTY_STREAM, MAX_ENTRIES, sseConnect, streamStop, subscribe, unsubscribe, wsClose, wsConnect, wsSend, type StreamEntry, type StreamEvent, type StreamState } from "./lib/stream";
 import { cachedSchema, loadGraphQL, storeSchema } from "./lib/graphql";
 import { applyDefaults, type Layer } from "./lib/inherit";
-import { executeRequest, resolveOAuth, withSession } from "./lib/pipeline";
+import { executeRequest, prepareRequest, resolveOAuth, withSession } from "./lib/pipeline";
 import { getToken, tokenKey, type TokenCache } from "./lib/oauth";
 import {
   basename,
@@ -57,6 +60,7 @@ import {
   METHODS,
   emptyKV,
   formatBytes,
+  interpolate,
   load,
   newTab,
   normalizeTab,
@@ -73,13 +77,13 @@ import { parseBru, parseBruEnv } from "./lib/bruno";
 import { ensureEnvironment, writeImport } from "./lib/importer";
 import "./styles.css";
 
-type ReqSection = "params" | "headers" | "body" | "query" | "auth" | "scripts" | "tests" | "settings";
+type ReqSection = "params" | "headers" | "body" | "query" | "message" | "auth" | "scripts" | "tests" | "settings";
 
 const SECTIONS: Record<RequestKind, ReqSection[]> = {
   http: ["params", "headers", "body", "auth", "scripts", "tests", "settings"],
   graphql: ["query", "headers", "auth", "scripts", "tests", "settings"],
-  sse: ["params", "headers", "auth", "settings"],
-  ws: ["headers", "auth", "settings"],
+  sse: ["params", "headers", "body", "auth", "scripts", "settings"],
+  ws: ["message", "headers", "auth", "settings"],
   grpc: ["headers", "auth", "settings"],
 };
 const KIND_LABEL: Record<RequestKind, string> = { http: "HTTP", graphql: "GraphQL", sse: "SSE", ws: "WebSocket", grpc: "gRPC" };
@@ -119,6 +123,10 @@ export default function App() {
   const bump = () => setTick((t) => t + 1);
   const [runs, setRuns] = useState<Record<string, RunOutput | null>>({});
   const [oauthBusy, setOauthBusy] = useState(false);
+  const [streams, setStreams] = useState<Record<string, StreamState>>({});
+  const entryN = useRef(0);
+  const queue = useRef<Record<string, { entries: StreamEntry[]; patch: Partial<StreamState> }>>({});
+  const flushing = useRef(false);
   const [gqlFetching, setGqlFetching] = useState<Record<string, boolean>>({});
   const [gqlError, setGqlError] = useState<Record<string, string | null>>({});
   const [runner, setRunner] = useState<RunState | null>(null);
@@ -142,6 +150,9 @@ export default function App() {
   const env = envs.find((e) => e.id === envId);
   const sections = SECTIONS[active?.kind ?? "http"];
   const section: ReqSection = sections.includes(reqSection) ? reqSection : sections[0];
+  const isStreamKind = active?.kind === "ws" || active?.kind === "sse";
+  const streamState = (active && streams[active.id]) || EMPTY_STREAM;
+  const streamStatus = streamState.status;
   const response = active ? responses[active.id] : null;
   const run = active ? runs[active.id] : null;
 
@@ -552,6 +563,14 @@ export default function App() {
   };
 
   const closeTab = (id: string) => {
+    if (streams[id]) {
+      streamStop(id).catch(() => {});
+      unsubscribe(id);
+      setStreams((m) => {
+        const { [id]: _drop, ...rest } = m;
+        return rest;
+      });
+    }
     setTabs((ts) => {
       const next = ts.filter((t) => t.id !== id);
       if (!next.length) {
@@ -564,9 +583,152 @@ export default function App() {
     });
   };
 
+  /* ------------------------- streams (SSE / WebSocket) ------------------------- */
+
+  /** Incoming events are batched per animation frame so a chatty stream can't flood React with renders. */
+  const flushStreams = () => {
+    flushing.current = false;
+    const q = queue.current;
+    queue.current = {};
+    setStreams((m) => {
+      const next = { ...m };
+      for (const [id, { entries, patch: sp }] of Object.entries(q)) {
+        const cur = next[id] ?? EMPTY_STREAM;
+        let all = entries.length ? [...cur.entries, ...entries] : cur.entries;
+        let dropped = cur.dropped;
+        if (all.length > MAX_ENTRIES) {
+          dropped += all.length - MAX_ENTRIES;
+          all = all.slice(-MAX_ENTRIES);
+        }
+        next[id] = {
+          ...cur,
+          ...sp,
+          entries: all,
+          dropped,
+          received: cur.received + entries.filter((e) => e.dir === "in").length,
+          sent: cur.sent + entries.filter((e) => e.dir === "out").length,
+        };
+      }
+      return next;
+    });
+  };
+  const pushStream = (id: string, entries: Omit<StreamEntry, "n" | "at">[], sp: Partial<StreamState> = {}) => {
+    const at = Date.now();
+    const cur = queue.current[id] ?? { entries: [], patch: {} };
+    cur.entries.push(...entries.map((e) => ({ ...e, n: ++entryN.current, at })));
+    Object.assign(cur.patch, sp);
+    queue.current[id] = cur;
+    if (!flushing.current) {
+      flushing.current = true;
+      setTimeout(flushStreams, 40); // not rAF: that stops entirely when the window is in the background
+    }
+  };
+
+  const onStreamEvent = (id: string, e: StreamEvent) => {
+    switch (e.type) {
+      case "open":
+        pushStream(id, [{ dir: "sys", label: "connected", text: e.protocol ? `Subprotocol: ${e.protocol}` : `HTTP ${e.status} ${e.statusText ?? ""}`.trim() }], { status: "open", info: e.sse === false ? `HTTP ${e.status} (not an event stream)` : e.status ? `HTTP ${e.status}` : e.protocol ? `protocol ${e.protocol}` : "", startedAt: Date.now() });
+        break;
+      case "event":
+        pushStream(id, [{ dir: "in", label: e.event, text: e.data, size: new TextEncoder().encode(e.data).length }]);
+        break;
+      case "raw":
+        pushStream(id, [{ dir: "in", label: "data", text: e.text, size: new TextEncoder().encode(e.text).length }]);
+        break;
+      case "message":
+        pushStream(id, [{ dir: "in", label: "text", text: e.text, size: new TextEncoder().encode(e.text).length }]);
+        break;
+      case "binary":
+        pushStream(id, [{ dir: "in", label: "binary", text: e.preview, size: e.size }]);
+        break;
+      case "close":
+        pushStream(id, [{ dir: "sys", label: "closed", text: `${e.code}${e.reason ? ` ${e.reason}` : ""}` }], { status: "closed" });
+        unsubscribe(id);
+        break;
+      case "end":
+        pushStream(id, [{ dir: "sys", label: "ended", text: "The server closed the stream" }], { status: "closed" });
+        unsubscribe(id);
+        break;
+      case "error":
+        pushStream(id, [{ dir: "sys", label: "error", text: e.message, tone: "error" }], { status: "error" });
+        unsubscribe(id);
+        break;
+    }
+  };
+
+  const connectStream = async (tab: RequestTab) => {
+    if (!tab.url.trim()) return;
+    streamStop(tab.id).catch(() => {});
+    pushStream(tab.id, [], { status: "connecting", info: "" });
+    const prep = await prepareRequest(tab, { env, session: sessionRef.current, tokens: tokensRef.current, onSession: bump, layers: await freshLayers(tab) });
+    if (prep.error !== undefined) return pushStream(tab.id, [{ dir: "sys", label: "error", text: prep.error, tone: "error" }], { status: "error" });
+    setHistory((h) => [{ id: uid(), at: Date.now(), method: tab.method, url: tab.url, status: null, tab }, ...h].slice(0, settings.historyLimit));
+    try {
+      await subscribe(tab.id, (e) => onStreamEvent(tab.id, e));
+      if (tab.kind === "sse") await sseConnect(tab.id, prep.spec);
+      else
+        await wsConnect(tab.id, {
+          url: prep.spec.url,
+          headers: prep.spec.headers,
+          protocols: tab.ws.protocols.split(",").map((p) => p.trim()).filter(Boolean),
+          insecure: tab.insecure,
+        });
+    } catch (e) {
+      pushStream(tab.id, [{ dir: "sys", label: "error", text: String(e), tone: "error" }], { status: "error" });
+    }
+  };
+
+  const disconnectStream = async (tab: RequestTab) => {
+    try {
+      if (tab.kind === "ws") await wsClose(tab.id);
+      else {
+        await streamStop(tab.id);
+        unsubscribe(tab.id);
+        pushStream(tab.id, [{ dir: "sys", label: "stopped", text: "You disconnected" }], { status: "closed" });
+      }
+    } catch {
+      pushStream(tab.id, [], { status: "closed" });
+    }
+  };
+
+  const sendWsMessage = async (text: string, mode: WsMode) => {
+    const tab = active;
+    const body = interpolate(text, withSession(env, sessionRef.current));
+    try {
+      if (mode === "json") JSON.parse(body);
+    } catch (e) {
+      return flash(`Not valid JSON: ${(e as Error).message}`, 3500);
+    }
+    try {
+      if (mode === "binary") {
+        const b64 = body.replace(/\s+/g, "");
+        await wsSend(tab.id, { base64: b64 });
+        pushStream(tab.id, [{ dir: "out", label: "binary", text: b64, size: Math.floor((b64.length * 3) / 4) }]);
+      } else {
+        await wsSend(tab.id, { text: body });
+        pushStream(tab.id, [{ dir: "out", label: mode, text: body, size: new TextEncoder().encode(body).length }]);
+      }
+    } catch (e) {
+      pushStream(tab.id, [{ dir: "sys", label: "error", text: String(e), tone: "error" }]);
+    }
+  };
+
   const send = useCallback(async () => {
     if (!active || !active.url.trim()) return;
     const tab = active;
+    if (tab.kind === "ws" || tab.kind === "sse") {
+      const st = streams[tab.id]?.status;
+      if (tab.kind === "ws" && st === "open" && tab.ws.composer.trim()) {
+        let isJson = true;
+        try {
+          JSON.parse(tab.ws.composer);
+        } catch {
+          isJson = false;
+        }
+        return void sendWsMessage(tab.ws.composer, isJson ? "json" : "text");
+      }
+      return void connectStream(tab);
+    }
     setLoading((l) => ({ ...l, [tab.id]: true }));
     setResponses((r) => ({ ...r, [tab.id]: null }));
     setRuns((r) => ({ ...r, [tab.id]: null }));
@@ -1018,7 +1180,7 @@ export default function App() {
 
         <div className="urlbar">
           <select className="kind" value={active.kind} onChange={(e) => patch({ kind: e.target.value as RequestKind })} title="Request type">
-            {(["http", "graphql"] as RequestKind[]).map((k) => (
+            {(["http", "graphql", "sse", "ws"] as RequestKind[]).map((k) => (
               <option key={k} value={k}>{KIND_LABEL[k]}</option>
             ))}
           </select>
@@ -1044,8 +1206,12 @@ export default function App() {
             }}
             onChange={(v) => (looksLikeCurl(v) ? applyCurl(v) : patch({ url: v }))}
           />
-          <button className="btn primary" onClick={send} disabled={loading[active.id]}>
-            {loading[active.id] ? "Sending…" : "Send"}
+          <button
+            className={`btn primary ${isStreamKind && streamStatus === "open" ? "stop" : ""}`}
+            onClick={() => (isStreamKind && (streamStatus === "open" || streamStatus === "connecting") ? void disconnectStream(active) : void send())}
+            disabled={loading[active.id]}
+          >
+            {isStreamKind ? (streamStatus === "open" || streamStatus === "connecting" ? "Disconnect" : "Connect") : loading[active.id] ? "Sending…" : "Send"}
             <kbd>⌘↵</kbd>
           </button>
         </div>
@@ -1119,6 +1285,9 @@ export default function App() {
                 )}
               </div>
             )}
+            {section === "message" && (
+              <WsPanel tab={active} patch={patch} vars={varMap} connected={streamStatus === "open"} onSend={(b, m) => void sendWsMessage(b, m)} onAskName={() => ask("Save message", "", "Save", "Give this message a short name.")} />
+            )}
             {section === "query" && (
               <GraphQLPanel
                 tab={active}
@@ -1137,10 +1306,18 @@ export default function App() {
             {section === "tests" && <TestsPanel tab={active} patch={patch} />}
             {section === "settings" && (
               <div className="col">
+                {active.kind === "ws" && (
+                  <label className="field">
+                    <span>Subprotocols (comma-separated)</span>
+                    <input className="cell" placeholder="graphql-transport-ws, chat" value={active.ws.protocols} spellCheck={false} onChange={(e) => patch({ ws: { ...active.ws, protocols: e.target.value } })} />
+                  </label>
+                )}
+                {active.kind !== "ws" && (
                 <label className="check">
                   <input type="checkbox" checked={active.followRedirects} onChange={(e) => patch({ followRedirects: e.target.checked })} />
                   Follow redirects
                 </label>
+                )}
                 <label className="check">
                   <input type="checkbox" checked={active.insecure} onChange={(e) => patch({ insecure: e.target.checked })} />
                   Skip TLS certificate verification (self-signed)
@@ -1161,6 +1338,15 @@ export default function App() {
 
         <div className="splitter" onMouseDown={startDrag} role="separator" aria-orientation="horizontal" />
 
+        {isStreamKind ? (
+          <div className="stream-wrap" ref={resPanel as unknown as React.RefObject<HTMLDivElement>}>
+            <StreamLog
+              state={streamState}
+              onClear={() => setStreams((m) => ({ ...m, [active.id]: { ...(m[active.id] ?? EMPTY_STREAM), entries: [], dropped: 0, sent: 0, received: 0 } }))}
+              emptyHint={active.kind === "ws" ? "Connect, then send a message. Everything in both directions shows up here." : "Connect to start receiving events."}
+            />
+          </div>
+        ) : (
         <section className="panel res" ref={resPanel}>
           <nav className="subtabs">
             <button className={resSection === "body" ? "on" : ""} onClick={() => setResSection("body")}>
@@ -1260,6 +1446,7 @@ export default function App() {
             )}
           </div>
         </section>
+        )}
       </main>
       {paletteOpen && <CommandPalette commands={commands} onClose={() => setPaletteOpen(false)} />}
       {settingsOpen && (

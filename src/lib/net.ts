@@ -10,3 +10,5 @@ export const setNetwork = (n: Record<string, unknown>) => {
 
 export const sendRaw = (spec: Record<string, unknown>) =>
   invoke<ResponseData>("send_request", { spec: { ...spec, network: { ...network, ...(spec.network as object | undefined) } } });
+
+export const currentNetwork = () => network;
