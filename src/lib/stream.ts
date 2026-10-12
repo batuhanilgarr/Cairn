@@ -39,3 +39,28 @@ export type StreamState = { status: StreamStatus; entries: StreamEntry[]; droppe
 
 export const EMPTY_STREAM: StreamState = { status: "idle", entries: [], dropped: 0, info: "", sent: 0, received: 0 };
 export const MAX_ENTRIES = 3000;
+
+/* ------------------------------- gRPC ------------------------------- */
+
+export type GrpcMethod = {
+  name: string;
+  fullName: string;
+  clientStreaming: boolean;
+  serverStreaming: boolean;
+  inputType: string;
+  outputType: string;
+  template: unknown;
+};
+export type GrpcService = { name: string; methods: GrpcMethod[] };
+
+export type GrpcSourceArg = { kind: "reflection"; metadata: [string, string][] } | { kind: "proto"; files: string[]; includes: string[] };
+export type GrpcTargetArg = { url: string; tls: boolean; insecure: boolean; timeoutMs: number };
+
+export const grpcDescribe = (target: GrpcTargetArg, source: GrpcSourceArg) =>
+  invoke<GrpcService[]>("grpc_describe", { target: { ...target, network: currentNetwork() }, source });
+export const grpcCall = (id: string, a: { target: GrpcTargetArg; source: GrpcSourceArg; method: string; messages: string[]; metadata: [string, string][] }) =>
+  invoke("grpc_call", { id, ...a, target: { ...a.target, network: currentNetwork() } });
+export const grpcSend = (id: string, text: string) => invoke("grpc_send", { id, text });
+export const grpcEnd = (id: string) => invoke("grpc_end", { id });
+
+export const methodKind = (m: GrpcMethod) => (m.clientStreaming && m.serverStreaming ? "bidi stream" : m.clientStreaming ? "client stream" : m.serverStreaming ? "server stream" : "unary");

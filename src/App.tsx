@@ -19,8 +19,9 @@ import { RunnerModal, type RunState } from "./RunnerModal";
 import { DefaultsModal } from "./DefaultsModal";
 import { GraphQLPanel } from "./GraphQLPanel";
 import { StreamLog } from "./StreamLog";
+import { GrpcPanel, type GrpcSchema } from "./GrpcPanel";
 import { WsPanel, type WsMode } from "./WsPanel";
-import { EMPTY_STREAM, MAX_ENTRIES, sseConnect, streamStop, subscribe, unsubscribe, wsClose, wsConnect, wsSend, type StreamEntry, type StreamEvent, type StreamState } from "./lib/stream";
+import { EMPTY_STREAM, MAX_ENTRIES, grpcCall, grpcDescribe, grpcEnd, grpcSend, sseConnect, streamStop, subscribe, unsubscribe, wsClose, wsConnect, wsSend, type StreamEntry, type StreamEvent, type StreamState } from "./lib/stream";
 import { cachedSchema, loadGraphQL, storeSchema } from "./lib/graphql";
 import { applyDefaults, type Layer } from "./lib/inherit";
 import { executeRequest, prepareRequest, resolveOAuth, withSession } from "./lib/pipeline";
@@ -84,7 +85,7 @@ const SECTIONS: Record<RequestKind, ReqSection[]> = {
   graphql: ["query", "headers", "auth", "scripts", "tests", "settings"],
   sse: ["params", "headers", "body", "auth", "scripts", "settings"],
   ws: ["message", "headers", "auth", "settings"],
-  grpc: ["headers", "auth", "settings"],
+  grpc: ["message", "headers", "auth", "settings"],
 };
 const KIND_LABEL: Record<RequestKind, string> = { http: "HTTP", graphql: "GraphQL", sse: "SSE", ws: "WebSocket", grpc: "gRPC" };
 const pillOf = (t: RequestTab) => (t.kind === "http" ? t.method : t.kind === "graphql" ? "GQL" : t.kind === "grpc" ? "gRPC" : t.kind.toUpperCase());
@@ -124,6 +125,7 @@ export default function App() {
   const [runs, setRuns] = useState<Record<string, RunOutput | null>>({});
   const [oauthBusy, setOauthBusy] = useState(false);
   const [streams, setStreams] = useState<Record<string, StreamState>>({});
+  const [grpcSchemas, setGrpcSchemas] = useState<Record<string, GrpcSchema>>({});
   const entryN = useRef(0);
   const queue = useRef<Record<string, { entries: StreamEntry[]; patch: Partial<StreamState> }>>({});
   const flushing = useRef(false);
@@ -150,7 +152,7 @@ export default function App() {
   const env = envs.find((e) => e.id === envId);
   const sections = SECTIONS[active?.kind ?? "http"];
   const section: ReqSection = sections.includes(reqSection) ? reqSection : sections[0];
-  const isStreamKind = active?.kind === "ws" || active?.kind === "sse";
+  const isStreamKind = active?.kind === "ws" || active?.kind === "sse" || active?.kind === "grpc";
   const streamState = (active && streams[active.id]) || EMPTY_STREAM;
   const streamStatus = streamState.status;
   const response = active ? responses[active.id] : null;
@@ -627,6 +629,11 @@ export default function App() {
   const onStreamEvent = (id: string, e: StreamEvent) => {
     switch (e.type) {
       case "open":
+        if (e.headers !== undefined) {
+          const h = (e.headers as [string, string][]).map(([k, v]) => `${k}: ${v}`).join("\n");
+          pushStream(id, h ? [{ dir: "sys", label: "headers", text: h }] : [], { status: "open" });
+          break;
+        }
         pushStream(id, [{ dir: "sys", label: "connected", text: e.protocol ? `Subprotocol: ${e.protocol}` : `HTTP ${e.status} ${e.statusText ?? ""}`.trim() }], { status: "open", info: e.sse === false ? `HTTP ${e.status} (not an event stream)` : e.status ? `HTTP ${e.status}` : e.protocol ? `protocol ${e.protocol}` : "", startedAt: Date.now() });
         break;
       case "event":
@@ -642,8 +649,16 @@ export default function App() {
         pushStream(id, [{ dir: "in", label: "binary", text: e.preview, size: e.size }]);
         break;
       case "close":
-        pushStream(id, [{ dir: "sys", label: "closed", text: `${e.code}${e.reason ? ` ${e.reason}` : ""}` }], { status: "closed" });
+        if (e.codeName !== undefined) {
+          // gRPC call finished: status line first, trailers underneath
+          const ok = e.code === 0;
+          const trailers = (e.trailers as [string, string][]).map(([k, v]) => `${k}: ${v}`).join("\n");
+          pushStream(id, [{ dir: "sys", label: e.codeName, text: `${ok ? "Call finished" : e.message || "Call failed"} · ${e.ms} ms${trailers ? `\n${trailers}` : ""}`, tone: ok ? undefined : "error" }], { status: ok ? "closed" : "error", info: `${e.codeName}` });
+        } else pushStream(id, [{ dir: "sys", label: "closed", text: `${e.code}${e.reason ? ` ${e.reason}` : ""}` }], { status: "closed" });
         unsubscribe(id);
+        break;
+      case "warn":
+        pushStream(id, [{ dir: "sys", label: "warning", text: e.message, tone: "error" }]);
         break;
       case "end":
         pushStream(id, [{ dir: "sys", label: "ended", text: "The server closed the stream" }], { status: "closed" });
@@ -656,8 +671,26 @@ export default function App() {
     }
   };
 
+  const grpcTarget = (tab: RequestTab, url: string) => ({ url, tls: tab.grpc.tls, insecure: tab.insecure, timeoutMs: tab.timeoutMs });
+  const grpcSource = (tab: RequestTab, headers: [string, string][]) =>
+    tab.grpc.source === "reflection" ? ({ kind: "reflection", metadata: headers } as const) : ({ kind: "proto", files: tab.grpc.protoFiles, includes: tab.grpc.importPaths } as const);
+
+  const loadGrpcSchema = async () => {
+    const tab = active;
+    setGrpcSchemas((m) => ({ ...m, [tab.id]: { services: m[tab.id]?.services ?? [], loading: true, error: null } }));
+    try {
+      const prep = await prepareRequest({ ...tab, preScript: "", postScript: "" }, { env, session: sessionRef.current, tokens: tokensRef.current, onSession: bump, layers: await freshLayers(tab) });
+      if (prep.error !== undefined) throw new Error(prep.error);
+      const services = await grpcDescribe(grpcTarget(tab, prep.spec.url), grpcSource(tab, prep.spec.headers));
+      setGrpcSchemas((m) => ({ ...m, [tab.id]: { services, loading: false, error: null } }));
+    } catch (e) {
+      setGrpcSchemas((m) => ({ ...m, [tab.id]: { services: [], loading: false, error: String((e as Error).message ?? e) } }));
+    }
+  };
+
   const connectStream = async (tab: RequestTab) => {
-    if (!tab.url.trim()) return;
+    if (!tab.url.trim() && !(tab.kind === "grpc" && tab.grpc.source === "proto")) return;
+    if (tab.kind === "grpc" && !tab.grpc.method.trim()) return flash("Pick a method first", 2500);
     streamStop(tab.id).catch(() => {});
     pushStream(tab.id, [], { status: "connecting", info: "" });
     const prep = await prepareRequest(tab, { env, session: sessionRef.current, tokens: tokensRef.current, onSession: bump, layers: await freshLayers(tab) });
@@ -665,7 +698,17 @@ export default function App() {
     setHistory((h) => [{ id: uid(), at: Date.now(), method: tab.method, url: tab.url, status: null, tab }, ...h].slice(0, settings.historyLimit));
     try {
       await subscribe(tab.id, (e) => onStreamEvent(tab.id, e));
-      if (tab.kind === "sse") await sseConnect(tab.id, prep.spec);
+      if (tab.kind === "grpc") {
+        const msg = interpolate(tab.grpc.message, prep.eff());
+        pushStream(tab.id, [{ dir: "out", label: tab.grpc.method.split("/")[1] ?? "request", text: msg, size: new TextEncoder().encode(msg).length }]);
+        await grpcCall(tab.id, {
+          target: grpcTarget(tab, prep.spec.url),
+          source: grpcSource(tab, prep.spec.headers),
+          method: tab.grpc.method,
+          messages: [msg],
+          metadata: prep.spec.headers,
+        });
+      } else if (tab.kind === "sse") await sseConnect(tab.id, prep.spec);
       else
         await wsConnect(tab.id, {
           url: prep.spec.url,
@@ -714,9 +757,9 @@ export default function App() {
   };
 
   const send = useCallback(async () => {
-    if (!active || !active.url.trim()) return;
+    if (!active || (!active.url.trim() && !(active.kind === "grpc" && active.grpc.source === "proto"))) return;
     const tab = active;
-    if (tab.kind === "ws" || tab.kind === "sse") {
+    if (tab.kind === "ws" || tab.kind === "sse" || tab.kind === "grpc") {
       const st = streams[tab.id]?.status;
       if (tab.kind === "ws" && st === "open" && tab.ws.composer.trim()) {
         let isJson = true;
@@ -1180,7 +1223,7 @@ export default function App() {
 
         <div className="urlbar">
           <select className="kind" value={active.kind} onChange={(e) => patch({ kind: e.target.value as RequestKind })} title="Request type">
-            {(["http", "graphql", "sse", "ws"] as RequestKind[]).map((k) => (
+            {(["http", "graphql", "sse", "ws", "grpc"] as RequestKind[]).map((k) => (
               <option key={k} value={k}>{KIND_LABEL[k]}</option>
             ))}
           </select>
@@ -1197,7 +1240,7 @@ export default function App() {
             value={active.url}
             vars={varMap}
             editorRef={urlView}
-            placeholder="Enter URL, or paste a cURL command  (use {{variables}})"
+            placeholder={active.kind === "grpc" ? "localhost:50051  or  grpcs://api.example.com:443" : active.kind === "ws" ? "wss://example.com/socket" : "Enter URL, or paste a cURL command  (use {{variables}})"}
             onSubmit={send}
             onPasteText={(text) => {
               if (!looksLikeCurl(text)) return false;
@@ -1211,7 +1254,7 @@ export default function App() {
             onClick={() => (isStreamKind && (streamStatus === "open" || streamStatus === "connecting") ? void disconnectStream(active) : void send())}
             disabled={loading[active.id]}
           >
-            {isStreamKind ? (streamStatus === "open" || streamStatus === "connecting" ? "Disconnect" : "Connect") : loading[active.id] ? "Sending…" : "Send"}
+            {isStreamKind ? (streamStatus === "open" || streamStatus === "connecting" ? (active.kind === "grpc" ? "Cancel" : "Disconnect") : active.kind === "grpc" ? "Invoke" : "Connect") : loading[active.id] ? "Sending…" : "Send"}
             <kbd>⌘↵</kbd>
           </button>
         </div>
@@ -1285,7 +1328,27 @@ export default function App() {
                 )}
               </div>
             )}
-            {section === "message" && (
+            {section === "message" && active.kind === "grpc" && (
+              <GrpcPanel
+                tab={active}
+                patch={patch}
+                vars={varMap}
+                schema={grpcSchemas[active.id]}
+                active={streamStatus === "open" || streamStatus === "connecting"}
+                onLoad={loadGrpcSchema}
+                onSendMore={async (text) => {
+                  const body = interpolate(text, withSession(env, sessionRef.current));
+                  try {
+                    await grpcSend(active.id, body);
+                    pushStream(active.id, [{ dir: "out", label: active.grpc.method.split("/")[1] ?? "request", text: body, size: new TextEncoder().encode(body).length }]);
+                  } catch (e) {
+                    pushStream(active.id, [{ dir: "sys", label: "error", text: String(e), tone: "error" }]);
+                  }
+                }}
+                onEndStream={() => void grpcEnd(active.id).then(() => pushStream(active.id, [{ dir: "sys", label: "half-close", text: "You ended the request stream" }])).catch(() => {})}
+              />
+            )}
+            {section === "message" && active.kind === "ws" && (
               <WsPanel tab={active} patch={patch} vars={varMap} connected={streamStatus === "open"} onSend={(b, m) => void sendWsMessage(b, m)} onAskName={() => ask("Save message", "", "Save", "Give this message a short name.")} />
             )}
             {section === "query" && (
@@ -1312,7 +1375,13 @@ export default function App() {
                     <input className="cell" placeholder="graphql-transport-ws, chat" value={active.ws.protocols} spellCheck={false} onChange={(e) => patch({ ws: { ...active.ws, protocols: e.target.value } })} />
                   </label>
                 )}
-                {active.kind !== "ws" && (
+                {active.kind === "grpc" && (
+                  <label className="check">
+                    <input type="checkbox" checked={active.grpc.tls} onChange={(e) => patch({ grpc: { ...active.grpc, tls: e.target.checked } })} />
+                    Use TLS when the address has no grpc:// or grpcs:// prefix
+                  </label>
+                )}
+                {active.kind !== "ws" && active.kind !== "grpc" && (
                 <label className="check">
                   <input type="checkbox" checked={active.followRedirects} onChange={(e) => patch({ followRedirects: e.target.checked })} />
                   Follow redirects
@@ -1343,7 +1412,7 @@ export default function App() {
             <StreamLog
               state={streamState}
               onClear={() => setStreams((m) => ({ ...m, [active.id]: { ...(m[active.id] ?? EMPTY_STREAM), entries: [], dropped: 0, sent: 0, received: 0 } }))}
-              emptyHint={active.kind === "ws" ? "Connect, then send a message. Everything in both directions shows up here." : "Connect to start receiving events."}
+              emptyHint={active.kind === "ws" ? "Connect, then send a message. Everything in both directions shows up here." : active.kind === "grpc" ? "Pick a method and hit Invoke. Requests, responses, headers and the final status appear here." : "Connect to start receiving events."}
             />
           </div>
         ) : (

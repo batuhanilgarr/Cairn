@@ -23,26 +23,33 @@ pub enum WsCmd {
     Close,
 }
 
-enum Handle {
+pub(crate) enum Handle {
     Task(AbortHandle),
     Ws { tx: mpsc::UnboundedSender<WsCmd>, abort: AbortHandle },
+    Grpc { tx: mpsc::UnboundedSender<crate::grpc::GrpcCmd>, abort: AbortHandle },
 }
 
 #[derive(Default, Clone)]
 pub struct Streams(Arc<Mutex<HashMap<String, Handle>>>);
 
 impl Streams {
-    fn put(&self, id: &str, h: Handle) {
+    pub(crate) fn put(&self, id: &str, h: Handle) {
         if let Some(old) = self.0.lock().unwrap().insert(id.to_string(), h) {
             old.abort();
         }
     }
-    fn remove(&self, id: &str) {
+    pub(crate) fn remove(&self, id: &str) {
         self.0.lock().unwrap().remove(id);
     }
     pub fn stop(&self, id: &str) {
         if let Some(h) = self.0.lock().unwrap().remove(id) {
             h.abort();
+        }
+    }
+    pub(crate) fn grpc_cmd(&self, id: &str, cmd: crate::grpc::GrpcCmd) -> Result<(), String> {
+        match self.0.lock().unwrap().get(id) {
+            Some(Handle::Grpc { tx, .. }) => tx.send(cmd).map_err(|_| "The call has finished".to_string()),
+            _ => Err("No active call".to_string()),
         }
     }
     pub fn ws_send(&self, id: &str, cmd: WsCmd) -> Result<(), String> {
@@ -57,7 +64,7 @@ impl Handle {
     fn abort(self) {
         match self {
             Handle::Task(a) => a.abort(),
-            Handle::Ws { abort, .. } => abort.abort(),
+            Handle::Ws { abort, .. } | Handle::Grpc { abort, .. } => abort.abort(),
         }
     }
 }

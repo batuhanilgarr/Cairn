@@ -90,7 +90,7 @@ export function buildRequest(tab: RequestTab, env: Environment | undefined, extr
   if (tab.kind === "ws") {
     url = url.replace(/^http(s?):\/\//i, "ws$1://");
     if (url && !/^wss?:\/\//i.test(url)) url = "ws://" + url;
-  } else if (url && !/^[a-z][a-z0-9+.-]*:\/\//i.test(url)) url = "http://" + url;
+  } else if (tab.kind !== "grpc" && url && !/^[a-z][a-z0-9+.-]*:\/\//i.test(url)) url = "http://" + url;
 
   const headers: [string, string][] = tab.headers
     .filter((h) => h.enabled && h.key)

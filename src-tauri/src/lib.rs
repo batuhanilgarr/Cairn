@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+pub mod grpc;
 pub mod streams;
 use std::fs;
 use std::path::Path;
@@ -393,6 +394,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(streams::Streams::default())
+        .manage(grpc::Pools::default())
         .setup(|app| {
             let menu = build_menu(app.handle())?;
             app.set_menu(menu)?;
@@ -409,6 +411,10 @@ pub fn run() {
             streams::ws_send,
             streams::ws_close,
             streams::stream_stop,
+            grpc::grpc_describe,
+            grpc::grpc_call,
+            grpc::grpc_send,
+            grpc::grpc_end,
             oauth_listen,
             list_tree,
             list_files,
