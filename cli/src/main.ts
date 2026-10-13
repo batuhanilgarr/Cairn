@@ -9,7 +9,7 @@ import type { Environment, RequestTab, TestResult } from "../../src/lib/types";
 import type { Layer } from "../../src/lib/inherit";
 import { junitXml, htmlReport, type Report, type ReqResult } from "./reporters";
 
-export const VERSION = "0.2.2";
+export const VERSION = "0.2.3";
 
 const HELP = `reqnest ${VERSION}: run Reqnest collections from the command line
 
