@@ -22,7 +22,7 @@ import { GraphQLPanel } from "./GraphQLPanel";
 import { StreamLog } from "./StreamLog";
 import { CodePanel } from "./CodePanel";
 import { rowsFromUrl, syncParams, urlFromRows } from "./lib/query";
-import { IconAlert, IconCode, IconCollections, IconEnvironments, IconFolderPlus, IconHistory, IconInbox, IconMore, IconPlay, IconPlus, IconSidebar, IconSearch, IconSettings, IconSpark } from "./Icons";
+import { IconAlert, IconChevronDown, IconCode, IconCollections, IconEnvironments, IconFolderPlus, IconHistory, IconInbox, IconMore, IconPlay, IconPlus, IconSidebar, IconSearch, IconSettings, IconSpark } from "./Icons";
 import { Menu } from "./Menu";
 import { useRequestLabels } from "./lib/useRequestLabels";
 import { AiPanel } from "./AiPanel";
@@ -181,6 +181,7 @@ export default function App() {
   const [rawView, setRawView] = useState(false);
   const [wrapRes, setWrapRes] = useState(true);
   const urlView = useRef<EditorView | null>(null);
+  const tabStrip = useRef<HTMLDivElement>(null);
   const resView = useRef<EditorView | null>(null);
 
   const active = tabs.find((t) => t.id === activeId) ?? tabs[0];
@@ -1037,6 +1038,9 @@ export default function App() {
   useEffect(() => save("rq.sidebar", sidebarOpen), [sidebarOpen]);
   useEffect(() => save("rq.aside", aside), [aside]);
   useEffect(() => {
+    tabStrip.current?.querySelector(".tab.on")?.scrollIntoView({ inline: "nearest", block: "nearest" });
+  }, [active?.id, tabs.length]);
+  useEffect(() => {
     for (const t of tabs) if (t.file) setLabel(t.file, pillOf(t));
   }, [tabs]);
 
@@ -1383,8 +1387,9 @@ export default function App() {
       <main className="main">
         <div className="tabbar" data-tauri-drag-region>
           {!sidebarOpen && <button className="icon-btn show-side" onClick={() => fire("toggle-sidebar")} title="Show sidebar (⌘B)" aria-label="Show sidebar"><IconSidebar /></button>}
+          <div className="tabstrip" ref={tabStrip} onWheel={(e) => { if (Math.abs(e.deltaY) > Math.abs(e.deltaX) && tabStrip.current) tabStrip.current.scrollLeft += e.deltaY; }}>
           {tabs.map((t) => (
-            <div key={t.id} className={`tab ${t.id === active.id ? "on" : ""}`} onClick={() => setActiveId(t.id)}>
+            <div key={t.id} role="tab" aria-selected={t.id === active.id} className={`tab ${t.id === active.id ? "on" : ""}`} onClick={() => setActiveId(t.id)}>
               <span className={`m m-${pillOf(t)}`}>{pillOf(t)}</span>
               <span className="tab-title">{tabTitle(t)}</span>
               {isDirty(t) && <b className="unsaved">●</b>}
@@ -1400,11 +1405,18 @@ export default function App() {
               </button>
             </div>
           ))}
+          </div>
           <button className="icon-btn plus" onClick={() => addTab()} aria-label="New tab">
             +
           </button>
+          <Menu
+            title="All tabs"
+            trigger={<IconChevronDown />}
+            items={tabs.map((t) => ({ label: `${pillOf(t)}  ${tabTitle(t)}`, onClick: () => setActiveId(t.id) }))}
+          />
           <div className="spacer" />
           <select className="env-pick" value={envId} onChange={(e) => setEnvId(e.target.value)} title="Environment">
+            {envs.length === 0 && <option value="">No environment</option>}
             {envs.map((e) => (
               <option key={e.id} value={e.id}>
                 {e.name}

@@ -747,3 +747,14 @@ pre.block { white-space: pre-wrap; word-break: break-word; margin: 0; background
 .hist-day { padding: 10px 14px 4px; font-size: 11.5px; font-weight: 600; color: var(--muted); }
 .side-body .link { text-decoration: none; font-size: 12px; }
 .side-body .link:hover { color: var(--text); text-decoration: underline; }
+
+/* ---------------- round 7: many tabs scroll inside their own strip ---------------- */
+.tabstrip { display: flex; align-items: stretch; min-width: 0; flex: 0 1 auto; overflow-x: auto; scrollbar-width: none; }
+.tabstrip::-webkit-scrollbar { display: none; }
+.tabstrip .tab { flex: 0 0 auto; width: 170px; min-width: 0; }
+.tabbar > .icon-btn.plus, .tabbar > .menu-wrap { flex: none; align-self: center; }
+.tabbar > .menu-wrap > .icon-btn { width: 24px; height: 24px; }
+.tabbar > .spacer { min-width: 8px; }
+.popmenu { max-height: 60vh; overflow: auto; }
+.tabbar .popmenu { right: auto; left: 0; min-width: 260px; }
+.env-pick { flex: none; }

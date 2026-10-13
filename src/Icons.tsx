@@ -50,3 +50,6 @@ export const IconInbox = () => <svg {...lg} width={34} height={34} strokeWidth={
 export const IconAlert = () => (
   <svg {...base}><path d="M12 3 2.5 20h19L12 3Z" /><path d="M12 10v4.5M12 17.5v.01" /></svg>
 );
+export const IconChevronDown = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+);
