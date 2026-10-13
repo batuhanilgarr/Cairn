@@ -9,7 +9,7 @@ No account, no cloud, no telemetry. Fast startup, tiny footprint.
 - HTTP client on a native Rust core (reqwest + rustls): all methods, headers, query params
 - Bodies: JSON, text, form-urlencoded, **multipart/form-data** (text and file fields, per-field Content-Type) and raw **binary file**; `curl -F` is imported, and the CLI sends them too
 - Auth: Bearer, Basic
-- Environments with `{{variables}}`
+- Environments with `{{variables}}`, plus built-in **dynamic variables** that are generated fresh on every use: `{{$guid}}` / `{{$uuid}}`, `{{$timestamp}}`, `{{$isoTimestamp}}`, `{{$date}}`, `{{$randomInt}}`, `{{$randomString}}`, `{{$randomEmail}}`, `{{$randomBoolean}}` (autocomplete and hover included; a variable of the same name in an environment wins)
 - **Git-friendly collections**: a collection is a folder of plain YAML files (`*.req.yaml`), no generated IDs, stable key order, literal-block bodies for clean diffs. Order comes from file names, never from file contents
 - Environments stored in `environments/*.env.yaml`; variables marked 🔒 secret live in `.reqnest/secrets.yaml` (auto-gitignored)
 - Paste a `curl ...` command into the URL bar: method, headers, body, auth and Content-Type are filled in automatically

@@ -1,3 +1,4 @@
+import { dynamicValue } from "./dynamic";
 import type { Environment, FormPart, KV, OAuthConfig, RequestTab } from "./types";
 
 export const uid = () => Math.random().toString(36).slice(2, 10);
@@ -82,7 +83,7 @@ export const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTION
 export function interpolate(text: string, env: Environment | undefined): string {
   if (!env) return text;
   const map = new Map(env.vars.filter((v) => v.enabled && v.key).map((v) => [v.key, v.value]));
-  return text.replace(/\{\{\s*([\w.\-]+)\s*\}\}/g, (m, k) => (map.has(k) ? map.get(k)! : m));
+  return text.replace(/\{\{\s*(\$?[\w.\-]+)\s*\}\}/g, (m, k) => (map.has(k) ? map.get(k)! : (dynamicValue(k) ?? m)));
 }
 
 export function buildRequest(tab: RequestTab, env: Environment | undefined, extraHeaders: [string, string][] = []) {

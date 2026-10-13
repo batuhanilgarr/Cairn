@@ -37,6 +37,7 @@ import { cachedSchema, loadGraphQL, storeSchema } from "./lib/graphql";
 import { applyDefaults, type Layer } from "./lib/inherit";
 import { executeRequest, prepareRequest, resolveOAuth, withSession } from "./lib/pipeline";
 import { buildRequest } from "./lib/util";
+import { DYNAMIC_DESCRIPTIONS } from "./lib/dynamic";
 import { MultipartEditor } from "./MultipartEditor";
 import { getToken, tokenKey, type TokenCache } from "./lib/oauth";
 import {
@@ -882,7 +883,7 @@ export default function App() {
       status = out.response?.status ?? null;
       if (out.sent) {
         const text = [out.sent.url, out.sent.body ?? "", ...out.sent.headers.flat()].join("\n");
-        const missing = [...new Set([...text.matchAll(/\{\{\s*([\w.\-]+)\s*\}\}/g)].map((m) => m[1]))];
+        const missing = [...new Set([...text.matchAll(/\{\{\s*(\$?[\w.\-]+)\s*\}\}/g)].map((m) => m[1]))];
         if (missing.length) flash(`Undefined variable${missing.length > 1 ? "s" : ""}: ${missing.join(", ")}`, 4500);
       }
       setResponses((r) => ({ ...r, [tab.id]: out.response ?? { error: out.error ?? "Request failed" } }));
@@ -1130,7 +1131,7 @@ export default function App() {
 
   /** What {{variables}} resolve to right now (secrets masked), for highlighting and hover. */
   const varMap = useMemo<VarMap>(() => {
-    const m: VarMap = {};
+    const m: VarMap = { ...DYNAMIC_DESCRIPTIONS };
     for (const v of env?.vars ?? []) if (v.enabled && v.key) m[v.key] = v.secret ? "•••••• (secret)" : v.value;
     for (const [k, v] of Object.entries(sessionRef.current)) m[k] = v;
     return m;

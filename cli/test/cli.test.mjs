@@ -114,6 +114,20 @@ tests:
 scripts:
   pre: env.set('x', '1');
 `);
+  write("dynamic/01-dynamic.req.yaml", `name: Dynamic variables
+method: POST
+url: '{{baseUrl}}/echo?name={{$guid}}'
+auth:
+  mode: none
+body:
+  mode: json
+  content: '{"a":"{{$guid}}","b":"{{$guid}}","ts":{{$timestamp}},"n":{{$randomInt}},"email":"{{$randomEmail}}","mine":"{{$isoTimestamp}}","nope":"{{$notReal}}"}'
+tests:
+  - kind: json
+    path: q
+    op: matches
+    value: '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+`);
   write("upload/note.txt", "FILEDATA-123");
   write("upload/01-multipart.req.yaml", `name: Multipart upload
 method: POST
@@ -273,4 +287,19 @@ test("multipart/form-data and raw file bodies are sent with a generated boundary
   assert.match(mp.body, /name="title"\r\n\r\nHello http:\/\/127\.0\.0\.1:\d+\r\n/);
   const raw = seen.find((r) => r.method === "PUT");
   assert.equal(raw.headers["content-type"], "application/octet-stream");
+});
+
+test("dynamic variables are generated per use; unknown $names are left alone", async () => {
+  const before = seen.length;
+  const { code, stdout, stderr } = await run(["dynamic", "--env", "Local"]);
+  assert.equal(code, 0, stdout + stderr);
+  const req = seen.slice(before).find((r) => r.method === "POST" && r.url.startsWith("/echo?name="));
+  const b = JSON.parse(req.body);
+  assert.match(b.a, /^[0-9a-f-]{36}$/);
+  assert.notEqual(b.a, b.b, "each {{$guid}} is a fresh value");
+  assert.ok(Math.abs(b.ts - Date.now() / 1000) < 60);
+  assert.ok(b.n >= 0 && b.n <= 1000);
+  assert.match(b.email, /^[a-z0-9]{10}@example\.com$/);
+  assert.ok(!Number.isNaN(Date.parse(b.mine)));
+  assert.equal(b.nope, "{{$notReal}}");
 });

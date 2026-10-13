@@ -14,7 +14,7 @@ Mock server, response history + diff, CLI/CI runner (JUnit/HTML), OpenAPI re-syn
 | Eksik | Kanıt | Not |
 |---|---|---|
 | ~~multipart/form-data + dosya yükleme~~ **YAPILDI** | `BodyMode` artık `multipart` ve `binary` içeriyor; curl `-F` import, CLI desteği, kod üretimi (cURL/fetch/Python) | Kalan: diğer 11 dilde multipart kod üretimi, XML/HTML body modu |
-| **Dinamik değişkenler** (`{{$randomInt}}`, `{{$timestamp}}`, `{{$guid}}`) | Kodda yok (mock tarafında `$uuid` var) | İstek gövdelerinde sık kullanılıyor |
+| ~~Dinamik değişkenler~~ **YAPILDI** | `{{$guid}}`, `{{$timestamp}}`, `{{$isoTimestamp}}`, `{{$date}}`, `{{$randomInt}}`, `{{$randomString}}`, `{{$randomEmail}}`, `{{$randomBoolean}}`; app, CLI, editör vurgulaması ve otomatik tamamlama | Kalan: `$randomInt(min,max)` gibi argümanlar, sahte isim/adres verisi |
 | **Global / collection / folder değişken kapsamları** | `global` sadece stream/openapi içinde geçiyor | Şimdilik sadece environment var |
 | **Windows ve Linux build** | `tauri.conf.json` targets: `app`, `dmg`; Release workflow'u sadece macos-14 | Kullanıcı tabanını belirleyen en büyük etken |
 | **Otomatik güncelleme** | `updater` yok | Tauri updater plugin'i + imzalı release |

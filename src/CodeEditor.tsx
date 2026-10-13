@@ -101,7 +101,7 @@ const varsField = StateField.define<VarMap>({
   },
 });
 
-const VAR_RE = /\{\{\s*([\w.\-]+)\s*\}\}/g;
+const VAR_RE = /\{\{\s*(\$?[\w.\-]+)\s*\}\}/g;
 
 function buildVarDecos(view: EditorView): DecorationSet {
   const vars = view.state.field(varsField);
@@ -155,14 +155,14 @@ const varHover = hoverTooltip((view, pos) => {
 });
 
 function varCompletions(ctx: CompletionContext) {
-  const m = ctx.matchBefore(/\{\{\s*[\w.\-]*/);
+  const m = ctx.matchBefore(/\{\{\s*\$?[\w.\-]*/);
   if (!m) return null;
   const vars = ctx.state.field(varsField);
   const closed = ctx.state.doc.sliceString(ctx.pos, ctx.pos + 2) === "}}";
   return {
     from: m.from + m.text.indexOf("{{") + 2 + (m.text.slice(m.text.indexOf("{{") + 2).match(/^\s*/)![0].length),
     options: Object.entries(vars).map(([k, v]) => ({ label: k, detail: v.length > 24 ? v.slice(0, 24) + "…" : v, type: "variable", apply: closed ? k : `${k}}}` })),
-    validFor: /^[\w.\-]*$/,
+    validFor: /^\$?[\w.\-]*$/,
   };
 }
 

@@ -71,7 +71,7 @@ export function Welcome({ hasCollection, onCurl, onSample, onNewCollection, onOp
           </div>
         </section>
       </div>
-      <p className="muted small welcome-foot">Tip: use <code>{"{{variables}}"}</code> anywhere. Pick or create an environment in the top right.</p>
+      <p className="muted small welcome-foot">Tip: use <code>{"{{variables}}"}</code> anywhere, and <code>{"{{$guid}}"}</code> or <code>{"{{$timestamp}}"}</code> for fresh values. Pick or create an environment in the top right.</p>
     </div>
   );
 }
