@@ -12,6 +12,11 @@ export type Effective = {
   authFrom: string | null;
 };
 
+/** Variables set by the collection and its folders, outermost first, so a deeper folder wins. */
+export function layerVars(layers: Layer[]): KV[] {
+  return layers.flatMap((l) => (l.defaults.vars ?? []).filter((v) => v.enabled && v.key));
+}
+
 const lk = (k: string) => k.trim().toLowerCase();
 
 /**

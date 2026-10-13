@@ -4,15 +4,20 @@ import { buildRequest, emptyKV, interpolate } from "./util";
 import { runAssertions, runCaptures } from "./assert";
 import { runScript, type ScriptRequest } from "./script";
 import { getToken, type TokenCache } from "./oauth";
-import { applyDefaults, type Layer } from "./inherit";
+import { applyDefaults, layerVars, type Layer } from "./inherit";
 
 /** Session variables: set by scripts and captures, held in memory only, never written to disk. */
 export type Session = Record<string, string>;
 
-export const withSession = (env: Environment | undefined, session: Session): Environment => ({
+/**
+ * What {{variables}} resolve against. Later entries win:
+ * `base` (global, then collection and folder variables) < the environment < session (scripts and captures).
+ */
+export const withSession = (env: Environment | undefined, session: Session, base: KV[] = []): Environment => ({
   id: env?.id ?? "session",
   name: env?.name ?? "session",
   vars: [
+    ...base,
     ...(env?.vars ?? []),
     ...Object.entries(session).map(([key, value]): KV => ({ ...emptyKV(), key, value })), // later entries win
   ],
@@ -62,6 +67,8 @@ type Deps = {
   onSession: () => void;
   /** Defaults of the request's folders, outermost first. */
   layers?: Layer[];
+  /** App-wide variables (Settings > Variables); the lowest level. */
+  globals?: KV[];
 };
 
 export type Prepared =
@@ -82,7 +89,8 @@ export async function prepareRequest(rawTab: RequestTab, deps: Deps): Promise<Pr
     deps.onSession();
   };
   const fail = (error: string): Prepared => ({ error, run });
-  const eff = () => withSession(deps.env, deps.session);
+  const base = [...(deps.globals ?? []).filter((v) => v.enabled && v.key), ...layerVars(deps.layers ?? [])];
+  const eff = () => withSession(deps.env, deps.session, base);
 
   // 1. pre-request scripts (collection, folders, request): env.set() feeds {{variables}},
   //    req.* edits accumulate and apply on top of the built request.

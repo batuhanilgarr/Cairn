@@ -10,6 +10,7 @@ import { setNetwork } from "./lib/net";
 import { KVEditor } from "./KVEditor";
 import { CodeEditor, type Lang, type VarMap } from "./CodeEditor";
 import type { EditorView } from "@codemirror/view";
+import { openSearchPanel } from "@codemirror/search";
 import { Dialog, type DialogState } from "./Dialog";
 import { Tree } from "./Tree";
 import { AuthPanel } from "./AuthPanel";
@@ -34,7 +35,7 @@ import { loadInfo, mcpClose, mcpConnect, mcpRequest, rpcLabel, splitArgs, type M
 import { WsPanel, type WsMode } from "./WsPanel";
 import { EMPTY_STREAM, MAX_ENTRIES, grpcCall, grpcDescribe, grpcEnd, grpcSend, sseConnect, streamStop, subscribe, unsubscribe, wsClose, wsConnect, wsSend, type StreamEntry, type StreamEvent, type StreamState } from "./lib/stream";
 import { cachedSchema, loadGraphQL, storeSchema } from "./lib/graphql";
-import { applyDefaults, type Layer } from "./lib/inherit";
+import { applyDefaults, layerVars, type Layer } from "./lib/inherit";
 import { executeRequest, prepareRequest, resolveOAuth, withSession } from "./lib/pipeline";
 import { buildRequest } from "./lib/util";
 import { DYNAMIC_DESCRIPTIONS } from "./lib/dynamic";
@@ -85,13 +86,13 @@ import {
   setTabDefaults,
   statusClass,
   tryPrettyJson,
+  tryPrettyXml,
   uid,
 } from "./lib/util";
 import { looksLikeCurl, parseCurl } from "./lib/curl";
 import { parseOpenApi, type ImportedRequest } from "./lib/openapi";
-import { parsePostman } from "./lib/postman";
 import { parseBru, parseBruEnv } from "./lib/bruno";
-import { ensureEnvironment, writeImport } from "./lib/importer";
+import { ensureEnvironment, importPostmanFiles, writeImport } from "./lib/importer";
 import "./styles.css";
 
 type ReqSection = "params" | "headers" | "body" | "query" | "message" | "examples" | "explore" | "auth" | "scripts" | "tests" | "settings";
@@ -172,6 +173,7 @@ export default function App() {
   const [rawView, setRawView] = useState(false);
   const [wrapRes, setWrapRes] = useState(true);
   const urlView = useRef<EditorView | null>(null);
+  const resView = useRef<EditorView | null>(null);
 
   const active = tabs.find((t) => t.id === activeId) ?? tabs[0];
   const env = envs.find((e) => e.id === envId);
@@ -363,7 +365,8 @@ export default function App() {
         ...(meta?.openapi ? [{ id: "resync", label: "Re-sync OpenAPI", hint: meta.openapi.source }] : []),
         { id: "oas-url", label: "OpenAPI / Swagger from URL", hint: "JSON or YAML, v2 or v3" },
         { id: "oas-file", label: "OpenAPI / Swagger from file" },
-        { id: "postman", label: "Postman collection", hint: "v2.0 / v2.1 JSON export" },
+        { id: "postman-folder", label: "Postman export folder", hint: "all collections, environments (with secrets) and globals in one go" },
+        { id: "postman", label: "Postman collection or environment file", hint: "one v2.x JSON export" },
         { id: "bruno", label: "Bruno collection", hint: "pick the collection folder" },
       ]);
       if (!choice) return;
@@ -376,14 +379,35 @@ export default function App() {
         const f = await pickFile("Choose an OpenAPI file", ["json", "yaml", "yml"]);
         if (f) await importOpenApi(f, true);
       }
-      if (choice === "postman") {
-        const f = await pickFile("Choose a Postman collection", ["json"]);
-        if (!f) return;
-        const parsed = parsePostman((await readText(f)) ?? "");
-        const summary = await writeImport(collection.root, parsed.requests, false);
-        if (Object.keys(parsed.vars).length) await reloadEnvs((await ensureEnvironment(collection.root, parsed.title, parsed.vars)).id);
+      if (choice === "postman" || choice === "postman-folder") {
+        let files: string[];
+        if (choice === "postman") {
+          const f = await pickFile("Choose a Postman export", ["json"]);
+          if (!f) return;
+          files = [f];
+        } else {
+          const dir = await pickFolder("Choose the folder with your Postman exports");
+          if (!dir) return;
+          files = await listFilesRecursive(dir, ".json");
+          if (!files.length) return void (await info("No exports found", "That folder has no .json files. In Postman: Settings > Data > Export Data, unzip it, then pick the folder."));
+        }
+        const r = await importPostmanFiles(collection.root, files);
+        if (r.globals.length)
+          setSettings((s) => ({ ...s, globals: [...s.globals.filter((g) => g.key), ...r.globals.filter((g) => !s.globals.some((x) => x.key === g.key)).map((g) => ({ ...emptyKV(), key: g.key, value: g.value })), emptyKV()] }));
+        await reloadEnvs(r.lastEnvId);
         await refreshTree();
-        await info(`${parsed.title}: imported`, summarize("Postman collection imported.", summary, parsed.notes));
+        const reqs = r.collections.reduce((n, c) => n + c.requests, 0);
+        const secrets = r.environments.reduce((n, e) => n + e.secrets, 0);
+        const lines = [
+          `${r.collections.length} collection${r.collections.length === 1 ? "" : "s"} (${reqs} requests), each in its own folder.`,
+          `${r.environments.length} environment${r.environments.length === 1 ? "" : "s"}${secrets ? `, ${secrets} secret value${secrets === 1 ? "" : "s"} kept out of Git` : ""}.`,
+          ...(r.globals.length ? [`${r.globals.length} global variable${r.globals.length === 1 ? "" : "s"} (Settings > Variables).`] : []),
+          ...(r.protectedCredentials ? [`${r.protectedCredentials} password${r.protectedCredentials === 1 ? "" : "s"}, token${r.protectedCredentials === 1 ? "" : "s"} or key${r.protectedCredentials === 1 ? "" : "s"} from the auth settings were kept out of the files: they're global variables on this Mac, so nothing secret gets committed.`] : []),
+          ...(r.folders ? [`${r.folders} folder${r.folders === 1 ? "" : "s"} with their own auth, variables or scripts.`] : []),
+          ...(r.skippedFiles.length ? ["", `Skipped: ${r.skippedFiles.slice(0, 5).join(", ")}${r.skippedFiles.length > 5 ? `, +${r.skippedFiles.length - 5} more` : ""}`] : []),
+          ...(r.notes.length ? ["", ...r.notes.slice(0, 6).map((n) => `• ${n}`), ...(r.notes.length > 6 ? [`• +${r.notes.length - 6} more`] : [])] : []),
+        ];
+        await info("Postman import finished", lines.join("\n"));
       }
       if (choice === "bruno") {
         const dir = await pickFolder("Choose the Bruno collection folder");
@@ -565,6 +589,8 @@ export default function App() {
   }, [collection, active?.file, chainVer]);
   const layersOf = (c: ChainLink[]): Layer[] => c.map((l) => ({ label: l.label, defaults: l.defaults }));
   const inherited = useMemo(() => (active ? applyDefaults(active, layersOf(chain)) : null), [active, chain]);
+  /** Global, then collection and folder variables: the levels below the environment. */
+  const baseVars = useMemo(() => [...settings.globals.filter((v) => v.enabled && v.key), ...layerVars(layersOf(chain))], [settings.globals, chain]);
   useEffect(() => save("rq.split", splitPct), [splitPct]);
 
   const freshLayers = async (tab: RequestTab): Promise<Layer[]> =>
@@ -718,7 +744,7 @@ export default function App() {
     const tab = active;
     setGrpcSchemas((m) => ({ ...m, [tab.id]: { services: m[tab.id]?.services ?? [], loading: true, error: null } }));
     try {
-      const prep = await prepareRequest({ ...tab, preScript: "", postScript: "" }, { env, session: sessionRef.current, tokens: tokensRef.current, onSession: bump, layers: await freshLayers(tab) });
+      const prep = await prepareRequest({ ...tab, preScript: "", postScript: "" }, { env, globals: settings.globals, session: sessionRef.current, tokens: tokensRef.current, onSession: bump, layers: await freshLayers(tab) });
       if (prep.error !== undefined) throw new Error(prep.error);
       const services = await grpcDescribe(grpcTarget(tab, prep.spec.url), grpcSource(tab, prep.spec.headers));
       setGrpcSchemas((m) => ({ ...m, [tab.id]: { services, loading: false, error: null } }));
@@ -732,7 +758,7 @@ export default function App() {
     if (tab.kind === "grpc" && !tab.grpc.method.trim()) return flash("Pick a method first", 2500);
     streamStop(tab.id).catch(() => {});
     pushStream(tab.id, [], { status: "connecting", info: "" });
-    const prep = await prepareRequest(tab, { env, session: sessionRef.current, tokens: tokensRef.current, onSession: bump, layers: await freshLayers(tab) });
+    const prep = await prepareRequest(tab, { env, globals: settings.globals, session: sessionRef.current, tokens: tokensRef.current, onSession: bump, layers: await freshLayers(tab) });
     if (prep.error !== undefined) return pushStream(tab.id, [{ dir: "sys", label: "error", text: prep.error, tone: "error" }], { status: "error" });
     setHistory((h) => [{ id: uid(), at: Date.now(), method: tab.method, url: tab.url, status: null, tab }, ...h].slice(0, settings.historyLimit));
     try {
@@ -795,7 +821,7 @@ export default function App() {
 
   const sendWsMessage = async (text: string, mode: WsMode) => {
     const tab = active;
-    const body = interpolate(text, withSession(env, sessionRef.current));
+    const body = interpolate(text, withSession(env, sessionRef.current, baseVars));
     try {
       if (mode === "json") JSON.parse(body);
     } catch (e) {
@@ -879,7 +905,7 @@ export default function App() {
     setRuns((r) => ({ ...r, [tab.id]: null }));
     let status: number | null = null;
     try {
-      const out = await executeRequest(tab, { env, session: sessionRef.current, tokens: tokensRef.current, onSession: bump, layers: await freshLayers(tab) });
+      const out = await executeRequest(tab, { env, globals: settings.globals, session: sessionRef.current, tokens: tokensRef.current, onSession: bump, layers: await freshLayers(tab) });
       status = out.response?.status ?? null;
       if (out.sent) {
         const text = [out.sent.url, out.sent.body ?? "", ...out.sent.headers.flat()].join("\n");
@@ -911,7 +937,7 @@ export default function App() {
     try {
       const { getIntrospectionQuery } = await loadGraphQL();
       const probe = { ...tab, gql: { query: getIntrospectionQuery({ descriptions: true }), variables: "", operation: "" }, postScript: "", assertions: [], captures: [] };
-      const out = await executeRequest(probe, { env, session: sessionRef.current, tokens: tokensRef.current, onSession: bump, layers: await freshLayers(tab) });
+      const out = await executeRequest(probe, { env, globals: settings.globals, session: sessionRef.current, tokens: tokensRef.current, onSession: bump, layers: await freshLayers(tab) });
       if (!out.response) throw new Error(out.error ?? "Request failed");
       let json: any;
       try {
@@ -933,16 +959,16 @@ export default function App() {
   const buildSnippet = (resolve: boolean) => {
     const t = inherited?.tab ?? active;
     const extra: [string, string][] = t.authMode === "oauth2" ? [["Authorization", `${t.oauth.prefix || "Bearer"} <access_token>`]] : [];
-    const spec = buildRequest(t, resolve ? withSession(env, sessionRef.current) : undefined, extra);
+    const spec = buildRequest(t, resolve ? withSession(env, sessionRef.current, baseVars) : undefined, extra);
     return { method: spec.method, url: spec.url, headers: spec.headers, body: spec.body, multipart: spec.multipart, bodyFile: spec.bodyFile };
   };
 
-  const oauthToken = effOAuth ? tokensRef.current.get(tokenKey(resolveOAuth(effOAuth, withSession(env, sessionRef.current)))) : undefined;
+  const oauthToken = effOAuth ? tokensRef.current.get(tokenKey(resolveOAuth(effOAuth, withSession(env, sessionRef.current, baseVars)))) : undefined;
 
   const getTokenNow = async () => {
     setOauthBusy(true);
     try {
-      await getToken(resolveOAuth((inherited?.tab ?? active).oauth, withSession(env, sessionRef.current)), tokensRef.current, { force: true });
+      await getToken(resolveOAuth((inherited?.tab ?? active).oauth, withSession(env, sessionRef.current, baseVars)), tokensRef.current, { force: true });
     } catch (e) {
       await info("OAuth 2.0", String((e as Error).message ?? e));
     } finally {
@@ -951,7 +977,7 @@ export default function App() {
     }
   };
   const resetToken = () => {
-    tokensRef.current.delete(tokenKey(resolveOAuth((inherited?.tab ?? active).oauth, withSession(env, sessionRef.current))));
+    tokensRef.current.delete(tokenKey(resolveOAuth((inherited?.tab ?? active).oauth, withSession(env, sessionRef.current, baseVars))));
     bump();
   };
 
@@ -970,7 +996,7 @@ export default function App() {
         try {
           const tab = parseRequest((await readText(files[i])) ?? "", files[i]);
           items[i].name = tab.name;
-          const out = await executeRequest(tab, { env, session: sessionRef.current, tokens: tokensRef.current, onSession: bump, layers: await freshLayers(tab) });
+          const out = await executeRequest(tab, { env, globals: settings.globals, session: sessionRef.current, tokens: tokensRef.current, onSession: bump, layers: await freshLayers(tab) });
           items[i].status = out.response?.status;
           items[i].ms = out.response?.timeMs;
           items[i].error = out.error;
@@ -1022,6 +1048,12 @@ export default function App() {
       urlView.current?.focus();
       urlView.current?.dispatch({ selection: { anchor: 0, head: urlView.current.state.doc.length } });
     },
+    "find-in-response": () => {
+      const v = resView.current;
+      if (!v) return;
+      v.focus();
+      openSearchPanel(v);
+    },
     "duplicate-tab": () => addTab({ ...active, id: uid(), file: null, saved: null, name: "New request" }),
     "next-tab": () => nextTab(1),
     "prev-tab": () => nextTab(-1),
@@ -1060,6 +1092,11 @@ export default function App() {
       if (e.shiftKey && e.key.toLowerCase() === "g") {
         e.preventDefault();
         return fire("codegen");
+      }
+      // ⌘F inside an editor is that editor's own search; anywhere else it searches the response body.
+      if (e.key.toLowerCase() === "f" && !e.shiftKey && resView.current && !(e.target as HTMLElement | null)?.closest?.(".cm-editor")) {
+        e.preventDefault();
+        return fire("find-in-response");
       }
       const id = map[e.key.length === 1 ? e.key.toLowerCase() : e.key];
       if (!id) return;
@@ -1132,18 +1169,19 @@ export default function App() {
   /** What {{variables}} resolve to right now (secrets masked), for highlighting and hover. */
   const varMap = useMemo<VarMap>(() => {
     const m: VarMap = { ...DYNAMIC_DESCRIPTIONS };
+    for (const v of baseVars) m[v.key] = v.value;
     for (const v of env?.vars ?? []) if (v.enabled && v.key) m[v.key] = v.secret ? "•••••• (secret)" : v.value;
     for (const [k, v] of Object.entries(sessionRef.current)) m[k] = v;
     return m;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [env, tick]);
+  }, [env, tick, baseVars]);
 
   const resLang: Lang = useMemo(() => {
     if (!response || "error" in response) return "text";
     const ct = (response.headers.find(([k]) => k.toLowerCase() === "content-type")?.[1] ?? "").toLowerCase();
     if (ct.includes("json") || /^\s*[[{]/.test(response.body.slice(0, 20))) return "json";
     if (ct.includes("html")) return "html";
-    if (ct.includes("xml")) return "xml";
+    if (ct.includes("xml") || /^\s*<\?xml/.test(response.body.slice(0, 40))) return "xml";
     if (ct.includes("javascript")) return "js";
     return "text";
   }, [response]);
@@ -1155,9 +1193,9 @@ export default function App() {
 
   const resBody = useMemo(() => {
     if (!response || "error" in response) return null;
-    const pretty = tryPrettyJson(response.body);
+    const pretty = resLang === "xml" ? tryPrettyXml(response.body) : tryPrettyJson(response.body);
     return { pretty, text: response.body };
-  }, [response]);
+  }, [response, resLang]);
 
   return (
     <div className={`app ${sidebarOpen ? "" : "no-side"}`}>
@@ -1525,7 +1563,7 @@ export default function App() {
                 active={streamStatus === "open" || streamStatus === "connecting"}
                 onLoad={loadGrpcSchema}
                 onSendMore={async (text) => {
-                  const body = interpolate(text, withSession(env, sessionRef.current));
+                  const body = interpolate(text, withSession(env, sessionRef.current, baseVars));
                   try {
                     await grpcSend(active.id, body);
                     pushStream(active.id, [{ dir: "out", label: active.grpc.method.split("/")[1] ?? "request", text: body, size: new TextEncoder().encode(body).length }]);
@@ -1697,6 +1735,11 @@ export default function App() {
                     <input type="checkbox" checked={wrapRes} onChange={(e) => setWrapRes(e.target.checked)} /> Wrap
                   </label>
                   {!response.bodyBase64 && (
+                    <button className="btn small" onClick={() => fire("find-in-response")} title="Search the response (⌘F)">
+                      Search
+                    </button>
+                  )}
+                  {!response.bodyBase64 && (
                     <button className="btn small" onClick={() => navigator.clipboard.writeText(resBody.pretty ?? resBody.text)}>
                       Copy
                     </button>
@@ -1729,6 +1772,7 @@ export default function App() {
                     lang={resLang}
                     value={resBody.pretty && !rawView ? resBody.pretty : resBody.text}
                     vars={undefined}
+                    editorRef={resView}
                     className="fill"
                   />
                 </div>

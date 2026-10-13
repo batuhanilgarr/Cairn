@@ -71,6 +71,8 @@ export type RequestTab = {
   /** Text/JSON body, or for `binary` the absolute path of the file to send. */
   body: string;
   formParts: FormPart[];
+  /** Variables set by a folder or the collection (folder.yaml). Only used on defaults objects, never on requests. */
+  vars?: KV[];
   authMode: AuthMode;
   authToken: string;
   authUser: string;

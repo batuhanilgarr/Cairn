@@ -175,6 +175,40 @@ export function tryPrettyJson(text: string): string | null {
   }
 }
 
+/** Indent XML (what SAP Hybris, SOAP and many older APIs return). Returns null when it doesn't look like XML. */
+export function tryPrettyXml(src: string): string | null {
+  const text = src.trim();
+  if (!text.startsWith("<")) return null;
+  const tokens = text.match(/<!--[\s\S]*?-->|<!\[CDATA\[[\s\S]*?\]\]>|<\?[\s\S]*?\?>|<![^>]*>|<\/?[^>]+>|[^<]+/g);
+  if (!tokens) return null;
+  const out: string[] = [];
+  let depth = 0;
+  const pad = () => "  ".repeat(depth);
+  for (let i = 0; i < tokens.length; i++) {
+    const t = tokens[i];
+    if (!t.startsWith("<")) {
+      const s = t.trim();
+      if (s) out.push(pad() + s);
+      continue;
+    }
+    if (t.startsWith("</")) {
+      depth = Math.max(0, depth - 1);
+      out.push(pad() + t);
+    } else if (/^<[^!?]/.test(t) && !t.endsWith("/>")) {
+      const next = tokens[i + 1];
+      const close = tokens[i + 2];
+      if (next !== undefined && !next.startsWith("<") && close?.startsWith("</")) {
+        out.push(pad() + t + next.trim() + close); // <a>text</a> stays on one line
+        i += 2;
+      } else {
+        out.push(pad() + t);
+        depth++;
+      }
+    } else out.push(pad() + t);
+  }
+  return out.join("\n");
+}
+
 export function highlightJson(src: string): string {
   const esc = src.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   return esc.replace(

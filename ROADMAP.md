@@ -15,7 +15,7 @@ Mock server, response history + diff, CLI/CI runner (JUnit/HTML), OpenAPI re-syn
 |---|---|---|
 | ~~multipart/form-data + dosya yükleme~~ **YAPILDI** | `BodyMode` artık `multipart` ve `binary` içeriyor; curl `-F` import, CLI desteği, kod üretimi (cURL/fetch/Python) | Kalan: diğer 11 dilde multipart kod üretimi, XML/HTML body modu |
 | ~~Dinamik değişkenler~~ **YAPILDI** | `{{$guid}}`, `{{$timestamp}}`, `{{$isoTimestamp}}`, `{{$date}}`, `{{$randomInt}}`, `{{$randomString}}`, `{{$randomEmail}}`, `{{$randomBoolean}}`; app, CLI, editör vurgulaması ve otomatik tamamlama | Kalan: `$randomInt(min,max)` gibi argümanlar, sahte isim/adres verisi |
-| **Global / collection / folder değişken kapsamları** | `global` sadece stream/openapi içinde geçiyor | Şimdilik sadece environment var |
+| ~~Global / collection / folder değişken kapsamları~~ **YAPILDI** | Sıra: global < koleksiyon < klasör < environment < oturum. Koleksiyon/klasör `folder.yaml` içinde (CLI görür), global Settings'te | Kalan: değişkenin hangi kapsamdan geldiğini hover'da göstermek |
 | **Windows ve Linux build** | `tauri.conf.json` targets: `app`, `dmg`; Release workflow'u sadece macos-14 | Kullanıcı tabanını belirleyen en büyük etken |
 | **Otomatik güncelleme** | `updater` yok | Tauri updater plugin'i + imzalı release |
 | **macOS imzalama/notarization** | Secret'lar tanımlı değil; ilk açılışta "sağ tık → Open" gerekiyor | Güven sorunu, Apple Developer hesabı gerekir |
@@ -23,7 +23,7 @@ Mock server, response history + diff, CLI/CI runner (JUnit/HTML), OpenAPI re-syn
 ### P1: Postman'den geçişi kolaylaştıranlar
 | Eksik | Not |
 |---|---|
-| **`pm.*` script uyumluluğu** | Scriptlerde `req/res/env/expect` var, `pm.` yok. Import edilen Postman koleksiyonlarındaki scriptler çalışmaz. İnce bir `pm` shim'i (pm.environment, pm.response, pm.test, pm.expect) geçişi büyük ölçüde açar |
+| ~~`pm.*` script uyumluluğu~~ **YAPILDI** | `pm.test`, `pm.expect` (Chai alt kümesi), `pm.environment/variables/globals`, `pm.request`, `pm.response`, eski `tests[]`/`postman.*`; Postman importer scriptleri olduğu gibi taşıyor | Kalan: `pm.sendRequest`, `require()`, CryptoJS, cheerio |
 | **Postman / OpenAPI'ye export** | Import var, export yok (yalnızca kod üretimi) |
 | **Auth türleri: Digest, AWS SigV4, NTLM, Hawk, API key, JWT bearer üretimi** | Şu an Bearer, Basic, OAuth2 |
 | **Contract testing** | Yanıtı OpenAPI/JSON Schema'ya karşı doğrula; OpenAPI zaten import ediliyor, doğal uzantı |

@@ -363,6 +363,8 @@ export const DEFAULTS_FILE = "folder.yaml";
 
 export function serializeDefaults(t: RequestTab): string {
   const doc: Record<string, unknown> = {};
+  const vars = kvOut(t.vars ?? []);
+  if (vars.length) doc.vars = vars;
   const headers = kvOut(t.headers);
   if (headers.length) doc.headers = headers;
   const auth = t.authMode === "inherit" ? null : authOut(t);
@@ -379,6 +381,7 @@ export function parseDefaults(text: string | null): RequestTab {
   return {
     ...newTab(),
     name: "defaults",
+    vars: kvIn(d.vars),
     headers: kvIn(d.headers),
     ...authIn(d.auth),
     preScript: String(d.scripts?.pre ?? ""),

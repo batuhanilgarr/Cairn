@@ -208,7 +208,7 @@ export function CodeEditor({ value, onChange, lang = "text", readOnly, placehold
         cmPlaceholder(placeholder ?? ""),
         langC.current.of(langExt(lang)),
         extC.current.of(extensions ?? []),
-        roC.current.of([EditorState.readOnly.of(!!readOnly), EditorView.editable.of(!readOnly)]),
+        roC.current.of(EditorState.readOnly.of(!!readOnly)),
         wrapC.current.of(wrap || singleLine ? EditorView.lineWrapping : []),
         // Sources are added through language data (not `override`), so they sit alongside the language's own
         // completions, e.g. GraphQL schema fields.
@@ -297,7 +297,7 @@ export function CodeEditor({ value, onChange, lang = "text", readOnly, placehold
     if (v.state.doc.toString() !== value) v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: value } });
   }, [value]);
   useEffect(() => view.current?.dispatch({ effects: langC.current.reconfigure(langExt(lang)) }), [lang]);
-  useEffect(() => view.current?.dispatch({ effects: roC.current.reconfigure([EditorState.readOnly.of(!!readOnly), EditorView.editable.of(!readOnly)]) }), [readOnly]);
+  useEffect(() => view.current?.dispatch({ effects: roC.current.reconfigure(EditorState.readOnly.of(!!readOnly)) }), [readOnly]);
   useEffect(() => view.current?.dispatch({ effects: wrapC.current.reconfigure(wrap || singleLine ? EditorView.lineWrapping : []) }), [wrap, singleLine]);
   useEffect(() => view.current?.dispatch({ effects: setVarsEffect.of(vars ?? {}) }), [vars]);
   useEffect(() => view.current?.dispatch({ effects: extC.current.reconfigure(extensions ?? []) }), [extensions]);

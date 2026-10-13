@@ -1,3 +1,4 @@
+import type { KV } from "./types";
 import { load, save } from "./util";
 
 export type Settings = {
@@ -20,6 +21,8 @@ export type Settings = {
   clientKey: string;
   userAgent: string;
   cookies: boolean;
+  /** Global variables: the lowest level, available in every collection. Kept on this Mac, not in Git. */
+  globals: KV[];
 };
 
 export const ACCENTS: { name: string; light: string; dark: string }[] = [
@@ -49,6 +52,7 @@ export const DEFAULT_SETTINGS: Settings = {
   clientKey: "",
   userAgent: "",
   cookies: true,
+  globals: [],
 };
 
 export const loadSettings = (): Settings => ({ ...DEFAULT_SETTINGS, ...load<Partial<Settings>>("rq.settings", {}) });

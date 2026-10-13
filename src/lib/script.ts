@@ -1,4 +1,5 @@
 import type { ResponseData, TestResult } from "./types";
+import { PM_SHIM } from "./pm";
 
 export type ScriptRequest = { method: string; url: string; headers: [string, string][]; body?: string };
 export type ScriptContext = {
@@ -20,6 +21,7 @@ export type ScriptResult = {
  * timeout. A collection from someone else can't reach your files or secrets through a script.
  */
 export const HARNESS = `
+${PM_SHIM}
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
 const fmt = (a) => typeof a === 'string' ? a : (() => { try { return JSON.stringify(a); } catch { return String(a); } })();
 const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -71,9 +73,12 @@ self.onmessage = async (e) => {
   const log = (...a) => logs.push(a.map(fmt).join(' '));
   let error;
   try {
-    await new AsyncFunction('req', 'res', 'env', 'test', 'expect', 'console', code)(
-      reqApi, res, env, test, expect, { log, info: log, warn: log, error: log });
+    const compat = buildPm({ req: reqApi, res, vars, env, test });
+    await new AsyncFunction('req', 'res', 'env', 'test', 'expect', 'console', 'pm', 'postman', 'tests', 'responseBody', 'responseCode', 'require', code)(
+      reqApi, res, env, test, expect, { log, info: log, warn: log, error: log },
+      compat.pm, compat.postman, compat.legacyTests, compat.responseBody, compat.responseCode, compat.requireStub);
     await Promise.all(pending);
+    for (const [name, v] of Object.entries(compat.legacyTests)) tests.push({ name, passed: !!v, error: v ? undefined : 'assertion was false' });
   } catch (err) { error = String(err && err.stack ? err.message : err); }
   const { setHeader, removeHeader, getHeader, ...plain } = req;
   postMessage({ req: plain, set, logs, tests, error });

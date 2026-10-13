@@ -79,7 +79,8 @@ kbd { font-family: var(--font); font-size: 11px; opacity: 0.7; margin-left: 8px;
 .icon-btn:hover { background: var(--hover); color: var(--text); }
 .icon-btn.plus { margin-bottom: 6px; }
 
-.urlbar { display: flex; gap: 8px; padding: 12px; }
+.urlbar { display: flex; align-items: flex-start; gap: 8px; padding: 12px; }
+.urlbar > select, .urlbar > .btn { flex: none; height: 36px; padding-top: 0; padding-bottom: 0; }
 .method { width: 104px; font-weight: 700; }
 select, .cell, .url, .editor { background: var(--bg-input); border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; outline: none; }
 select { cursor: pointer; }
@@ -274,7 +275,7 @@ h4 { margin: 4px 0; font-size: 12px; text-transform: uppercase; letter-spacing: 
 .script-col { min-height: 0; }
 .script-col > .cm-host { flex: 1; }
 .panel-body.fill .tools { flex: none; margin-bottom: 6px; }
-.urlbar .cm-host.single { align-self: stretch; }
+.urlbar .cm-host.single { flex: 1; min-width: 0; min-height: 36px; max-height: 128px; overflow-y: auto; word-break: break-all; }
 
 /* graphql */
 .gql { display: flex; height: 100%; min-height: 0; gap: 10px; }

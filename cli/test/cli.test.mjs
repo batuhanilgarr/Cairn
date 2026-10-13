@@ -47,7 +47,7 @@ before(async () => {
 
   dir = fs.mkdtempSync(path.join(os.tmpdir(), "reqnest-cli-"));
   write("reqnest.yaml", "name: Demo API\n");
-  write("environments/local.env.yaml", `name: Local\nvars:\n  - key: baseUrl\n    value: ${base}\n  - key: clientSecret\n    value: ""\n    secret: true\n`);
+  write("environments/local.env.yaml", `name: Local\nvars:\n  - key: baseUrl\n    value: ${base}\n  - key: clientSecret\n    value: ""\n    secret: true\n  - key: c\n    value: env\n`);
   // collection-wide defaults: header + bearer token taken from a variable set by the login request
   write("folder.yaml", "headers:\n  - key: X-Api\n    value: team\nauth:\n  mode: bearer\n  token: '{{token}}'\n");
   write("ok/01-login.req.yaml", `name: Login
@@ -113,6 +113,48 @@ tests:
     value: redirected
 scripts:
   pre: env.set('x', '1');
+`);
+  // variable scopes: folder < inner folder < environment (a is set once, b is overridden deeper, c is overridden by the environment)
+  write("scopes/folder.yaml", "auth:\n  mode: none\nvars:\n  - key: a\n    value: outer\n  - key: b\n    value: outer\n  - key: c\n    value: outer\n  - key: off\n    value: nope\n    enabled: false\n");
+  write("scopes/inner/folder.yaml", "vars:\n  - key: b\n    value: inner\n");
+  write("scopes/inner/01-scopes.req.yaml", `name: Scopes
+method: GET
+url: '{{baseUrl}}/echo?name={{a}}-{{b}}-{{c}}-{{off}}'
+tests:
+  - kind: json
+    path: q
+    op: eq
+    value: 'outer-inner-env-{{off}}'
+`);
+  // Postman-style scripts (pm.*) must run unchanged
+  write("pm/01-pm.req.yaml", `name: Postman script
+method: POST
+url: '{{baseUrl}}/echo?name=ada'
+auth:
+  mode: none
+body:
+  mode: json
+  content: '{"n":3}'
+scripts:
+  pre: |-
+    pm.request.headers.add({ key: 'X-From-Pre', value: pm.variables.replaceIn('{{baseUrl}}') });
+    pm.environment.set('stamp', 'abc');
+  post: |-
+    pm.test('status is 200', function () { pm.response.to.have.status(200); });
+    pm.test('ok helper', function () { pm.response.to.be.ok; });
+    pm.test('chai chain', function () {
+      const j = pm.response.json();
+      pm.expect(j.q).to.equal('ada');
+      pm.expect(j).to.have.property('body').that.includes('"n":3');
+      pm.expect(j.q).to.be.a('string').and.have.lengthOf(3);
+      pm.expect([1, 2, 3]).to.include(2);
+      pm.expect({ a: { b: 1 } }).to.deep.equal({ a: { b: 1 } });
+      pm.expect(5).to.be.above(2).and.below(9);
+      pm.expect(j.q).to.not.equal('bob');
+    });
+    pm.test('reads the variable the pre-request script set', function () { pm.expect(pm.environment.get('stamp')).to.eql('abc'); });
+    tests['legacy style passes'] = responseCode.code === 200;
+    pm.test('a failing expectation is reported', function () { pm.expect(1).to.equal(2); });
 `);
   write("dynamic/01-dynamic.req.yaml", `name: Dynamic variables
 method: POST
@@ -302,4 +344,19 @@ test("dynamic variables are generated per use; unknown $names are left alone", a
   assert.match(b.email, /^[a-z0-9]{10}@example\.com$/);
   assert.ok(!Number.isNaN(Date.parse(b.mine)));
   assert.equal(b.nope, "{{$notReal}}");
+});
+
+test("variable scopes: folder vars, deeper folder wins, environment overrides, disabled vars are ignored", async () => {
+  const { code, stdout, stderr } = await run(["scopes", "--env", "Local"]);
+  assert.equal(code, 0, stdout + stderr);
+});
+
+test("Postman pm.* scripts run: chai expectations, environment, request headers, legacy tests[]", async () => {
+  const before = seen.length;
+  const { code, stdout } = await run(["pm", "--env", "Local"]);
+  assert.equal(code, 1, "the deliberately failing pm.test makes the run fail");
+  assert.match(stdout, /5\/6 tests/, "five pm tests pass, the deliberate failure is the sixth");
+  assert.match(stdout, /a failing expectation is reported — expected 1 to equal 2/);
+  const req = seen.slice(before).find((r) => r.url.startsWith("/echo?name=ada"));
+  assert.equal(req.headers["x-from-pre"], base);
 });

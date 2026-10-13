@@ -10,8 +10,15 @@ export type ImportedRequest = {
   tab: RequestTab;
 };
 
+/** Defaults (variables, auth, headers, scripts) for a folder of the import: written as that folder's folder.yaml. */
+export type ImportedFolder = { path: string[]; defaults: RequestTab };
+
 export type ImportResult = {
   title: string;
+  /** Folder-level settings the source format carries (Postman folders and collection root). */
+  folders?: ImportedFolder[];
+  /** Literal credentials taken out of auth settings and replaced by {{name}}: kept out of the files (and Git). */
+  secrets?: Record<string, string>;
   /** Variables the requests reference, with a suggested default (only baseUrl is non-empty). */
   vars: Record<string, string>;
   requests: ImportedRequest[];

@@ -4,12 +4,15 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { ACCENTS, DEFAULT_SETTINGS, type Settings } from "./lib/settings";
 import { pickFile } from "./lib/fs";
 import { CookiesPanel } from "./CookiesPanel";
+import { KVEditor } from "./KVEditor";
+import { emptyKV } from "./lib/util";
 
-export type SettingsSection = "general" | "appearance" | "network" | "cookies" | "shortcuts" | "data" | "about";
+export type SettingsSection = "general" | "appearance" | "variables" | "network" | "cookies" | "shortcuts" | "data" | "about";
 
 const NAV: { id: SettingsSection; label: string; icon: string }[] = [
   { id: "general", label: "Requests", icon: "⇄" },
   { id: "appearance", label: "Appearance", icon: "◐" },
+  { id: "variables", label: "Variables", icon: "{ }" },
   { id: "network", label: "Network", icon: "☍" },
   { id: "cookies", label: "Cookies", icon: "◍" },
   { id: "shortcuts", label: "Shortcuts", icon: "⌘" },
@@ -133,6 +136,14 @@ export function SettingsModal({ settings: s, onChange, section, onSection, onClo
                   <span className="muted">{Math.round(s.zoom * 100)}%</span>
                 </div>
               ))}
+            </>
+          )}
+
+          {section === "variables" && (
+            <>
+              <h2>Global variables</h2>
+              <p className="muted small">Available in every collection, kept on this Mac and never written into a collection. They are the lowest level: collection and folder variables, then the environment, then values set by scripts all override them. The CLI doesn't see these: pass <code>--var name=value</code> there.</p>
+              <KVEditor rows={s.globals.length ? s.globals : [emptyKV()]} onChange={(globals) => onChange({ globals })} keyPlaceholder="Variable" />
             </>
           )}
 
