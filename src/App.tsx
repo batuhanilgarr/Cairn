@@ -26,6 +26,7 @@ import { IconAlert, IconCode, IconCollections, IconEnvironments, IconFolderPlus,
 import { Menu } from "./Menu";
 import { useRequestLabels } from "./lib/useRequestLabels";
 import { AiPanel } from "./AiPanel";
+import { SettingRow, Switch } from "./SettingRow";
 import { AsideTabs, type AsideKind } from "./AsideTabs";
 import { DiffModal, type HistEntry } from "./DiffModal";
 import { ExamplesPanel } from "./ExamplesPanel";
@@ -1623,38 +1624,28 @@ export default function App() {
             {section === "scripts" && <ScriptsPanel tab={active} patch={patch} vars={varMap} />}
             {section === "tests" && <TestsPanel tab={active} patch={patch} />}
             {section === "settings" && (
-              <div className="col">
+              <div className="req-settings">
                 {active.kind === "ws" && (
-                  <label className="field">
-                    <span>Subprotocols (comma-separated)</span>
+                  <SettingRow label="Subprotocols" hint="Comma-separated, offered in the handshake.">
                     <input className="cell" placeholder="graphql-transport-ws, chat" value={active.ws.protocols} spellCheck={false} onChange={(e) => patch({ ws: { ...active.ws, protocols: e.target.value } })} />
-                  </label>
+                  </SettingRow>
                 )}
                 {active.kind === "grpc" && (
-                  <label className="check">
-                    <input type="checkbox" checked={active.grpc.tls} onChange={(e) => patch({ grpc: { ...active.grpc, tls: e.target.checked } })} />
-                    Use TLS when the address has no grpc:// or grpcs:// prefix
-                  </label>
+                  <SettingRow label="Use TLS" hint="When the address has no grpc:// or grpcs:// prefix.">
+                    <Switch label="Use TLS" checked={active.grpc.tls} onChange={(tls) => patch({ grpc: { ...active.grpc, tls } })} />
+                  </SettingRow>
                 )}
                 {active.kind !== "ws" && active.kind !== "grpc" && (
-                <label className="check">
-                  <input type="checkbox" checked={active.followRedirects} onChange={(e) => patch({ followRedirects: e.target.checked })} />
-                  Follow redirects
-                </label>
+                  <SettingRow label="Follow redirects" hint="Follow 3xx responses automatically.">
+                    <Switch label="Follow redirects" checked={active.followRedirects} onChange={(followRedirects) => patch({ followRedirects })} />
+                  </SettingRow>
                 )}
-                <label className="check">
-                  <input type="checkbox" checked={active.insecure} onChange={(e) => patch({ insecure: e.target.checked })} />
-                  Skip TLS certificate verification (self-signed)
-                </label>
-                <label className="check">
-                  Timeout (ms)
-                  <input
-                    className="cell narrow"
-                    type="number"
-                    value={active.timeoutMs}
-                    onChange={(e) => patch({ timeoutMs: Number(e.target.value) || 30000 })}
-                  />
-                </label>
+                <SettingRow label="Verify TLS certificate" hint="Turn off for a dev server with a self-signed certificate.">
+                  <Switch label="Verify TLS certificate" checked={!active.insecure} onChange={(verify) => patch({ insecure: !verify })} />
+                </SettingRow>
+                <SettingRow label="Timeout" hint="Milliseconds before the request gives up.">
+                  <input className="cell narrow" type="number" value={active.timeoutMs} onChange={(e) => patch({ timeoutMs: Number(e.target.value) || 30000 })} aria-label="Timeout in milliseconds" />
+                </SettingRow>
               </div>
             )}
           </div>

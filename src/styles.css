@@ -708,3 +708,20 @@ pre.block { white-space: pre-wrap; word-break: break-word; margin: 0; background
 .htable td:first-child { color: var(--text); font-weight: 600; }
 .htable tr:hover td { background: var(--hover); }
 .htable td { padding: 6px 10px; }
+
+/* ---------------- round 5: setting rows in the request, test sections, script reference ---------------- */
+.req-settings { max-width: 640px; }
+.req-settings .set-row:first-child { padding-top: 2px; }
+.req-settings .set-control .cell { max-width: 280px; }
+.req-settings .set-control .cell.narrow { width: 110px; margin: 0; }
+.req-settings .set-control { justify-content: flex-end; }
+.test-sec { display: flex; flex-direction: column; gap: 6px; padding-bottom: 18px; }
+.test-sec + .test-sec { padding-top: 16px; border-top: 1px solid var(--border); }
+.sec-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
+.sec-head h4 { margin: 0; color: var(--text); font-size: 13px; }
+.sec-head p { margin: 2px 0 0; }
+.sec-head .btn { flex: none; }
+.script-help { grid-column: 1 / -1; font-size: 12px; color: var(--muted); }
+.script-help summary { cursor: pointer; }
+.script-help summary:hover { color: var(--text); }
+.script-help ul { margin: 6px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; }

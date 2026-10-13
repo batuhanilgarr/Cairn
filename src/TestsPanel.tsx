@@ -22,9 +22,17 @@ export function TestsPanel({ tab, patch }: { tab: RequestTab; patch: (p: Partial
   const upA = (id: string, p: Partial<Assertion>) => patch({ assertions: tab.assertions.map((a) => (a.id === id ? { ...a, ...p } : a)) });
   const upC = (id: string, p: Partial<Capture>) => patch({ captures: tab.captures.map((c) => (c.id === id ? { ...c, ...p } : c)) });
   return (
-    <div className="col wide">
-      <h4>Assertions</h4>
-      {tab.assertions.length === 0 && <p className="muted small">No code needed: check status, JSON fields, headers and timing after each send.</p>}
+    <div className="col wide tests-panel">
+      <section className="test-sec">
+      <div className="sec-head">
+        <div>
+          <h4>Assertions</h4>
+          <p className="muted small">No code needed: check status, JSON fields, headers and timing after each send.</p>
+        </div>
+        <button className="btn small" onClick={() => patch({ assertions: [...tab.assertions, { id: uid(), enabled: true, kind: "status", path: "", op: "eq", value: "200" }] })}>
+          + Assertion
+        </button>
+      </div>
       {tab.assertions.map((a) => (
         <div className="kv-row" key={a.id}>
           <input type="checkbox" checked={a.enabled} onChange={(e) => upA(a.id, { enabled: e.target.checked })} aria-label="Enabled" />
@@ -41,16 +49,18 @@ export function TestsPanel({ tab, patch }: { tab: RequestTab; patch: (p: Partial
           <button className="icon-btn" onClick={() => patch({ assertions: tab.assertions.filter((x) => x.id !== a.id) })} aria-label="Remove">×</button>
         </div>
       ))}
-      <div>
-        <button className="btn small" onClick={() => patch({ assertions: [...tab.assertions, { id: uid(), enabled: true, kind: "status", path: "", op: "eq", value: "200" }] })}>
-          + Assertion
+      </section>
+
+      <section className="test-sec">
+      <div className="sec-head">
+        <div>
+          <h4>Capture into variables</h4>
+          <p className="muted small">Save a value from the response (a token, an id) as a variable for the requests that follow. Use it as <code>{"{{name}}"}</code>.</p>
+        </div>
+        <button className="btn small" onClick={() => patch({ captures: [...tab.captures, { id: uid(), variable: "", from: "json", path: "" }] })}>
+          + Capture
         </button>
       </div>
-
-      <h4>Capture into variables</h4>
-      {tab.captures.length === 0 && (
-        <p className="muted small">Save a value from the response (a token, an id) as a variable for the requests that follow. Use it as <code>{"{{name}}"}</code>.</p>
-      )}
       {tab.captures.map((c) => (
         <div className="kv-row" key={c.id}>
           <input className="cell" placeholder="variable" value={c.variable} spellCheck={false} onChange={(e) => upC(c.id, { variable: e.target.value })} />
@@ -63,11 +73,7 @@ export function TestsPanel({ tab, patch }: { tab: RequestTab; patch: (p: Partial
           <button className="icon-btn" onClick={() => patch({ captures: tab.captures.filter((x) => x.id !== c.id) })} aria-label="Remove">×</button>
         </div>
       ))}
-      <div>
-        <button className="btn small" onClick={() => patch({ captures: [...tab.captures, { id: uid(), variable: "", from: "json", path: "" }] })}>
-          + Capture
-        </button>
-      </div>
+      </section>
     </div>
   );
 }

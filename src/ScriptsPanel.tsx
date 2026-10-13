@@ -41,12 +41,17 @@ export function ScriptsPanel({ tab, patch, vars }: { tab: RequestTab; patch: (p:
           onChange={(v) => patch({ postScript: v })}
         />
       </div>
-      <p className="muted small hint">
-        <code>req</code> (method, url, headers, body, setHeader, removeHeader) · <code>res</code> (status, json(), text(), header(), time) ·{" "}
-        <code>env.get/set</code> (session variables, kept in memory, never written to disk) · <code>test(name, fn)</code> ·{" "}
-        <code>expect(x).toBe / toEqual / toContain / toMatch / toExist / toHaveProperty / not</code> · <code>console.log</code>.
-        Scripts run in an isolated worker with a 5 s limit.
-      </p>
+      <details className="script-help hint">
+        <summary>Script reference <span className="muted">· req, res, env, test, expect · Postman <code>pm.*</code> works too</span></summary>
+        <ul>
+          <li><code>req</code>: method, url, headers, body, setHeader, removeHeader</li>
+          <li><code>res</code>: status, json(), text(), header(), time</li>
+          <li><code>env.get</code> / <code>env.set</code>: session variables, kept in memory and never written to disk</li>
+          <li><code>test(name, fn)</code> and <code>expect(x)</code>: toBe, toEqual, toContain, toMatch, toExist, toHaveProperty, not</li>
+          <li>Postman scripts run as they are: <code>pm.test</code>, <code>pm.expect</code>, <code>pm.environment</code>, <code>pm.variables</code>, <code>pm.request</code>, <code>pm.response</code></li>
+          <li><code>console.log</code>. Scripts run in an isolated worker with a 5 s limit.</li>
+        </ul>
+      </details>
     </div>
   );
 }
