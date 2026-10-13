@@ -22,7 +22,9 @@ import { GraphQLPanel } from "./GraphQLPanel";
 import { StreamLog } from "./StreamLog";
 import { CodePanel } from "./CodePanel";
 import { rowsFromUrl, syncParams, urlFromRows } from "./lib/query";
-import { IconCollections, IconEnvironments, IconHistory, IconSearch, IconSettings } from "./Icons";
+import { IconCollections, IconEnvironments, IconHistory, IconSearch, IconSettings, IconSpark } from "./Icons";
+import { AiPanel } from "./AiPanel";
+import { AsideTabs, type AsideKind } from "./AsideTabs";
 import { DiffModal, type HistEntry } from "./DiffModal";
 import { ExamplesPanel } from "./ExamplesPanel";
 import { MockModal } from "./MockModal";
@@ -145,7 +147,7 @@ export default function App() {
   const [runs, setRuns] = useState<Record<string, RunOutput | null>>({});
   const [oauthBusy, setOauthBusy] = useState(false);
   const [streams, setStreams] = useState<Record<string, StreamState>>({});
-  const [codegenOpen, setCodegenOpen] = useState<boolean>(() => load("rq.codepanel", false));
+  const [aside, setAside] = useState<AsideKind | null>(() => load<AsideKind | null>("rq.aside", load("rq.codepanel", false) ? "code" : null));
   const [respHist, setRespHist] = useState<Record<string, HistEntry[]>>({});
   const [viewing, setViewing] = useState<Record<string, number | null>>({});
   const [diffOpen, setDiffOpen] = useState(false);
@@ -1029,7 +1031,7 @@ export default function App() {
     }
   }, [settings]);
   useEffect(() => save("rq.sidebar", sidebarOpen), [sidebarOpen]);
-  useEffect(() => save("rq.codepanel", codegenOpen), [codegenOpen]);
+  useEffect(() => save("rq.aside", aside), [aside]);
 
   const nextTab = (d: number) => {
     const i = tabs.findIndex((t) => t.id === active.id);
@@ -1063,7 +1065,8 @@ export default function App() {
     "run-collection": () => (collection ? void runFolder(collection.root, `Run ${collection.name}`) : void info("No collection open", "Open a collection to run its requests.")),
     palette: () => setPaletteOpen(true),
     mock: () => (collection ? setMockOpen(true) : void info("Open a collection first", "The mock server serves the saved examples of a collection's requests.")),
-    codegen: () => setCodegenOpen((v) => !v),
+    codegen: () => setAside((a) => (a === "code" ? null : "code")),
+    ai: () => setAside((a) => (a === "ai" ? null : "ai")),
     "toggle-sidebar": () => setSidebarOpen((v) => !v),
     "zoom-in": () => zoomBy(0.1),
     "zoom-out": () => zoomBy(-0.1),
@@ -1095,6 +1098,10 @@ export default function App() {
       if (e.shiftKey && e.key.toLowerCase() === "g") {
         e.preventDefault();
         return fire("codegen");
+      }
+      if (e.shiftKey && e.key.toLowerCase() === "a") {
+        e.preventDefault();
+        return fire("ai");
       }
       // ⌘F inside an editor is that editor's own search; anywhere else it searches the response body.
       if (e.key.toLowerCase() === "f" && !e.shiftKey && resView.current && !(e.target as HTMLElement | null)?.closest?.(".cm-editor")) {
@@ -1147,6 +1154,7 @@ export default function App() {
     { id: "a:mock", group: "Action", title: mockPort ? `Mock server (running on :${mockPort})` : "Mock server…", run: () => fire("mock") },
     { id: "a:diff", group: "Action", title: "Compare responses of this request", run: () => (hist.length > 1 ? setDiffOpen(true) : flash("Send the request at least twice to compare responses")) },
     { id: "a:code", group: "Action", title: "Show or hide the code snippet panel", hint: "⇧⌘G", run: () => fire("codegen") },
+    { id: "a:ai", group: "Action", title: "Ask AI about this request", hint: "⇧⌘A", run: () => fire("ai") },
     { id: "a:side", group: "View", title: "Toggle sidebar", hint: "⌘B", run: () => fire("toggle-sidebar") },
     { id: "a:set", group: "App", title: "Settings", hint: "⌘,", run: () => fire("settings") },
     { id: "a:keys", group: "App", title: "Keyboard shortcuts", hint: "⌘/", run: () => fire("shortcuts") },
@@ -1201,7 +1209,7 @@ export default function App() {
   }, [response, resLang]);
 
   return (
-    <div className={`app ${sidebarOpen ? "" : "no-side"} ${codegenOpen ? "with-aside" : ""}`}>
+    <div className={`app ${sidebarOpen ? "" : "no-side"} ${aside ? "with-aside" : ""}`}>
       <aside className="sidebar">
         <div className="titlebar-drag" data-tauri-drag-region />
         <div className="side-wrap">
@@ -1431,10 +1439,13 @@ export default function App() {
             <kbd>⌘↵</kbd>
           </button>
           {active.kind !== "ws" && active.kind !== "grpc" && (
-            <button className={`btn code-btn ${codegenOpen ? "on" : ""}`} onClick={() => fire("codegen")} title="Code snippet (⇧⌘G)" aria-label="Toggle code snippet panel" aria-pressed={codegenOpen}>
+            <button className={`btn code-btn ${aside === "code" ? "on" : ""}`} onClick={() => fire("codegen")} title="Code snippet (⇧⌘G)" aria-label="Toggle code snippet panel" aria-pressed={aside === "code"}>
               {"</>"}
             </button>
           )}
+          <button className={`btn code-btn ${aside === "ai" ? "on" : ""}`} onClick={() => fire("ai")} title="Ask AI about this request (⇧⌘A)" aria-label="Toggle AI assistant" aria-pressed={aside === "ai"}>
+            <IconSpark />
+          </button>
         </div>
 
         {showWelcome ? (
@@ -1811,13 +1822,21 @@ export default function App() {
         </>
         )}
       </main>
-      {codegenOpen && (
-        <CodePanel
-          build={buildSnippet}
-          onClose={() => setCodegenOpen(false)}
-          unsupported={active.kind === "ws" || active.kind === "grpc" ? "A snippet isn't available for this request type." : undefined}
-        />
-      )}
+      {aside && (() => {
+        const tabs = <AsideTabs active={aside} onSelect={setAside} onClose={() => setAside(null)} />;
+        return aside === "code" ? (
+          <CodePanel build={buildSnippet} tabs={tabs} unsupported={active.kind === "ws" || active.kind === "grpc" ? "A snippet isn't available for this request type." : undefined} />
+        ) : (
+          <AiPanel
+            config={settings.ai}
+            tab={inherited?.tab ?? active}
+            response={response && !("error" in response) ? response : null}
+            sendError={response && "error" in response ? response.error : undefined}
+            tabs={tabs}
+            onSettings={() => setSettingsOpen("ai")}
+          />
+        );
+      })()}
       {mockOpen && collection && (
         <MockModal root={collection.root} name={collection.name} port={mockPort} log={mockLog} onStart={startMock} onStop={stopMock} onClearLog={() => setMockLog([])} onClose={() => setMockOpen(false)} />
       )}

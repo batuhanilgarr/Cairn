@@ -1,4 +1,5 @@
 import type { KV } from "./types";
+import { DEFAULT_AI, type AiConfig } from "./ai";
 import { load, save } from "./util";
 
 export type Settings = {
@@ -23,6 +24,8 @@ export type Settings = {
   cookies: boolean;
   /** Global variables: the lowest level, available in every collection. Kept on this Mac, not in Git. */
   globals: KV[];
+  /** AI assistant endpoint. Kept on this Mac only. */
+  ai: AiConfig;
 };
 
 export const ACCENTS: { name: string; light: string; dark: string }[] = [
@@ -53,9 +56,13 @@ export const DEFAULT_SETTINGS: Settings = {
   userAgent: "",
   cookies: true,
   globals: [],
+  ai: DEFAULT_AI,
 };
 
-export const loadSettings = (): Settings => ({ ...DEFAULT_SETTINGS, ...load<Partial<Settings>>("rq.settings", {}) });
+export const loadSettings = (): Settings => {
+  const saved = load<Partial<Settings>>("rq.settings", {});
+  return { ...DEFAULT_SETTINGS, ...saved, ai: { ...DEFAULT_AI, ...(saved.ai ?? {}) } };
+};
 export const saveSettings = (s: Settings) => save("rq.settings", s);
 
 /** Theme + accent are applied through CSS variables on <html>, so every component follows without props. */

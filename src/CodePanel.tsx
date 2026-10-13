@@ -5,13 +5,14 @@ import { load, save } from "./lib/util";
 
 type Props = {
   build: (resolveVars: boolean) => Snippet;
-  onClose: () => void;
+  /** The Code / Ask AI switch with the close button. */
+  tabs: React.ReactNode;
   /** Set for request types that have no HTTP snippet (WebSocket, gRPC): explains why instead of showing code. */
   unsupported?: string;
 };
 
 /** Docked next to the request, like Postman's code pane: the current request as code in any of 14 languages, updated as you edit. */
-export function CodePanel({ build, onClose, unsupported }: Props) {
+export function CodePanel({ build, tabs, unsupported }: Props) {
   const [lang, setLang] = useState<string>(() => load("rq.codelang", "curl"));
   const [resolve, setResolve] = useState<boolean>(() => load("rq.coderesolve", true));
   const [copied, setCopied] = useState(false);
@@ -30,8 +31,8 @@ export function CodePanel({ build, onClose, unsupported }: Props) {
 
   return (
     <aside className="codepanel" aria-label="Code snippet">
+      {tabs}
       <div className="codepanel-head">
-        <strong>Code</strong>
         <select value={lang} onChange={(e) => setLang(e.target.value)} aria-label="Language">
           {LANGS.map((l) => (
             <option key={l.id} value={l.id}>{l.label}</option>
@@ -49,7 +50,6 @@ export function CodePanel({ build, onClose, unsupported }: Props) {
         >
           {copied ? "Copied" : "Copy"}
         </button>
-        <button className="icon-btn" onClick={onClose} aria-label="Close code panel" title="Close (⇧⌘G)">×</button>
       </div>
       <label className="check codepanel-opt">
         <input type="checkbox" checked={resolve} onChange={(e) => setResolve(e.target.checked)} /> Resolve variables

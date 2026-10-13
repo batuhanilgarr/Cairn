@@ -5,14 +5,16 @@ import { ACCENTS, DEFAULT_SETTINGS, type Settings } from "./lib/settings";
 import { pickFile } from "./lib/fs";
 import { CookiesPanel } from "./CookiesPanel";
 import { KVEditor } from "./KVEditor";
+import { AiSettings } from "./AiSettings";
 import { emptyKV } from "./lib/util";
 
-export type SettingsSection = "general" | "appearance" | "variables" | "network" | "cookies" | "shortcuts" | "data" | "about";
+export type SettingsSection = "general" | "appearance" | "variables" | "ai" | "network" | "cookies" | "shortcuts" | "data" | "about";
 
 const NAV: { id: SettingsSection; label: string; icon: string }[] = [
   { id: "general", label: "Requests", icon: "⇄" },
   { id: "appearance", label: "Appearance", icon: "◐" },
   { id: "variables", label: "Variables", icon: "{ }" },
+  { id: "ai", label: "AI", icon: "✦" },
   { id: "network", label: "Network", icon: "☍" },
   { id: "cookies", label: "Cookies", icon: "◍" },
   { id: "shortcuts", label: "Shortcuts", icon: "⌘" },
@@ -29,6 +31,7 @@ export const SHORTCUTS: [string, string][] = [
   ["Focus URL bar", "⌘ L"],
   ["Duplicate tab", "⌘ D"],
   ["Generate code", "⇧ ⌘ G"],
+  ["Ask AI about the request", "⇧ ⌘ A"],
   ["Next / previous tab", "⌃ ⇥  /  ⌃ ⇧ ⇥"],
   ["Open collection", "⌘ O"],
   ["New collection", "⇧ ⌘ N"],
@@ -146,6 +149,8 @@ export function SettingsModal({ settings: s, onChange, section, onSection, onClo
               <KVEditor rows={s.globals.length ? s.globals : [emptyKV()]} onChange={(globals) => onChange({ globals })} keyPlaceholder="Variable" />
             </>
           )}
+
+          {section === "ai" && <AiSettings ai={s.ai} onChange={(ai) => onChange({ ai })} />}
 
           {section === "network" && (
             <>
