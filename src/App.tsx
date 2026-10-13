@@ -21,6 +21,7 @@ import { DefaultsModal } from "./DefaultsModal";
 import { GraphQLPanel } from "./GraphQLPanel";
 import { StreamLog } from "./StreamLog";
 import { CodePanel } from "./CodePanel";
+import { rowsFromUrl, syncParams, urlFromRows } from "./lib/query";
 import { IconCollections, IconEnvironments, IconHistory, IconSearch, IconSettings } from "./Icons";
 import { DiffModal, type HistEntry } from "./DiffModal";
 import { ExamplesPanel } from "./ExamplesPanel";
@@ -442,7 +443,7 @@ export default function App() {
   const applyCurl = (text: string) => {
     const { tab: c, notes } = parseCurl(text);
     patch({
-      method: c.method, url: c.url, headers: c.headers, params: [emptyKV()], bodyMode: c.bodyMode, body: c.body,
+      method: c.method, ...syncParams(c.url, []), headers: c.headers, bodyMode: c.bodyMode, body: c.body,
       authMode: c.authMode, authUser: c.authUser, authPass: c.authPass, authToken: "",
       insecure: c.insecure, followRedirects: c.followRedirects, timeoutMs: c.timeoutMs,
     });
@@ -1417,7 +1418,7 @@ export default function App() {
               applyCurl(text);
               return true;
             }}
-            onChange={(v) => (looksLikeCurl(v) ? applyCurl(v) : patch({ url: v }))}
+            onChange={(v) => (looksLikeCurl(v) ? applyCurl(v) : patch({ url: v, params: rowsFromUrl(v, active.params) }))}
           />
           )}
           </div>
@@ -1469,7 +1470,7 @@ export default function App() {
             ))}
           </nav>
           <div className={`panel-body ${section === "body" || reqSection === "scripts" ? "fill" : ""}`}>
-            {section === "params" && <KVEditor rows={active.params} onChange={(params) => patch({ params })} />}
+            {section === "params" && <KVEditor rows={active.params} onChange={(params) => patch({ params, url: urlFromRows(active.url, params) })} keyPlaceholder="Parameter" />}
             {section === "headers" && (
               <>
                 <KVEditor rows={active.headers} onChange={(headers) => patch({ headers })} />

@@ -1,4 +1,5 @@
 import { dynamicValue } from "./dynamic";
+import { missingParams, syncParams } from "./query";
 import type { Environment, FormPart, KV, OAuthConfig, RequestTab } from "./types";
 
 export const uid = () => Math.random().toString(36).slice(2, 10);
@@ -67,9 +68,10 @@ export const newTab = (): RequestTab => ({
 /** Fill in fields added by newer versions, so tabs saved by an older build still load. */
 export const normalizeTab = (t: Partial<RequestTab>): RequestTab => {
   const base = newTab();
+  const merged = { ...base, ...t };
   return {
-    ...base,
-    ...t,
+    ...merged,
+    ...syncParams(merged.url, merged.params),
     oauth: { ...base.oauth, ...(t.oauth ?? {}) },
     gql: { ...base.gql, ...(t.gql ?? {}) },
     ws: { ...base.ws, ...(t.ws ?? {}) },
@@ -88,8 +90,9 @@ export function interpolate(text: string, env: Environment | undefined): string 
 
 export function buildRequest(tab: RequestTab, env: Environment | undefined, extraHeaders: [string, string][] = []) {
   const sub = (s: string) => interpolate(s, env);
-  let url = sub(tab.url.trim());
-  const params = tab.params.filter((p) => p.enabled && p.key);
+  const rawUrl = tab.url.trim();
+  let url = sub(rawUrl);
+  const params = missingParams(rawUrl, tab.params);
   if (params.length) {
     const qs = params
       .map((p) => `${encodeURIComponent(sub(p.key))}=${encodeURIComponent(sub(p.value))}`)

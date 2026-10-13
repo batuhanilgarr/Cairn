@@ -1,6 +1,7 @@
 import { parse, stringify } from "yaml";
 import type { AuthMode, BodyMode, Environment, FormPart, KV, OAuthConfig, RequestKind, RequestTab } from "./types";
 import { defaultOAuth, emptyKV, emptyPart, newTab, uid } from "./util";
+import { foldParamsIntoUrl, syncParams } from "./query";
 import { basename, dirname, join, listFiles, makeDir, pathExists, readText, removePath, writeText } from "./fs";
 
 /**
@@ -35,9 +36,9 @@ export function serializeRequest(t: RequestTab): string {
   const doc: Record<string, unknown> = { name: t.name };
   if (t.kind !== "http") doc.type = t.kind;
   if (t.kind !== "graphql" && t.kind !== "ws" && t.kind !== "grpc" && t.kind !== "mcp") doc.method = t.method;
-  doc.url = t.url;
+  doc.url = foldParamsIntoUrl(t.url, t.params);
   if (t.source) doc.source = t.source;
-  const params = kvOut(t.params);
+  const params = kvOut(t.params.filter((p) => !p.enabled)); // enabled ones are in the url
   const headers = kvOut(t.headers);
   if (params.length) doc.params = params;
   if (headers.length) doc.headers = headers;
@@ -195,7 +196,6 @@ function parseRequestRaw(text: string, file: string): RequestTab {
     name: String(d.name ?? basename(file).replace(/\.req\.ya?ml$/, "")),
     kind: (["graphql", "sse", "ws", "grpc", "mcp"].includes(d.type) ? d.type : "http") as RequestKind,
     method: String(d.method ?? "GET").toUpperCase(),
-    url: String(d.url ?? ""),
     gql: { query: String(d.graphql?.query ?? ""), variables: String(d.graphql?.variables ?? ""), operation: String(d.graphql?.operation ?? "") },
     ws: {
       composer: String(d.websocket?.message ?? ""),
@@ -212,7 +212,7 @@ function parseRequestRaw(text: string, file: string): RequestTab {
       tls: d.grpc?.tls !== false,
     },
     source: d.source ? String(d.source) : undefined,
-    params: kvIn(d.params),
+    ...syncParams(String(d.url ?? ""), kvIn(d.params)),
     headers: kvIn(d.headers),
     bodyMode: (d.body?.mode ?? "none") as BodyMode,
     body: String(d.body?.content ?? ""),
