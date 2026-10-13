@@ -1714,9 +1714,9 @@ export default function App() {
                   {response.status} {response.statusText}
                 </span>
                 <span title="Total time">{response.timeMs} ms</span>
-                {response.ttfbMs !== undefined && <span className="muted" title="Time to first byte">TTFB {response.ttfbMs} ms</span>}
+                {response.ttfbMs !== undefined && <span className="muted opt" title="Time to first byte">TTFB {response.ttfbMs} ms</span>}
                 <span>{formatBytes(response.sizeBytes)}</span>
-                <span>{response.httpVersion}</span>
+                <span className="opt">{response.httpVersion}</span>
               </div>
             )}
           </nav>
