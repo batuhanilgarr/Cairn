@@ -517,7 +517,8 @@ pre.block { white-space: pre-wrap; word-break: break-word; margin: 0; background
 @media (max-width: 1180px) {
   .app.with-aside { grid-template-columns: 300px 1fr; }
   .app.no-side.with-aside { grid-template-columns: minmax(0, 1fr); }
-  .codepanel { position: fixed; top: 0; right: 0; bottom: 0; width: min(420px, 92vw); z-index: 40; box-shadow: -18px 0 50px rgba(0, 0, 0, .35); }
+  /* a drawer below the tab bar and request bar, so Send and the panel toggles stay reachable while it is open */
+  .codepanel { position: fixed; top: 104px; right: 0; bottom: 0; width: min(420px, 92vw); z-index: 40; box-shadow: -18px 0 50px rgba(0, 0, 0, .35); border-top: 1px solid var(--border); }
 }
 
 /* right-hand panel: tabs and the AI assistant */

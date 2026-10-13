@@ -1,5 +1,65 @@
 # Reqnest Yol Haritası
 
+## Değişmez ilkeler
+
+1. **Postman'den daha iyi olmak zorundayız:** tasarımda, özellikte VE performansta. Hepsinde aynı seviyede kalırsak bu ürünü yapmanın anlamı yok.
+2. **Arayüz hatası olmamalı.** CSS tabanlı düzen hataları (taşma, kırılan çipler, örtülen düğmeler, çöken kenar çubuğu) göz kararıyla değil `npm run test:ui` ile yakalanır. Bu paket CI'da her push'ta çalışır. Yeni bir arayüz hatası bulunursa önce onu yakalayan bir test eklenir, sonra düzeltilir.
+3. **Performans iddiası ölçümle yapılır.** `npm run bench:ui` tekrarlanabilir bir kıyas verir; sayılar donanımla birlikte raporlanır.
+4. **Eksikler tahminle değil kullanıcı kanıtıyla seçilir** (aşağıdaki araştırma).
+
+## Araştırma (2026-10-14): Postman'in gerçek eksikleri
+
+Kaynaklar GitHub issue listeleri, Postman topluluk forumu, HN ve rakip belgeleri. **Sınırlar:** Reddit sonuç vermedi, forum oyları alınamadı, GitHub'daki sayılar "reaksiyon mu yorum mu" ayırt edilemeden okundu (bu yüzden "n gösterildi" diye anılır) ve rakip bloglarının çoğu kendi ürününü öven kaynaklardır. Kesin talep ölçüsü olarak değil, yön gösterici olarak oku.
+
+**En sık ve en yoğun şikâyetler** (Postman):
+1. Zorunlu hesap/bulut ve çevrimdışı çalışmanın kaybı (Scratch Pad kaldırıldı). *Reqnest: karşılıyor (yerel öncelikli, hesap yok).*
+2. Sırların bulut senkronuyla sızması ve kurumsal yasaklar (Truffle Security: ~4.000 canlı kimlik bilgisi). *Reqnest: sırlar git-ignored dosyada, Postman import'u kimlik bilgilerini dosyalardan çıkarıyor. **Eksik:** OS anahtarlığı, paylaşım/dışa aktarım öncesi sır tarayıcı.*
+3. v12 YAML formatı (Mart 2026): eski koleksiyonlar içe aktarılamadı, Git senkronu bozuldu, **şema yayınlanmadı**. *Reqnest: **eksik:** biçimin yayınlanmış, sürümlü şeması; kuru-çalıştırma (dry-run) import önizlemesi.*
+4. Performans: RAM, açılış, büyük koleksiyonlarda takılma, yanıt gösterimi 50 MB'ta kesiliyor (100 MB üstü çökme riski). *Reqnest: aşağıdaki ölçümlere bak.*
+5. Arayüz şişkinliği, 6. araya giren yapay zekâ (kapatılamayan modal; Nisan 2026'da geri çekildi), 7. fiyat/plan değişiklikleri (Free tek kullanıcı oldu), 8. Git dostu dosya tabanlı koleksiyon isteği, 9. script'lerin uygulama ile CLI'da farklı davranması, 10. içe/dışa aktarım doğruluğu.
+
+**Talep edilen ama karşılanmayan özellikler** (talep × efor sırasıyla):
+1. Aynı isteği birden çok koleksiyonda yeniden kullanma (Postman #1535, 2015'ten beri açık, en yüksek sayı) — **M**
+2. Yanıtlarda jq/JSONPath filtresi (Bruno #7423, Insomnia #777) — **S/M**
+3. Birden çok .env dosyası, iç içe ve çoklu ortam seçimi (Bruno #409/#7217, Postman #4968, Yaak) — **S–M**
+4. Sekme geliştirmeleri: önizleme (geçici) sekme, birden çok koleksiyondan sekme, yan yana (Yaak 66 oy, Insomnia #1003, Postman #9180) — **S–M** *(kısmen yapıldı: kaydırmalı şerit + tüm sekmeler menüsü)*
+5. Sır/kasa entegrasyonu: anahtarlık, HashiCorp, 1Password (Postman #13605, Hoppscotch #5643) — **M**
+6. OpenAPI'ye dışa aktarma + panodan içe aktarma (Yaak 37/10 oy, Bruno #7043); HAR ve WSDL/SOAP içe aktarma — **M / S**
+7. Socket.IO, ardından MQTT (Bruno #5887, #6511) — **M**
+8. OAuth2 cilası: otomatik yenileme/sıfırlama, `client_assertion`, özel `redirect_uri` — **S**
+9. Uygulama içi Git arayüzü + dosya izleme (Hoppscotch #870, Bruno #5498) — **M**
+10. Koleksiyondan statik dokümantasyon dışa aktarımı, ekran okuyucu (erişilebilirlik) geçişi — **M**
+Ek: klavye odaklı kullanım/Vim modu, ağ koşulu taklidi (gecikme/kayıp), seçili isteklerle runner arayüzü.
+
+**Rakip haritasının boş bıraktığı alan:** hızlı + yerel + hesapsız + eksiksiz protokol/mock/script/CLI aynı üründe; **devasa yanıtları akıtarak/sanallaştırarak gösteren bir istemci yok**; yayınlanmış, tekrarlanabilir performans ölçümü yok; lisans/fiyat modeli birçok rakipte karışık.
+
+## Ölçülen başlangıç noktamız (npm run bench:ui, stub IPC, Chrome)
+
+| Senaryo | Sonuç | Hüküm |
+|---|---|---|
+| 10.000 istekli koleksiyon | ilk satırlara **10,2 sn**, 10.020 DOM satırı, 140.774 DOM düğümü, ~180–200 MB | **Kötü:** liste sanallaştırılmıyor |
+| 5 MB yanıt | 0,3 sn, 0,27 sn donma | Kabul edilebilir |
+| 50 MB yanıt | 2,5 sn, **2,5 sn donma**, **913 MB bellek** | **Kötü:** biçimlendirme ve gösterim ana iş parçacığında, çok kopya |
+
+Not: stub IPC dosya/ağ G/Ç'sini içermez, gerçek uygulamada süreler uzar. Postman'in 50 MB gösterim sınırını geçmek ve 100 MB+ yanıtları çökmeden açmak somut, kanıtlanabilir bir hedef.
+
+## Yeni öncelik sırası
+
+**P0, performans ve kalite kapısı (önce bunlar):**
+1. Koleksiyon ağacını **sanallaştır** (hedef: 10.000 istek < 1 sn ilk çizim, DOM'da yalnız görünen satırlar) ve metod etiketlerini tembel/önbellekli oku.
+2. **Büyük yanıt hattı:** biçimlendirme ve arama Rust/Worker'da, görüntüleyici sanal, çok kopya yok, 100 MB+ için akıtma/diske yazma ve "ham aç" yolu. Hedef: 50 MB < 1 sn, donma yok, bellek < 3× boyut.
+3. Bench'i bütçeye çevir (CI'da gerilemeyi yakala) ve sonuçları donanımla birlikte yayınla.
+4. UI test paketini büyüt: tüm modallar, diğer sekmeler, klavye odağı, erişilebilirlik (axe).
+
+**P1, kanıtlı eksik özellikler:** yukarıdaki talep listesi 1–6 (yeniden kullanılabilir istek, jq filtresi, çoklu .env/ortam, sekme geliştirmeleri, anahtarlık + sır tarayıcı, OpenAPI export + HAR import) ve biçim şemasının yayınlanması.
+
+**P2:** Socket.IO/MQTT, OAuth2 cilası, Git arayüzü, doküman dışa aktarımı, erişilebilirlik geçişi, ağ taklidi.
+
+---
+
+# (Önceki) Yol Haritası
+
+
 Amaç: Postman ve benzerlerinde **ücretli katmanda** olan özellikleri ücretsiz (ya da çok uygun fiyata) sunmak, ayrıca kullanıcıların talep ettiği ama onlarda olmayan şeyleri eklemek.
 
 Bu liste kod tabanı taranarak çıkarıldı (kaynak: `src/lib/types.ts`, `src-tauri/src/*`, README). "Yok" dediklerim kodda arandı ve bulunamadı.

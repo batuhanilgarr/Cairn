@@ -11,6 +11,8 @@ jobs:
         with: { node-version: 20, cache: npm }
       - run: npm ci
       - run: npx tsc --noEmit
+      - name: UI layout checks (real Chrome, many sizes and themes)
+        run: npm run test:ui
       - name: CLI
         working-directory: cli
         run: npm ci && npm run typecheck && npm test
