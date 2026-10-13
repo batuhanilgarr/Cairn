@@ -1,5 +1,6 @@
 import fs from "node:fs";
-import { Agent, ProxyAgent, EnvHttpProxyAgent, Headers, fetch, type Dispatcher } from "undici";
+import path from "node:path";
+import { Agent, ProxyAgent, EnvHttpProxyAgent, FormData, Headers, fetch, type Dispatcher } from "undici";
 import { CookieJar } from "tough-cookie";
 
 /** The same request/response shape the app's Rust `send_request` uses, implemented on Node's fetch. */
@@ -8,6 +9,8 @@ type Spec = {
   url: string;
   headers: [string, string][];
   body?: string | null;
+  multipart?: { name: string; value: string; file: boolean; contentType?: string }[] | null;
+  bodyFile?: string | null;
   timeoutMs?: number;
   insecure?: boolean;
   followRedirects?: boolean;
@@ -63,9 +66,33 @@ export async function sendHttp(spec: Spec) {
   const dispatcher = dispatcherFor(spec);
   let url = spec.url;
   let method = spec.method.toUpperCase();
-  let body: string | undefined = spec.body || undefined;
+  let body: string | Buffer | FormData | undefined = spec.body || undefined;
   const headers = new Headers();
   for (const [k, v] of spec.headers) if (k.trim()) headers.append(k, v);
+  if (spec.multipart) {
+    const form = new FormData();
+    for (const p of spec.multipart) {
+      if (p.file) {
+        let bytes: Buffer;
+        try {
+          bytes = fs.readFileSync(p.value);
+        } catch (e: any) {
+          throw new Error(`Can't read file for field "${p.name}" (${p.value}): ${e.message}`);
+        }
+        form.append(p.name, new Blob([bytes], { type: p.contentType || "application/octet-stream" }), path.basename(p.value));
+      } else {
+        form.append(p.name, p.contentType ? new Blob([p.value], { type: p.contentType }) : p.value);
+      }
+    }
+    body = form;
+    headers.delete("content-type"); // fetch adds the multipart boundary itself
+  } else if (spec.bodyFile) {
+    try {
+      body = fs.readFileSync(spec.bodyFile);
+    } catch (e: any) {
+      throw new Error(`Can't read body file ${spec.bodyFile}: ${e.message}`);
+    }
+  }
   if (!headers.has("user-agent")) headers.set("user-agent", n.userAgent || "Reqnest-CLI/0.1.0");
 
   let res!: Awaited<ReturnType<typeof fetch>>;

@@ -1,5 +1,7 @@
 export type KV = { id: string; key: string; value: string; enabled: boolean; secret?: boolean };
-export type BodyMode = "none" | "json" | "text" | "form";
+export type BodyMode = "none" | "json" | "text" | "form" | "multipart" | "binary";
+/** One field of a multipart/form-data body. For `file` parts, `value` is the absolute path of the file to upload. */
+export type FormPart = { id: string; key: string; value: string; enabled: boolean; kind: "text" | "file"; contentType?: string };
 /** "inherit" uses the nearest folder/collection auth (see lib/inherit.ts). */
 export type AuthMode = "none" | "inherit" | "bearer" | "basic" | "oauth2";
 
@@ -66,7 +68,9 @@ export type RequestTab = {
   params: KV[];
   headers: KV[];
   bodyMode: BodyMode;
+  /** Text/JSON body, or for `binary` the absolute path of the file to send. */
   body: string;
+  formParts: FormPart[];
   authMode: AuthMode;
   authToken: string;
   authUser: string;

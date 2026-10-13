@@ -460,3 +460,9 @@ pre.block { white-space: pre-wrap; word-break: break-word; margin: 0; background
 .mcp-instr { font-size: 12px; } .mcp-instr summary { cursor: pointer; color: var(--muted); }
 .pre { white-space: pre-wrap; }
 .url-static { flex: 1; min-width: 0; border: 1px dashed var(--border); border-radius: 8px; padding: 8px 12px; font-family: var(--mono); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+
+/* multipart/form-data editor */
+.col:has(.mp-row) { max-width: none; }
+.mp-row .mp-kind { flex: 0 0 76px; font-family: inherit; }
+.mp-row .mp-ct { flex: 0 1 180px; }
+.mp-row .mp-file { text-align: left; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }

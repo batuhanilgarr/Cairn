@@ -181,7 +181,7 @@ mod tests {
             method: "GET".into(),
             url: url.into(),
             headers: vec![],
-            body: None,
+            body: None, multipart: None, body_file: None,
             timeout_ms: Some(5000),
             insecure: false,
             follow_redirects: true,

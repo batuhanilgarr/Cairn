@@ -16,11 +16,60 @@ pub struct RequestSpec {
     pub url: String,
     pub headers: Vec<(String, String)>,
     pub body: Option<String>,
+    /// multipart/form-data fields. When set, `body` is ignored and the Content-Type (with boundary) is generated here.
+    #[serde(default)]
+    pub multipart: Option<Vec<MultipartPart>>,
+    /// Send this file's bytes as the raw request body.
+    #[serde(default)]
+    pub body_file: Option<String>,
     pub timeout_ms: Option<u64>,
     pub insecure: bool,
     pub follow_redirects: bool,
     #[serde(default)]
     pub network: NetworkSettings,
+}
+
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct MultipartPart {
+    pub name: String,
+    /// Text value, or the file path when `file` is set.
+    pub value: String,
+    #[serde(default)]
+    pub file: bool,
+    #[serde(default)]
+    pub content_type: Option<String>,
+}
+
+fn quote_param(s: &str) -> String {
+    s.replace('\\', "\\\\").replace('"', "\\\"").replace(['\r', '\n'], " ")
+}
+
+/// Encode parts as multipart/form-data. Returns the body and the Content-Type header value.
+pub(crate) fn build_multipart(parts: &[MultipartPart]) -> Result<(Vec<u8>, String), String> {
+    let boundary = format!("----ReqnestBoundary{:032x}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0));
+    let mut out: Vec<u8> = Vec::new();
+    for p in parts {
+        out.extend_from_slice(format!("--{boundary}\r\n").as_bytes());
+        if p.file {
+            let path = Path::new(&p.value);
+            let bytes = fs::read(path).map_err(|e| format!("Can't read file for field \"{}\" ({}): {e}", p.name, p.value))?;
+            let filename = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| "file".into());
+            let ct = p.content_type.clone().filter(|c| !c.trim().is_empty()).unwrap_or_else(|| "application/octet-stream".into());
+            out.extend_from_slice(format!("Content-Disposition: form-data; name=\"{}\"; filename=\"{}\"\r\nContent-Type: {ct}\r\n\r\n", quote_param(&p.name), quote_param(&filename)).as_bytes());
+            out.extend_from_slice(&bytes);
+        } else {
+            out.extend_from_slice(format!("Content-Disposition: form-data; name=\"{}\"\r\n", quote_param(&p.name)).as_bytes());
+            if let Some(ct) = p.content_type.as_ref().filter(|c| !c.trim().is_empty()) {
+                out.extend_from_slice(format!("Content-Type: {ct}\r\n").as_bytes());
+            }
+            out.extend_from_slice(b"\r\n");
+            out.extend_from_slice(p.value.as_bytes());
+        }
+        out.extend_from_slice(b"\r\n");
+    }
+    out.extend_from_slice(format!("--{boundary}--\r\n").as_bytes());
+    Ok((out, format!("multipart/form-data; boundary={boundary}")))
 }
 
 /// App-wide network settings (Settings > Network). Sent with every request so the UI stays the single source of truth.
@@ -89,10 +138,21 @@ async fn send_request(spec: RequestSpec) -> Result<ResponseData, String> {
     let client = build_client(&spec, redirect, false)?;
 
     let mut req = client.request(method, &spec.url);
+    let multipart = match &spec.multipart {
+        Some(parts) => Some(build_multipart(parts)?),
+        None => None,
+    };
     for (k, v) in spec.headers.iter().filter(|(k, _)| !k.trim().is_empty()) {
+        if multipart.is_some() && k.eq_ignore_ascii_case("content-type") {
+            continue; // the boundary lives in the generated header
+        }
         req = req.header(k.as_str(), v.as_str());
     }
-    if let Some(body) = spec.body.filter(|b| !b.is_empty()) {
+    if let Some((bytes, content_type)) = multipart {
+        req = req.header("Content-Type", content_type).body(bytes);
+    } else if let Some(path) = spec.body_file.as_ref().filter(|p| !p.trim().is_empty()) {
+        req = req.body(fs::read(path).map_err(|e| format!("Can't read body file {path}: {e}"))?);
+    } else if let Some(body) = spec.body.filter(|b| !b.is_empty()) {
         req = req.body(body);
     }
 
@@ -598,7 +658,7 @@ mod network_tests {
             method: "GET".into(),
             url: url.into(),
             headers: vec![],
-            body: None,
+            body: None, multipart: None, body_file: None,
             timeout_ms: Some(5000),
             insecure: false,
             follow_redirects: true,
@@ -701,5 +761,37 @@ mod network_tests {
             .err()
             .unwrap();
         assert!(e.contains("Invalid proxy URL"), "{e}");
+    }
+}
+
+#[cfg(test)]
+mod multipart_tests {
+    use super::*;
+
+    #[test]
+    fn multipart_encodes_text_and_file_parts() {
+        let dir = std::env::temp_dir().join(format!("reqnest-mp-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("report.txt");
+        std::fs::write(&file, b"FILEDATA").unwrap();
+        let parts = vec![
+            MultipartPart { name: "title".into(), value: "Hello".into(), file: false, content_type: None },
+            MultipartPart { name: "doc".into(), value: file.to_string_lossy().into(), file: true, content_type: Some("text/plain".into()) },
+        ];
+        let (body, ct) = build_multipart(&parts).unwrap();
+        let boundary = ct.strip_prefix("multipart/form-data; boundary=").unwrap();
+        let text = String::from_utf8(body).unwrap();
+        assert!(text.starts_with(&format!("--{boundary}\r\n")));
+        assert!(text.contains("name=\"title\"\r\n\r\nHello\r\n"));
+        assert!(text.contains("name=\"doc\"; filename=\"report.txt\"\r\nContent-Type: text/plain\r\n\r\nFILEDATA\r\n"));
+        assert!(text.ends_with(&format!("--{boundary}--\r\n")));
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn missing_file_gives_a_clear_error() {
+        let parts = vec![MultipartPart { name: "doc".into(), value: "/nope/missing.bin".into(), file: true, content_type: None }];
+        let err = build_multipart(&parts).unwrap_err();
+        assert!(err.contains("doc") && err.contains("/nope/missing.bin"));
     }
 }

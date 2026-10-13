@@ -509,7 +509,7 @@ mod tests {
     }
 
     fn spec(url: &str) -> RequestSpec {
-        RequestSpec { method: "GET".into(), url: url.into(), headers: vec![], body: None, timeout_ms: Some(5000), insecure: false, follow_redirects: true, network: Default::default() }
+        RequestSpec { method: "GET".into(), url: url.into(), headers: vec![], body: None, multipart: None, body_file: None, timeout_ms: Some(5000), insecure: false, follow_redirects: true, network: Default::default() }
     }
 
     #[tokio::test]

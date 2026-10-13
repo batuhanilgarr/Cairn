@@ -7,7 +7,7 @@ No account, no cloud, no telemetry. Fast startup, tiny footprint.
 ## Status: v0.1 (early)
 
 - HTTP client on a native Rust core (reqwest + rustls): all methods, headers, query params
-- Bodies: JSON, text, form-urlencoded
+- Bodies: JSON, text, form-urlencoded, **multipart/form-data** (text and file fields, per-field Content-Type) and raw **binary file**; `curl -F` is imported, and the CLI sends them too
 - Auth: Bearer, Basic
 - Environments with `{{variables}}`
 - **Git-friendly collections**: a collection is a folder of plain YAML files (`*.req.yaml`), no generated IDs, stable key order, literal-block bodies for clean diffs. Order comes from file names, never from file contents

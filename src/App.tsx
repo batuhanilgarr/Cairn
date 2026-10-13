@@ -37,6 +37,7 @@ import { cachedSchema, loadGraphQL, storeSchema } from "./lib/graphql";
 import { applyDefaults, type Layer } from "./lib/inherit";
 import { executeRequest, prepareRequest, resolveOAuth, withSession } from "./lib/pipeline";
 import { buildRequest } from "./lib/util";
+import { MultipartEditor } from "./MultipartEditor";
 import { getToken, tokenKey, type TokenCache } from "./lib/oauth";
 import {
   basename,
@@ -44,6 +45,7 @@ import {
   listFilesRecursive,
   listTree,
   makeDir,
+  pickAnyFile,
   pickFile,
   pickFolder,
   saveResponse,
@@ -931,7 +933,7 @@ export default function App() {
     const t = inherited?.tab ?? active;
     const extra: [string, string][] = t.authMode === "oauth2" ? [["Authorization", `${t.oauth.prefix || "Bearer"} <access_token>`]] : [];
     const spec = buildRequest(t, resolve ? withSession(env, sessionRef.current) : undefined, extra);
-    return { method: spec.method, url: spec.url, headers: spec.headers, body: spec.body };
+    return { method: spec.method, url: spec.url, headers: spec.headers, body: spec.body, multipart: spec.multipart, bodyFile: spec.bodyFile };
   };
 
   const oauthToken = effOAuth ? tokensRef.current.get(tokenKey(resolveOAuth(effOAuth, withSession(env, sessionRef.current)))) : undefined;
@@ -1452,10 +1454,10 @@ export default function App() {
             {section === "body" && (
               <div className="col">
                 <div className="row">
-                  {(["none", "json", "text", "form"] as BodyMode[]).map((m) => (
+                  {(["none", "json", "text", "form", "multipart", "binary"] as BodyMode[]).map((m) => (
                     <label key={m} className="radio">
-                      <input type="radio" checked={active.bodyMode === m} onChange={() => patch({ bodyMode: m })} />
-                      {m === "form" ? "form-urlencoded" : m}
+                      <input type="radio" checked={active.bodyMode === m} onChange={() => patch({ bodyMode: m, ...(m === "binary" && active.bodyMode !== "binary" ? { body: "" } : {}) })} />
+                      {m === "form" ? "form-urlencoded" : m === "multipart" ? "multipart/form-data" : m}
                     </label>
                   ))}
                   {active.bodyMode === "json" && (
@@ -1472,6 +1474,21 @@ export default function App() {
                 </div>
                 {active.bodyMode === "none" ? (
                   <p className="muted">This request has no body.</p>
+                ) : active.bodyMode === "multipart" ? (
+                  <MultipartEditor rows={active.formParts} onChange={(formParts) => patch({ formParts })} />
+                ) : active.bodyMode === "binary" ? (
+                  <div className="row">
+                    <button
+                      className="btn"
+                      onClick={async () => {
+                        const f = await pickAnyFile("Choose the file to send as the request body");
+                        if (f) patch({ body: f });
+                      }}
+                    >
+                      Choose file…
+                    </button>
+                    <span className="muted">{active.body ? active.body : "Sends the file's bytes as the raw body."}</span>
+                  </div>
                 ) : (
                   <div className="editor-slot">
                     <CodeEditor

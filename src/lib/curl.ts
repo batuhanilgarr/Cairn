@@ -1,5 +1,5 @@
-import type { RequestTab } from "./types";
-import { emptyKV, newTab, tryPrettyJson } from "./util";
+import type { FormPart, RequestTab } from "./types";
+import { emptyKV, emptyPart, newTab, tryPrettyJson } from "./util";
 
 export const looksLikeCurl = (s: string) => /^\s*curl(\s|$)/i.test(s);
 
@@ -71,6 +71,7 @@ export function parseCurl(command: string): CurlResult {
   let url = "";
   const data: string[] = [];
   const headers: { key: string; value: string }[] = [];
+  const parts: FormPart[] = [];
   let getMode = false;
   let head = false;
 
@@ -123,7 +124,21 @@ export function parseCurl(command: string): CurlResult {
       case "-L": case "--location": tab.followRedirects = true; break;
       case "-G": case "--get": getMode = true; break;
       case "-I": case "--head": head = true; break;
-      case "-F": case "--form": next(); notes.push("multipart form (-F) isn't supported yet and was skipped"); break;
+      case "-F": case "--form": case "--form-string": {
+        const f = next();
+        const eq = f.indexOf("=");
+        if (eq <= 0) break;
+        let value = f.slice(eq + 1);
+        let contentType: string | undefined;
+        const m = value.match(/;type=([^;]+)/);
+        if (m) {
+          contentType = m[1].trim();
+          value = value.replace(/;type=[^;]+/, "");
+        }
+        const isFile = t !== "--form-string" && /^[@<]/.test(value);
+        parts.push({ ...emptyPart(), key: f.slice(0, eq), value: isFile ? value.slice(1).replace(/;filename=.*$/, "") : value, kind: isFile ? "file" : "text", ...(contentType ? { contentType } : {}) });
+        break;
+      }
       default:
         if (VALUE_FLAGS.has(t)) next(); // known flag we don't use: swallow its value
     }
@@ -134,10 +149,17 @@ export function parseCurl(command: string): CurlResult {
     data.length = 0;
   }
   tab.url = url;
-  tab.method = head ? "HEAD" : method ?? (data.length ? "POST" : "GET");
+  tab.method = head ? "HEAD" : method ?? (data.length || parts.length ? "POST" : "GET");
 
+  if (parts.length) {
+    tab.bodyMode = "multipart";
+    tab.formParts = [...parts, emptyPart()];
+    // the boundary is generated when sending, so a Content-Type from the command must not be kept
+    for (let i = headers.length - 1; i >= 0; i--) if (headers[i].key.toLowerCase() === "content-type") headers.splice(i, 1);
+    if (parts.some((p) => p.kind === "file")) notes.push("File fields keep the path from the command; check it exists on this Mac");
+  }
   const ct = headers.find((h) => h.key.toLowerCase() === "content-type")?.value.toLowerCase() ?? "";
-  if (data.length) {
+  if (data.length && !parts.length) {
     const body = data.join("&");
     const isJson = ct.includes("json") || (!ct && tryPrettyJson(body) !== null);
     tab.bodyMode = isJson ? "json" : ct.includes("x-www-form-urlencoded") || !ct ? "form" : "text";

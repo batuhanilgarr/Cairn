@@ -121,7 +121,7 @@ impl Session {
                 if url.trim().is_empty() {
                     return Err("Enter the MCP server URL".into());
                 }
-                let spec = RequestSpec { method: "POST".into(), url: url.clone(), headers: vec![], body: None, timeout_ms: Some(30_000), insecure, follow_redirects: true, network };
+                let spec = RequestSpec { method: "POST".into(), url: url.clone(), headers: vec![], body: None, multipart: None, body_file: None, timeout_ms: Some(30_000), insecure, follow_redirects: true, network };
                 let client = crate::build_client(&spec, reqwest::redirect::Policy::limited(5), true)?;
                 let timeout = Duration::from_millis(if timeout_ms == 0 { 60_000 } else { timeout_ms });
                 Transport::Http { client, url, headers, session: Mutex::new(None), timeout }

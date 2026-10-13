@@ -1,4 +1,5 @@
-export type Snippet = { method: string; url: string; headers: [string, string][]; body?: string };
+export type MultipartField = { name: string; value: string; file: boolean; contentType?: string };
+export type Snippet = { method: string; url: string; headers: [string, string][]; body?: string; multipart?: MultipartField[]; bodyFile?: string };
 
 export type Lang = { id: string; label: string; gen: (s: Snippet) => string };
 
@@ -23,7 +24,9 @@ const curl: Lang = {
   gen: (s) => {
     const parts = [`curl -X ${s.method} ${shq(s.url)}`];
     for (const [k, v] of s.headers) parts.push(`-H ${shq(`${k}: ${v}`)}`);
-    if (hasBody(s)) parts.push(`-d ${shq(s.body!)}`);
+    if (s.multipart) for (const f of s.multipart) parts.push(`-F ${shq(`${f.name}=${f.file ? "@" : ""}${f.value}${f.contentType ? `;type=${f.contentType}` : ""}`)}`);
+    else if (s.bodyFile) parts.push(`--data-binary ${shq(`@${s.bodyFile}`)}`);
+    else if (hasBody(s)) parts.push(`-d ${shq(s.body!)}`);
     return parts.join(" \\\n  ");
   },
 };
@@ -45,8 +48,16 @@ const fetchJs: Lang = {
   gen: (s) => {
     const opts = [`  method: ${dq(s.method)},`];
     if (s.headers.length) opts.push(`  headers: {\n${s.headers.map(([k, v]) => `    ${dq(k)}: ${dq(v)},`).join("\n")}\n  },`);
-    if (hasBody(s)) opts.push(`  body: ${isJson(s.body) ? `JSON.stringify(${JSON.stringify(JSON.parse(s.body!), null, 2).replace(/\n/g, "\n  ")})` : dq(s.body!)},`);
-    return `const response = await fetch(${dq(s.url)}, {\n${opts.join("\n")}\n});\nconst data = await response.text();\nconsole.log(response.status, data);`;
+    let prelude = "";
+    if (s.multipart) {
+      prelude = `const form = new FormData();\n${s.multipart.map((f) => (f.file ? `form.append(${dq(f.name)}, await fs.openAsBlob(${dq(f.value)}${f.contentType ? `, { type: ${dq(f.contentType)} }` : ""}), ${dq(f.value.split("/").pop() ?? "file")});` : `form.append(${dq(f.name)}, ${dq(f.value)});`)).join("\n")}\n\n`;
+      if (s.multipart.some((f) => f.file)) prelude = `import fs from "node:fs";\n\n${prelude}`;
+      opts.push("  body: form,");
+    } else if (s.bodyFile) {
+      prelude = `import fs from "node:fs";\n\n`;
+      opts.push(`  body: await fs.promises.readFile(${dq(s.bodyFile)}),`);
+    } else if (hasBody(s)) opts.push(`  body: ${isJson(s.body) ? `JSON.stringify(${JSON.stringify(JSON.parse(s.body!), null, 2).replace(/\n/g, "\n  ")})` : dq(s.body!)},`);
+    return `${prelude}const response = await fetch(${dq(s.url)}, {\n${opts.join("\n")}\n});\nconst data = await response.text();\nconsole.log(response.status, data);`;
   },
 };
 
@@ -67,8 +78,19 @@ const python: Lang = {
   gen: (s) => {
     const lines = ["import requests", "", `url = ${dq(s.url)}`];
     if (s.headers.length) lines.push(`headers = {\n${s.headers.map(([k, v]) => `    ${dq(k)}: ${dq(v)},`).join("\n")}\n}`);
-    if (hasBody(s)) lines.push(`payload = ${dq(s.body!)}`);
-    const args = [`${dq(s.method)}`, "url", ...(s.headers.length ? ["headers=headers"] : []), ...(hasBody(s) ? ["data=payload"] : [])];
+    if (s.multipart) {
+      const data = s.multipart.filter((f) => !f.file);
+      const files = s.multipart.filter((f) => f.file);
+      if (data.length) lines.push(`data = {\n${data.map((f) => `    ${dq(f.name)}: ${dq(f.value)},`).join("\n")}\n}`);
+      if (files.length) lines.push(`files = {\n${files.map((f) => `    ${dq(f.name)}: (${dq(f.value.split("/").pop() ?? "file")}, open(${dq(f.value)}, "rb")${f.contentType ? `, ${dq(f.contentType)}` : ""}),`).join("\n")}\n}`);
+    } else if (s.bodyFile) lines.push(`payload = open(${dq(s.bodyFile)}, "rb").read()`);
+    else if (hasBody(s)) lines.push(`payload = ${dq(s.body!)}`);
+    const args = [
+      `${dq(s.method)}`,
+      "url",
+      ...(s.headers.length ? ["headers=headers"] : []),
+      ...(s.multipart ? [...(s.multipart.some((f) => !f.file) ? ["data=data"] : []), ...(s.multipart.some((f) => f.file) ? ["files=files"] : [])] : s.bodyFile || hasBody(s) ? ["data=payload"] : []),
+    ];
     lines.push("", `response = requests.request(${args.join(", ")})`, "print(response.status_code, response.text)");
     return lines.join("\n");
   },
@@ -226,5 +248,13 @@ const powershell: Lang = {
   gen: (s) => `$headers = @{\n${s.headers.map(([k, v]) => `    ${psq(k)} = ${psq(v)}`).join("\n")}\n}\n${hasBody(s) ? `$body = ${psq(s.body!)}\n` : ""}Invoke-RestMethod -Method ${s.method} -Uri ${psq(s.url)}${s.headers.length ? " -Headers $headers" : ""}${hasBody(s) ? " -Body $body" : ""}`,
 };
 
-export const LANGS: Lang[] = [curl, httpie, fetchJs, axios, python, go, java, kotlin, swift, csharp, php, ruby, rust, powershell];
+/** Languages whose generator knows about multipart/form-data and file bodies. The rest get a pointer to cURL. */
+const FILE_AWARE = new Set(["curl", "fetch", "python"]);
+const HASH = new Set(["httpie", "ruby", "powershell"]);
+const withFileNote = (l: Lang): Lang =>
+  FILE_AWARE.has(l.id)
+    ? l
+    : { ...l, gen: (s) => ((s.multipart || s.bodyFile) ? `${HASH.has(l.id) ? "#" : "//"} This request sends ${s.multipart ? "multipart/form-data" : "a file body"}, which isn't generated for ${l.label} yet: the body below is empty.\n${HASH.has(l.id) ? "#" : "//"} Use the cURL snippet as a reference.\n${l.gen({ ...s, multipart: undefined, bodyFile: undefined })}` : l.gen(s)) };
+
+export const LANGS: Lang[] = [curl, httpie, fetchJs, axios, python, go, java, kotlin, swift, csharp, php, ruby, rust, powershell].map(withFileNote);
 export { ind };

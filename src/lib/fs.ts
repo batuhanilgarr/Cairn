@@ -34,3 +34,9 @@ export async function saveResponse(name: string, body: { base64?: string | null;
   await invoke("save_bytes", { path, base64: body.base64 ?? null, text: body.base64 ? null : (body.text ?? "") });
   return path;
 }
+
+/** Pick any file (for multipart uploads and raw binary bodies). */
+export async function pickAnyFile(title: string): Promise<string | null> {
+  const r = await open({ multiple: false, directory: false, title });
+  return typeof r === "string" ? r : null;
+}

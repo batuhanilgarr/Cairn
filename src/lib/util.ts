@@ -1,4 +1,4 @@
-import type { Environment, KV, OAuthConfig, RequestTab } from "./types";
+import type { Environment, FormPart, KV, OAuthConfig, RequestTab } from "./types";
 
 export const uid = () => Math.random().toString(36).slice(2, 10);
 export const emptyKV = (): KV => ({ id: uid(), key: "", value: "", enabled: true });
@@ -31,6 +31,8 @@ export const defaultGrpc = (): RequestTab["grpc"] => ({ source: "reflection", pr
 
 export const defaultMcp = (): RequestTab["mcp"] => ({ transport: "http", command: "", args: "", env: [emptyKV()] });
 
+export const emptyPart = (): FormPart => ({ id: uid(), key: "", value: "", enabled: true, kind: "text" });
+
 export const newTab = (): RequestTab => ({
   kind: "http",
   examples: [],
@@ -46,6 +48,7 @@ export const newTab = (): RequestTab => ({
   headers: [emptyKV()],
   bodyMode: "none",
   body: "",
+  formParts: [emptyPart()],
   authMode: "none",
   authToken: "",
   authUser: "",
@@ -110,6 +113,8 @@ export function buildRequest(tab: RequestTab, env: Environment | undefined, extr
   for (const [k, v] of extraHeaders) if (!has(k.toLowerCase())) headers.push([k, v]);
 
   let body: string | undefined;
+  let multipart: { name: string; value: string; file: boolean; contentType?: string }[] | undefined;
+  let bodyFile: string | undefined;
   let method = tab.method;
   if (tab.kind === "graphql") {
     method = "POST";
@@ -125,6 +130,15 @@ export function buildRequest(tab: RequestTab, env: Environment | undefined, extr
     body = JSON.stringify({ query: sub(tab.gql.query), variables, ...(tab.gql.operation.trim() ? { operationName: sub(tab.gql.operation.trim()) } : {}) });
     if (!has("content-type")) headers.push(["Content-Type", "application/json"]);
     if (!has("accept")) headers.push(["Accept", "application/graphql-response+json, application/json"]);
+  } else if (tab.bodyMode === "multipart" && !["GET", "HEAD"].includes(tab.method)) {
+    multipart = tab.formParts
+      .filter((p) => p.enabled && p.key)
+      .map((p) => ({ name: sub(p.key), value: sub(p.value), file: p.kind === "file", contentType: p.contentType?.trim() ? sub(p.contentType.trim()) : undefined }));
+    // The boundary is generated at send time, so a Content-Type header here would be wrong.
+    for (let i = headers.length - 1; i >= 0; i--) if (headers[i][0].toLowerCase() === "content-type") headers.splice(i, 1);
+  } else if (tab.bodyMode === "binary" && !["GET", "HEAD"].includes(tab.method)) {
+    bodyFile = sub(tab.body).trim() || undefined;
+    if (!has("content-type")) headers.push(["Content-Type", "application/octet-stream"]);
   } else if (tab.bodyMode !== "none" && !["GET", "HEAD"].includes(tab.method)) {
     body = sub(tab.body);
     if (!has("content-type")) {
@@ -138,6 +152,8 @@ export function buildRequest(tab: RequestTab, env: Environment | undefined, extr
     url,
     headers,
     body,
+    multipart,
+    bodyFile,
     timeoutMs: tab.timeoutMs,
     insecure: tab.insecure,
     followRedirects: tab.followRedirects,

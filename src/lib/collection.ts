@@ -1,6 +1,6 @@
 import { parse, stringify } from "yaml";
-import type { AuthMode, BodyMode, Environment, KV, OAuthConfig, RequestKind, RequestTab } from "./types";
-import { defaultOAuth, emptyKV, newTab, uid } from "./util";
+import type { AuthMode, BodyMode, Environment, FormPart, KV, OAuthConfig, RequestKind, RequestTab } from "./types";
+import { defaultOAuth, emptyKV, emptyPart, newTab, uid } from "./util";
 import { basename, dirname, join, listFiles, makeDir, pathExists, readText, removePath, writeText } from "./fs";
 
 /**
@@ -16,6 +16,21 @@ const kvOut = (rows: KV[]) =>
     .filter((r) => r.key || r.value)
     .map((r) => ({ key: r.key, value: r.value, ...(r.enabled ? {} : { enabled: false }) }));
 
+const partsIn = (v: unknown): FormPart[] => {
+  const rows = (Array.isArray(v) ? v : []).map((p: any): FormPart => {
+    const file = typeof p?.file === "string";
+    return {
+      id: uid(),
+      key: String(p?.key ?? ""),
+      value: String(file ? p.file : (p?.value ?? "")),
+      kind: file ? "file" : "text",
+      enabled: p?.enabled !== false,
+      ...(p?.contentType ? { contentType: String(p.contentType) } : {}),
+    };
+  });
+  return [...rows, emptyPart()];
+};
+
 export function serializeRequest(t: RequestTab): string {
   const doc: Record<string, unknown> = { name: t.name };
   if (t.kind !== "http") doc.type = t.kind;
@@ -26,7 +41,17 @@ export function serializeRequest(t: RequestTab): string {
   const headers = kvOut(t.headers);
   if (params.length) doc.params = params;
   if (headers.length) doc.headers = headers;
-  if (t.bodyMode !== "none") doc.body = { mode: t.bodyMode, content: t.body };
+  if (t.bodyMode === "multipart") {
+    const parts = t.formParts
+      .filter((p) => p.key || p.value)
+      .map((p) => ({
+        key: p.key,
+        ...(p.kind === "file" ? { file: p.value } : { value: p.value }),
+        ...(p.contentType?.trim() ? { contentType: p.contentType.trim() } : {}),
+        ...(p.enabled ? {} : { enabled: false }),
+      }));
+    doc.body = { mode: "multipart", parts };
+  } else if (t.bodyMode !== "none") doc.body = { mode: t.bodyMode, content: t.body };
   const auth = authOut(t);
   if (auth) doc.auth = auth;
   if (t.kind === "graphql") {
@@ -191,6 +216,7 @@ function parseRequestRaw(text: string, file: string): RequestTab {
     headers: kvIn(d.headers),
     bodyMode: (d.body?.mode ?? "none") as BodyMode,
     body: String(d.body?.content ?? ""),
+    formParts: partsIn(d.body?.parts),
     ...authIn(d.auth),
     examples: (Array.isArray(d.examples) ? d.examples : []).map((e: any) => ({
       id: uid(),

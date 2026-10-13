@@ -114,6 +114,45 @@ tests:
 scripts:
   pre: env.set('x', '1');
 `);
+  write("upload/note.txt", "FILEDATA-123");
+  write("upload/01-multipart.req.yaml", `name: Multipart upload
+method: POST
+url: '{{baseUrl}}/echo'
+auth:
+  mode: none
+body:
+  mode: multipart
+  parts:
+    - key: title
+      value: Hello {{baseUrl}}
+    - key: doc
+      file: ${path.join(dir, "upload/note.txt")}
+      contentType: text/plain
+tests:
+  - kind: status
+    op: eq
+    value: "200"
+  - kind: body
+    op: contains
+    value: filename=\\"note.txt\\"
+  - kind: body
+    op: contains
+    value: FILEDATA-123
+`);
+  write("upload/02-binary.req.yaml", `name: Raw file body
+method: PUT
+url: '{{baseUrl}}/echo'
+auth:
+  mode: none
+body:
+  mode: binary
+  content: ${path.join(dir, "upload/note.txt")}
+tests:
+  - kind: json
+    path: body
+    op: eq
+    value: FILEDATA-123
+`);
   write("failing/05-fails.req.yaml", `name: Expects 201
 method: GET
 url: '{{baseUrl}}/echo?name=a'
@@ -224,4 +263,14 @@ test("HTML report is written", async () => {
   const out = path.join(dir, "r.html");
   await run([path.join(dir, "ok"), "--html", out]);
   assert.match(fs.readFileSync(out, "utf8"), /Demo API/);
+});
+
+test("multipart/form-data and raw file bodies are sent with a generated boundary", async () => {
+  const { code, stdout, stderr } = await run(["upload", "--env", "Local"]);
+  assert.equal(code, 0, stdout + stderr);
+  const mp = seen.find((r) => r.url === "/echo" && String(r.headers["content-type"]).startsWith("multipart/form-data; boundary="));
+  assert.ok(mp, "multipart request reached the server");
+  assert.match(mp.body, /name="title"\r\n\r\nHello http:\/\/127\.0\.0\.1:\d+\r\n/);
+  const raw = seen.find((r) => r.method === "PUT");
+  assert.equal(raw.headers["content-type"], "application/octet-stream");
 });
