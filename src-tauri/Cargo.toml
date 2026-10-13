@@ -1,6 +1,6 @@
 [package]
 name = "reqnest"
-version = "0.2.1"
+version = "0.2.2"
 description = "Reqnest - local-first API client"
 authors = ["Reqnest"]
 edition = "2024"

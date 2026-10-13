@@ -1,6 +1,6 @@
 {
   "name": "@reqnest/cli",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Run Reqnest collections in CI: assertions, scripts, OAuth, JUnit/JSON/HTML reports",
   "type": "module",
   "bin": {
