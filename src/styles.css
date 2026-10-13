@@ -292,7 +292,8 @@ h4 { margin: 4px 0; font-size: 12.5px; font-weight: 600; color: var(--muted); }
 .pal-hint { color: var(--muted); font-size: 11px; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* sidebar footer, collapsed sidebar */
-.app.no-side { grid-template-columns: 0 1fr; }
+/* the sidebar is display:none, so it is not a grid item: no empty column for it */
+.app.no-side { grid-template-columns: minmax(0, 1fr); }
 .app.no-side .sidebar { display: none; }
 .app.no-side .tabbar { padding-left: 80px; } /* clear the traffic lights */
 
@@ -503,7 +504,7 @@ pre.block { white-space: pre-wrap; word-break: break-word; margin: 0; background
 
 /* docked code snippet panel */
 .app.with-aside { grid-template-columns: 300px minmax(0, 1fr) minmax(300px, 400px); }
-.app.no-side.with-aside { grid-template-columns: 0 minmax(0, 1fr) minmax(300px, 400px); }
+.app.no-side.with-aside { grid-template-columns: minmax(0, 1fr) minmax(300px, 400px); }
 .code-btn.on { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); }
 .codepanel { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--bg-side); border-left: 1px solid var(--border); }
 .codepanel-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--border); }
@@ -515,7 +516,7 @@ pre.block { white-space: pre-wrap; word-break: break-word; margin: 0; background
 /* not enough room beside the request: float the code panel over it instead of squeezing the request */
 @media (max-width: 1180px) {
   .app.with-aside { grid-template-columns: 300px 1fr; }
-  .app.no-side.with-aside { grid-template-columns: 0 1fr; }
+  .app.no-side.with-aside { grid-template-columns: minmax(0, 1fr); }
   .codepanel { position: fixed; top: 0; right: 0; bottom: 0; width: min(420px, 92vw); z-index: 40; box-shadow: -18px 0 50px rgba(0, 0, 0, .35); }
 }
 
@@ -675,7 +676,7 @@ pre.block { white-space: pre-wrap; word-break: break-word; margin: 0; background
 }
 @media (max-width: 1000px) {
   .app, .app.with-aside { grid-template-columns: 264px 1fr; }
-  .app.no-side, .app.no-side.with-aside { grid-template-columns: 0 1fr; }
+  .app.no-side, .app.no-side.with-aside { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 760px) {
   .settings { flex-direction: column; height: 92vh; }
@@ -725,3 +726,24 @@ pre.block { white-space: pre-wrap; word-break: break-word; margin: 0; background
 .script-help summary { cursor: pointer; }
 .script-help summary:hover { color: var(--text); }
 .script-help ul { margin: 6px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; }
+
+/* ---------------- round 6: runner ---------------- */
+.run-progress { height: 4px; background: var(--hover); border-radius: 4px; overflow: hidden; margin: 12px 0 10px; }
+.run-progress i { display: block; height: 100%; background: var(--accent); border-radius: 4px; transition: width .2s ease-out; }
+.run-summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; margin: 0; font-size: 12.5px; color: var(--muted); }
+.run-summary b { color: var(--text); font-weight: 600; margin-right: -10px; }
+.bad-text { color: var(--bad); font-weight: 600; } .warn-text { color: var(--warn); font-weight: 600; }
+.run-row { align-items: center; }
+.run-row.warn .run-ic { color: var(--warn); font-weight: 700; }
+.run-name { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.run-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.run-meta { display: flex; align-items: center; gap: 10px; flex: none; white-space: nowrap; font-size: 12px; }
+.run-meta .pill { min-width: 38px; text-align: center; }
+.run-row .run-err { margin-top: 3px; }
+.mock { height: auto; min-height: 340px; }
+.seg button { white-space: nowrap; padding-left: 14px; padding-right: 14px; }
+.grpc-top .seg, .mcp-top .seg { flex: none; width: auto; }
+
+.hist-day { padding: 10px 14px 4px; font-size: 11.5px; font-weight: 600; color: var(--muted); }
+.side-body .link { text-decoration: none; font-size: 12px; }
+.side-body .link:hover { color: var(--text); text-decoration: underline; }

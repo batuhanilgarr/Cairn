@@ -248,3 +248,13 @@ export function save(key: string, value: unknown) {
     /* storage unavailable */
   }
 }
+
+/** "Today", "Yesterday" or a short date, for grouping history. */
+export function dayLabel(t: number, now = new Date()): string {
+  const d = new Date(t);
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  if (d.toDateString() === now.toDateString()) return "Today";
+  if (d.toDateString() === yesterday.toDateString()) return "Yesterday";
+  return d.toLocaleDateString(undefined, { day: "numeric", month: "short", ...(d.getFullYear() !== now.getFullYear() ? { year: "numeric" } : {}) });
+}

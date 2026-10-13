@@ -44,7 +44,7 @@ import { EMPTY_STREAM, MAX_ENTRIES, grpcCall, grpcDescribe, grpcEnd, grpcSend, s
 import { cachedSchema, loadGraphQL, storeSchema } from "./lib/graphql";
 import { applyDefaults, layerVars, type Layer } from "./lib/inherit";
 import { executeRequest, prepareRequest, resolveOAuth, withSession } from "./lib/pipeline";
-import { buildRequest } from "./lib/util";
+import { buildRequest, dayLabel } from "./lib/util";
 import { DYNAMIC_DESCRIPTIONS } from "./lib/dynamic";
 import { MultipartEditor } from "./MultipartEditor";
 import { getToken, tokenKey, type TokenCache } from "./lib/oauth";
@@ -1288,12 +1288,15 @@ export default function App() {
           {side === "history" && (
             <>
               {history.length === 0 && <p className="muted pad">Sent requests will show up here.</p>}
-              {history.map((h) => (
-                <button key={h.id} className="hist" onClick={() => addTab({ ...h.tab, id: uid(), file: null, saved: null })}>
-                  <span className={`m m-${pillOf(h.tab)}`}>{pillOf(h.tab)}</span>
-                  <span className="hist-url">{h.url.replace(/^https?:\/\//, "")}</span>
-                  {h.status !== null && <span className={`dot ${statusClass(h.status)}`}>{h.status}</span>}
-                </button>
+              {history.map((h, i) => (
+                <div key={h.id}>
+                  {(i === 0 || dayLabel(h.at) !== dayLabel(history[i - 1].at)) && <div className="hist-day">{dayLabel(h.at)}</div>}
+                  <button className="hist" title={`${new Date(h.at).toLocaleString()}\n${h.method} ${h.url}`} onClick={() => addTab({ ...h.tab, id: uid(), file: null, saved: null })}>
+                    <span className={`m m-${pillOf(h.tab)}`}>{pillOf(h.tab)}</span>
+                    <span className="hist-url">{h.url.replace(/^https?:\/\//, "")}</span>
+                    {h.status !== null && <span className={`dot ${statusClass(h.status)}`}>{h.status}</span>}
+                  </button>
+                </div>
               ))}
               {history.length > 0 && (
                 <button className="link pad" onClick={() => setHistory([])}>
