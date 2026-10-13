@@ -93,7 +93,7 @@ export async function sendHttp(spec: Spec) {
       throw new Error(`Can't read body file ${spec.bodyFile}: ${e.message}`);
     }
   }
-  if (!headers.has("user-agent")) headers.set("user-agent", n.userAgent || "Reqnest-CLI/0.2.3");
+  if (!headers.has("user-agent")) headers.set("user-agent", n.userAgent || "Reqnest-CLI/0.2.4");
 
   let res!: Awaited<ReturnType<typeof fetch>>;
   let ttfb = 0;
