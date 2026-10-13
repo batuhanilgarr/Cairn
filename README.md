@@ -4,7 +4,7 @@ Local-first API client for macOS. Built with Tauri 2 (Rust) + React + TypeScript
 
 No account, no cloud, no telemetry. Fast startup, tiny footprint.
 
-## Status: v0.1 (early)
+## Status: v0.2 (early)
 
 - HTTP client on a native Rust core (reqwest + rustls): all methods, headers, query params
 - Bodies: JSON, text, form-urlencoded, **multipart/form-data** (text and file fields, per-field Content-Type) and raw **binary file**; `curl -F` is imported, and the CLI sends them too
