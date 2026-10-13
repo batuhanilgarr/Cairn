@@ -191,7 +191,7 @@
           <a class="btn big" href="https://github.com/batuhanilgarr/Reqnest/releases/latest/download/Reqnest-universal.dmg">Download Reqnest.dmg</a>
           <a class="btn big ghost" href="https://github.com/batuhanilgarr/Reqnest/releases" rel="noopener">All releases</a>
         </div>
-        <p class="fine">Open the DMG and drag Reqnest into Applications. The first launch of an unsigned build needs a right-click on the app, then Open. Or run <code>xattr -dr com.apple.quarantine /Applications/Reqnest.app</code>.</p>
+        <p class="fine">Open the DMG and drag Reqnest into Applications. Reqnest is not signed with an Apple Developer ID yet, so macOS blocks the first launch. Run <code>xattr -dr com.apple.quarantine /Applications/Reqnest.app</code> in Terminal once, or open System Settings, Privacy &amp; Security and choose Open Anyway.</p>
       </div>
       <div id="build" class="term-block">
         <button class="copy" type="button" data-copy="git clone https://github.com/batuhanilgarr/Reqnest.git &amp;&amp; cd Reqnest &amp;&amp; npm install &amp;&amp; npm run tauri build">Copy</button>
