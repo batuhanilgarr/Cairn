@@ -22,7 +22,7 @@ import { GraphQLPanel } from "./GraphQLPanel";
 import { StreamLog } from "./StreamLog";
 import { CodePanel } from "./CodePanel";
 import { rowsFromUrl, syncParams, urlFromRows } from "./lib/query";
-import { IconCode, IconCollections, IconEnvironments, IconFolderPlus, IconHistory, IconInbox, IconMore, IconPlay, IconPlus, IconSidebar, IconSearch, IconSettings, IconSpark } from "./Icons";
+import { IconAlert, IconCode, IconCollections, IconEnvironments, IconFolderPlus, IconHistory, IconInbox, IconMore, IconPlay, IconPlus, IconSidebar, IconSearch, IconSettings, IconSpark } from "./Icons";
 import { Menu } from "./Menu";
 import { useRequestLabels } from "./lib/useRequestLabels";
 import { AiPanel } from "./AiPanel";
@@ -1492,6 +1492,8 @@ export default function App() {
                 {s === "params" && counts.params > 0 && <i>{counts.params}</i>}
                 {s === "headers" && counts.headers > 0 && <i>{counts.headers}</i>}
                 {s === "scripts" && (active.preScript.trim() || active.postScript.trim()) && <i>●</i>}
+                {s === "body" && active.bodyMode !== "none" && <i>●</i>}
+                {s === "auth" && active.authMode !== "none" && <i>●</i>}
                 {s === "examples" && active.examples.length > 0 && <i>{active.examples.length}</i>}
                 {s === "tests" && active.assertions.length + active.captures.length > 0 && <i>{active.assertions.length + active.captures.length}</i>}
               </button>
@@ -1735,7 +1737,15 @@ export default function App() {
                 <span>Press <kbd>⌘↵</kbd> or Send to run this request.</span>
               </div>
             )}
-            {response && "error" in response && resSection !== "tests" && resSection !== "console" && <pre className="err">{response.error}</pre>}
+            {response && "error" in response && resSection !== "tests" && resSection !== "console" && (
+              <div className="error-card" role="alert">
+                <IconAlert />
+                <div>
+                  <b>The request failed</b>
+                  <p>{response.error}</p>
+                </div>
+              </div>
+            )}
             {resSection === "tests" && run && (
               <div className="tests-list">
                 {run.scriptError && <pre className="err">{run.scriptError}</pre>}

@@ -47,3 +47,6 @@ export const IconBraces = () => <svg {...lg}><path d="M8 4c-2 0-3 1-3 3v2c0 1.5-
 export const IconGraph = () => <svg {...lg}><circle cx="6" cy="6" r="2.2" /><circle cx="18" cy="8" r="2.2" /><circle cx="9" cy="18" r="2.2" /><path d="m7.8 7 8.2.8M7 8l1.5 8M16.8 10l-6 6.5" /></svg>;
 export const IconImport = () => <svg {...lg}><path d="M12 3v12m0 0-4-4m4 4 4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" /></svg>;
 export const IconInbox = () => <svg {...lg} width={34} height={34} strokeWidth={1.4}><path d="M4 13l2.5-7A2 2 0 0 1 8.4 4.7h7.2a2 2 0 0 1 1.9 1.3L20 13M4 13v5a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5M4 13h4.5a1 1 0 0 1 1 .8 2.5 2.5 0 0 0 5 0 1 1 0 0 1 1-.8H20" /></svg>;
+export const IconAlert = () => (
+  <svg {...base}><path d="M12 3 2.5 20h19L12 3Z" /><path d="M12 10v4.5M12 17.5v.01" /></svg>
+);

@@ -34,7 +34,7 @@ export function AuthPanel({ tab, patch, token, busy, onGetToken, onResetToken, i
   );
 
   return (
-    <div className="col wide">
+    <div className="col wide auth">
       <select value={tab.authMode} onChange={(e) => patch({ authMode: e.target.value as AuthMode })}>
         {inheritFrom !== undefined && <option value="inherit">Inherit from folder / collection</option>}
         <option value="none">No auth</option>
