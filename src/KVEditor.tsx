@@ -23,6 +23,13 @@ export function KVEditor({ rows, onChange, keyPlaceholder = "Key", valuePlacehol
   };
   return (
     <div className="kv">
+      <div className="kv-head" aria-hidden="true">
+        <span className="kv-pad" />
+        <span>{keyPlaceholder}</span>
+        <span>{valuePlaceholder}</span>
+        {secrets && <span className="kv-end" />}
+        <span className="kv-end" />
+      </div>
       {rows.map((r) => (
         <div className="kv-row" key={r.id}>
           <input
