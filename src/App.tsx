@@ -20,7 +20,8 @@ import { RunnerModal, type RunState } from "./RunnerModal";
 import { DefaultsModal } from "./DefaultsModal";
 import { GraphQLPanel } from "./GraphQLPanel";
 import { StreamLog } from "./StreamLog";
-import { CodeGenModal } from "./CodeGenModal";
+import { CodePanel } from "./CodePanel";
+import { IconCollections, IconEnvironments, IconHistory, IconSearch, IconSettings } from "./Icons";
 import { DiffModal, type HistEntry } from "./DiffModal";
 import { ExamplesPanel } from "./ExamplesPanel";
 import { MockModal } from "./MockModal";
@@ -143,7 +144,7 @@ export default function App() {
   const [runs, setRuns] = useState<Record<string, RunOutput | null>>({});
   const [oauthBusy, setOauthBusy] = useState(false);
   const [streams, setStreams] = useState<Record<string, StreamState>>({});
-  const [codegenOpen, setCodegenOpen] = useState(false);
+  const [codegenOpen, setCodegenOpen] = useState<boolean>(() => load("rq.codepanel", false));
   const [respHist, setRespHist] = useState<Record<string, HistEntry[]>>({});
   const [viewing, setViewing] = useState<Record<string, number | null>>({});
   const [diffOpen, setDiffOpen] = useState(false);
@@ -1027,6 +1028,7 @@ export default function App() {
     }
   }, [settings]);
   useEffect(() => save("rq.sidebar", sidebarOpen), [sidebarOpen]);
+  useEffect(() => save("rq.codepanel", codegenOpen), [codegenOpen]);
 
   const nextTab = (d: number) => {
     const i = tabs.findIndex((t) => t.id === active.id);
@@ -1060,7 +1062,7 @@ export default function App() {
     "run-collection": () => (collection ? void runFolder(collection.root, `Run ${collection.name}`) : void info("No collection open", "Open a collection to run its requests.")),
     palette: () => setPaletteOpen(true),
     mock: () => (collection ? setMockOpen(true) : void info("Open a collection first", "The mock server serves the saved examples of a collection's requests.")),
-    codegen: () => (active.kind === "ws" || active.kind === "grpc" ? flash("Code generation isn't available for this request type") : setCodegenOpen(true)),
+    codegen: () => setCodegenOpen((v) => !v),
     "toggle-sidebar": () => setSidebarOpen((v) => !v),
     "zoom-in": () => zoomBy(0.1),
     "zoom-out": () => zoomBy(-0.1),
@@ -1143,7 +1145,7 @@ export default function App() {
     { id: "a:run", group: "Action", title: "Run collection", run: () => fire("run-collection") },
     { id: "a:mock", group: "Action", title: mockPort ? `Mock server (running on :${mockPort})` : "Mock server…", run: () => fire("mock") },
     { id: "a:diff", group: "Action", title: "Compare responses of this request", run: () => (hist.length > 1 ? setDiffOpen(true) : flash("Send the request at least twice to compare responses")) },
-    { id: "a:code", group: "Action", title: "Generate code for this request", hint: "⇧⌘G", run: () => fire("codegen") },
+    { id: "a:code", group: "Action", title: "Show or hide the code snippet panel", hint: "⇧⌘G", run: () => fire("codegen") },
     { id: "a:side", group: "View", title: "Toggle sidebar", hint: "⌘B", run: () => fire("toggle-sidebar") },
     { id: "a:set", group: "App", title: "Settings", hint: "⌘,", run: () => fire("settings") },
     { id: "a:keys", group: "App", title: "Keyboard shortcuts", hint: "⌘/", run: () => fire("shortcuts") },
@@ -1198,23 +1200,23 @@ export default function App() {
   }, [response, resLang]);
 
   return (
-    <div className={`app ${sidebarOpen ? "" : "no-side"}`}>
+    <div className={`app ${sidebarOpen ? "" : "no-side"} ${codegenOpen ? "with-aside" : ""}`}>
       <aside className="sidebar">
         <div className="titlebar-drag" data-tauri-drag-region />
+        <div className="side-wrap">
+          <nav className="rail" aria-label="Sections">
+            <button className={side === "collections" ? "on" : ""} onClick={() => setSide("collections")} title="Collections" aria-label="Collections"><IconCollections /></button>
+            <button className={side === "environments" ? "on" : ""} onClick={() => setSide("environments")} title="Environments" aria-label="Environments"><IconEnvironments /></button>
+            <button className={side === "history" ? "on" : ""} onClick={() => setSide("history")} title="History" aria-label="History"><IconHistory /></button>
+            <div className="spacer" />
+            <button onClick={() => fire("palette")} title="Search and commands (⌘K)" aria-label="Search"><IconSearch /></button>
+            <button onClick={() => fire("settings")} title="Settings (⌘,)" aria-label="Settings"><IconSettings /></button>
+          </nav>
+          <div className="side-main">
         <div className="brand">
           <Logo size={20} /> Reqnest
         </div>
-        <div className="seg">
-          <button className={side === "collections" ? "on" : ""} onClick={() => setSide("collections")}>
-            Collections
-          </button>
-          <button className={side === "history" ? "on" : ""} onClick={() => setSide("history")}>
-            History
-          </button>
-          <button className={side === "environments" ? "on" : ""} onClick={() => setSide("environments")}>
-            Environments
-          </button>
-        </div>
+        <div className="side-title">{side === "collections" ? "Collections" : side === "history" ? "History" : "Environments"}</div>
         <div className="side-body">
           {side === "collections" && (
             <>
@@ -1347,13 +1349,7 @@ export default function App() {
             </div>
           )}
         </div>
-        <div className="side-foot">
-          <button onClick={() => fire("palette")} title="Command palette (⌘K)">
-            <span>⌕</span> Search <kbd>⌘K</kbd>
-          </button>
-          <button onClick={() => fire("settings")} title="Settings (⌘,)">
-            <span>⚙</span> Settings
-          </button>
+          </div>
         </div>
       </aside>
 
@@ -1390,6 +1386,7 @@ export default function App() {
         </div>
 
         <div className="urlbar">
+          <div className="reqbar">
           <select className="kind" value={active.kind} onChange={(e) => patch({ kind: e.target.value as RequestKind })} title="Request type">
             {(["http", "graphql", "sse", "ws", "grpc", "mcp"] as RequestKind[]).map((k) => (
               <option key={k} value={k}>{KIND_LABEL[k]}</option>
@@ -1423,11 +1420,7 @@ export default function App() {
             onChange={(v) => (looksLikeCurl(v) ? applyCurl(v) : patch({ url: v }))}
           />
           )}
-          {active.kind !== "ws" && active.kind !== "grpc" && (
-            <button className="btn code-btn" onClick={() => fire("codegen")} title="Generate code (⇧⌘G)" aria-label="Generate code">
-              {"</>"}
-            </button>
-          )}
+          </div>
           <button
             className={`btn primary ${isStreamKind && streamStatus === "open" ? "stop" : ""}`}
             onClick={() => (isStreamKind && (streamStatus === "open" || streamStatus === "connecting") ? void disconnectStream(active) : void send())}
@@ -1436,6 +1429,11 @@ export default function App() {
             {isStreamKind ? (streamStatus === "open" || streamStatus === "connecting" ? (active.kind === "grpc" ? "Cancel" : "Disconnect") : active.kind === "grpc" ? "Invoke" : "Connect") : loading[active.id] ? "Sending…" : "Send"}
             <kbd>⌘↵</kbd>
           </button>
+          {active.kind !== "ws" && active.kind !== "grpc" && (
+            <button className={`btn code-btn ${codegenOpen ? "on" : ""}`} onClick={() => fire("codegen")} title="Code snippet (⇧⌘G)" aria-label="Toggle code snippet panel" aria-pressed={codegenOpen}>
+              {"</>"}
+            </button>
+          )}
         </div>
 
         {showWelcome ? (
@@ -1812,11 +1810,17 @@ export default function App() {
         </>
         )}
       </main>
+      {codegenOpen && (
+        <CodePanel
+          build={buildSnippet}
+          onClose={() => setCodegenOpen(false)}
+          unsupported={active.kind === "ws" || active.kind === "grpc" ? "A snippet isn't available for this request type." : undefined}
+        />
+      )}
       {mockOpen && collection && (
         <MockModal root={collection.root} name={collection.name} port={mockPort} log={mockLog} onStart={startMock} onStop={stopMock} onClearLog={() => setMockLog([])} onClose={() => setMockOpen(false)} />
       )}
       {diffOpen && hist.length > 1 && <DiffModal items={hist} onClose={() => setDiffOpen(false)} />}
-      {codegenOpen && <CodeGenModal build={buildSnippet} onClose={() => setCodegenOpen(false)} />}
       {paletteOpen && <CommandPalette commands={commands} onClose={() => setPaletteOpen(false)} />}
       {settingsOpen && (
         <SettingsModal
