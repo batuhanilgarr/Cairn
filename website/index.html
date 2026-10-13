@@ -4,9 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Reqnest: the API client that lives in your repo</title>
-  <meta name="description" content="A fast, local-first API client for macOS. REST, GraphQL, gRPC, WebSocket, SSE and MCP. Every request is a small file you commit to Git. No account, no cloud, no telemetry.">
+  <meta name="description" content="A fast, local-first API client for macOS. REST, GraphQL, gRPC, WebSocket, SSE and MCP. Every request is a small file you commit to Git, Postman collections import with their scripts, and an AI assistant runs on your own model. No account, no cloud, no telemetry.">
   <meta property="og:title" content="Reqnest: the API client that lives in your repo">
-  <meta property="og:description" content="Local-first API client for REST, GraphQL, gRPC, WebSocket, SSE and MCP. Plain-file collections, a CI runner and a mock server built in.">
+  <meta property="og:description" content="Local-first API client for REST, GraphQL, gRPC, WebSocket, SSE and MCP. Plain-file collections, Postman import, an AI assistant on your own model, a CI runner and a mock server built in.">
   <meta property="og:image" content="https://batuhanilgarr.github.io/Reqnest/assets/og.png">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="theme-color" content="#6c4cf5">
@@ -18,6 +18,8 @@
   <a class="brand" href="#top" aria-label="Reqnest home"><img src="assets/logo.svg" alt="" width="26" height="26"><span>Reqnest</span></a>
   <nav aria-label="Main">
     <a href="#files">Plain files</a>
+    <a href="#postman">Postman</a>
+    <a href="#ai">AI</a>
     <a href="#features">Features</a>
     <a href="#compare">Compare</a>
     <a href="#faq">FAQ</a>
@@ -31,12 +33,12 @@
     <div class="wrap hero-grid">
       <div class="hero-copy">
         <h1>Your API requests are files.</h1>
-        <p class="lead">Reqnest is a native Mac client for REST, GraphQL, gRPC, WebSocket, SSE and MCP. Each request is a small YAML file: review it in a pull request, run it in CI, keep it forever. No account, no cloud, no telemetry.</p>
+        <p class="lead">Reqnest is a native Mac client for REST, GraphQL, gRPC, WebSocket, SSE and MCP. Each request is a small YAML file: review it in a pull request, run it in CI, keep it forever. Bring your Postman collections along, and ask your own AI model about any request. No account, no cloud, no telemetry.</p>
         <div class="cta">
           <a class="btn big" href="https://github.com/batuhanilgarr/Reqnest/releases/latest/download/Reqnest-universal.dmg">Download for macOS</a>
           <a class="btn big ghost" href="https://github.com/batuhanilgarr/Reqnest" rel="noopener">View on GitHub</a>
         </div>
-        <p class="fine">Under 15 MB. macOS 11 or later, Apple silicon and Intel.</p>
+        <p class="fine">About 11 MB. macOS 11 or later, Apple silicon and Intel.</p>
       </div>
 
       <figure class="win" id="demo" aria-label="A request file next to the response it produces">
@@ -113,6 +115,64 @@
     </div>
   </section>
 
+  <section id="postman" class="sec tint">
+    <div class="wrap diff-grid">
+      <div class="prose">
+        <h2>Bring your Postman collections with you</h2>
+        <p>In Postman, open Settings, Data, Export Data. In Reqnest, choose Import and pick that folder. Every collection, environment and your globals come across in one go.</p>
+        <ul class="plain">
+          <li>Each collection becomes a folder. Its folders keep their own auth, variables and scripts.</li>
+          <li>OAuth 2.0, API key, bearer and basic auth, form-data, file and GraphQL bodies, and saved example responses are carried over.</li>
+          <li>Your pre-request and test scripts run as they are: <code>pm.test</code>, <code>pm.expect</code>, <code>pm.environment</code>, <code>pm.response</code>.</li>
+          <li>Passwords and tokens are moved out of the files into variables on your Mac, so nothing secret gets committed.</li>
+        </ul>
+        <p class="fine">Digest, AWS and NTLM auth and <code>pm.sendRequest</code> are not supported yet. The import lists everything it could not carry over.</p>
+      </div>
+      <figure class="card" aria-label="The summary Reqnest shows after an import">
+        <figcaption>Postman import finished</figcaption>
+<pre>3 collections (128 requests), each in its own folder.
+2 environments, 5 secret values kept out of Git.
+12 global variables (Settings &gt; Variables).
+7 passwords, tokens or keys from the auth settings
+were kept out of the files: they&#8217;re global variables
+on this Mac, so nothing secret gets committed.
+9 folders with their own auth, variables or scripts.
+
+&#8226; Payments: digest auth isn&#8217;t supported yet,
+  imported without auth
+&#8226; Admin: the script uses pm.sendRequest, which
+  isn&#8217;t available in Reqnest scripts</pre>
+      </figure>
+    </div>
+  </section>
+
+  <section id="ai" class="sec">
+    <div class="wrap diff-grid">
+      <figure class="card ai-demo" aria-label="The AI assistant answering a question about a request">
+        <figcaption>Ask AI <span class="muted-dim">qwen3:8b on your server</span></figcaption>
+        <div class="ai-body">
+          <p class="bubble-user">Why did this request fail?</p>
+          <p class="bubble-bot">The server answered <b>401 Unauthorized</b>. Your <code>Authorization</code> header has a token, but the response says it is expired. Refresh it with the <code>/auth/refresh</code> request, then send this one again.</p>
+          <details open class="seen"><summary>What the model sees</summary>
+<pre>Request: GET {{baseUrl}}/v1/invoices
+Authorization: &lt;hidden&gt;
+Last response: 401 Unauthorized in 84 ms
+{"error":"token_expired","access_token":"&lt;hidden&gt;"}</pre></details>
+        </div>
+      </figure>
+      <div class="prose">
+        <h2>Ask your own model about a request</h2>
+        <p>Open the panel, type a question, and the model answers with your request open in front of it: the method, URL, headers, body and, if you allow it, the last response.</p>
+        <ul class="plain">
+          <li>Works with Ollama and any OpenAI-compatible server: OpenAI, OpenRouter, LM Studio, vLLM, Groq.</li>
+          <li>Paste the curl command you already use and the endpoint, model and token are filled in. A token is optional.</li>
+          <li>Credentials are hidden and <code>{{variables}}</code> stay unresolved. The panel shows exactly what is sent.</li>
+        </ul>
+        <p class="fine">Questions go straight from your Mac to the endpoint you set, and nowhere else.</p>
+      </div>
+    </div>
+  </section>
+
   <section id="features" class="sec tint">
     <div class="wrap">
       <h2 class="left">Everything on the way from request to release</h2>
@@ -127,7 +187,9 @@
             <dt>OAuth 2.0</dt>
             <dd>Client credentials, authorization code with PKCE in your real browser, and password grants. Tokens refresh themselves.</dd>
             <dt>Import what you have</dt>
-            <dd>OpenAPI and Swagger with a re-sync that keeps your edits, Postman, Bruno and cURL.</dd>
+            <dd>OpenAPI and Swagger with a re-sync that keeps your edits, a whole Postman export, Bruno and cURL.</dd>
+            <dt>Params and URL in sync</dt>
+            <dd>Type <code>?a=1</code> and the Params table fills in; edit a row and only that part of the URL changes. Your encoding stays as you wrote it.</dd>
           </dl>
         </div>
         <div>
@@ -141,6 +203,8 @@
             <dd>Save responses as examples and serve the collection locally, with path params, templating, delays and CORS.</dd>
             <dt>Folder-level defaults</dt>
             <dd>Set headers, auth and scripts once on a folder. Requests inherit them, override them or switch them off.</dd>
+            <dt>Variables that stack</dt>
+            <dd>Global, collection, folder, environment, then values set by scripts: each level overrides the one before. Built-in <code>{{$guid}}</code>, <code>{{$timestamp}}</code> and <code>{{$randomInt}}</code> are fresh on every send.</dd>
           </dl>
         </div>
         <div>
@@ -148,8 +212,10 @@
           <dl>
             <dt>Response history and diff</dt>
             <dd>Compare any two responses side by side. Binary responses preview inline, and anything can be saved to disk.</dd>
-            <dt>Code in 14 languages</dt>
-            <dd>cURL, fetch, axios, Python, Go, Java, Kotlin, Swift, C#, PHP, Ruby, Rust, PowerShell and HTTPie.</dd>
+            <dt>Code, live, in a side panel</dt>
+            <dd>The open request as cURL, fetch, axios, Python, Go, Java, Kotlin, Swift, C#, PHP, Ruby, Rust, PowerShell or HTTPie, updating as you edit.</dd>
+            <dt>Big responses, handled</dt>
+            <dd>JSON and XML are formatted for you, and ⌘F searches a response of any size.</dd>
             <dt>Made for the Mac</dt>
             <dd>Native menus, a ⌘K command palette, full keyboard control, light and dark themes.</dd>
             <dt>Corporate networks</dt>
@@ -174,6 +240,7 @@
             <tr><th scope="row">OpenAPI import with re-sync</th><td class="us">Keeps your edits</td><td>Import</td><td>Import</td></tr>
             <tr><th scope="row">CLI runner for CI</th><td class="us">Same engine as the app</td><td>Yes</td><td>Yes</td></tr>
             <tr><th scope="row">Mock server from examples</th><td class="us">Built in</td><td>Varies</td><td>Limited</td></tr>
+            <tr><th scope="row">AI assistant on your own endpoint</th><td class="us">Ollama or any OpenAI-compatible server</td><td>Varies</td><td>Varies</td></tr>
             <tr><th scope="row">Response history and diff</th><td class="us">Built in</td><td>Varies</td><td>Varies</td></tr>
           </tbody>
         </table>
@@ -207,9 +274,10 @@ npm run tauri build</pre>
     <div class="wrap narrow">
       <h2 class="left">Questions</h2>
       <details><summary>What does it cost?</summary><p>Pricing is announced on this page and in the releases. Your collections are plain files, so you are never locked in: they stay readable without Reqnest.</p></details>
-      <details><summary>What does it send to your servers?</summary><p>Nothing. There is no account, no analytics and no telemetry. Requests go straight from your Mac to the API you are calling.</p></details>
-      <details><summary>How do I move over from Postman, Bruno or Insomnia?</summary><p>Collections, then Import: pick a Postman collection, a Bruno folder or an OpenAPI spec. Paste any curl command straight into the URL bar.</p></details>
+      <details><summary>What does it send to your servers?</summary><p>Nothing. There is no account, no analytics and no telemetry. Requests go straight from your Mac to the API you are calling. The one other thing that can leave your Mac is a question you ask the AI assistant, and it goes only to the endpoint you configured.</p></details>
+      <details><summary>How do I move over from Postman, Bruno or Insomnia?</summary><p>For Postman, export your data (Settings, Data, Export Data) and import that folder in one step: collections, environments, globals, auth and your scripts come across. For Bruno, import its folder; for OpenAPI, import the spec; and any curl command can be pasted straight into the URL bar.</p></details>
       <details><summary>Where are my secrets stored?</summary><p>Variables marked as secret live in <code>.reqnest/secrets.yaml</code>, which Reqnest adds to <code>.gitignore</code>. Tokens fetched by OAuth stay in memory only.</p></details>
+      <details><summary>Does the AI assistant need an account or a subscription?</summary><p>No. You bring the model: Ollama running on your machine or server, or any OpenAI-compatible service you already use. Reqnest adds nothing in between. A token is optional, and credentials from your requests are hidden before a question is sent.</p></details>
       <details><summary>Windows and Linux?</summary><p>The app is built on Tauri, so other platforms are possible. Today it targets macOS. The CLI already runs anywhere Node 20 does.</p></details>
       <details><summary>Can scripts access my files?</summary><p>In the app, scripts run in an isolated sandbox with a time limit and cannot reach your files or secrets. The CLI runs them in a Node worker, so treat CLI scripts like the rest of your CI code.</p></details>
     </div>

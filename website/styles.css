@@ -149,6 +149,18 @@ footer { border-top: 1px solid var(--line); padding: 28px 0; font-size: 14px; co
 .spacer { flex: 1; }
 .foot a:not(.brand):hover { color: var(--text); }
 
+/* small dark cards: the Postman import summary and the AI panel */
+.card { margin: 0; background: var(--win); color: var(--win-text); border: 1px solid var(--win-line); border-radius: 12px; overflow: hidden; font-family: var(--mono); font-size: 12.5px; }
+.card figcaption { display: flex; justify-content: space-between; gap: 12px; padding: 10px 14px; background: var(--win-bar); border-bottom: 1px solid var(--win-line); color: var(--win-dim); font: 12px var(--sans); }
+.card pre { margin: 0; padding: 14px; font: inherit; line-height: 1.65; white-space: pre-wrap; overflow-x: auto; }
+.muted-dim { color: var(--win-dim); }
+.ai-body { padding: 14px; display: flex; flex-direction: column; gap: 12px; font: 14px/1.55 var(--sans); }
+.bubble-user, .bubble-bot { margin: 0; }
+.bubble-user { align-self: flex-end; background: color-mix(in srgb, var(--accent) 24%, transparent); padding: 8px 12px; border-radius: 12px 12px 4px 12px; }
+.ai-body code { background: rgba(255, 255, 255, .09); border-color: transparent; color: var(--win-text); }
+.seen summary { cursor: pointer; color: var(--win-dim); font-size: 12px; }
+.seen pre { padding: 8px 0 0; color: var(--win-dim); font-size: 12px; }
+.prose .fine { margin-top: 14px; }
 @media (max-width: 960px) {
   .hero-grid, .diff-grid, .dl-grid { grid-template-columns: minmax(0, 1fr); gap: 40px; }
   .cols { grid-template-columns: minmax(0, 1fr); gap: 40px; }
