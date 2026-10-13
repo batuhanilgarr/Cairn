@@ -30,6 +30,15 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: "Reqnest ${{ github.ref_name }}"
           releaseBody: "Download **Reqnest_*_universal.dmg**, open it and drag Reqnest to Applications. Unsigned builds: right-click → Open the first time (or `xattr -dr com.apple.quarantine /Applications/Reqnest.app`)."
-          releaseDraft: true
-          prerelease: true
+          releaseDraft: false
+          prerelease: false
           args: --target universal-apple-darwin
+      # The website links to releases/latest/download/Reqnest-universal.dmg, a name that does not change with the version.
+      - name: Attach a stable-named DMG
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          dmg=$(find src-tauri/target -name '*.dmg' -path '*bundle/dmg*' | head -1)
+          test -n "$dmg" || { echo "no .dmg found"; exit 1; }
+          cp "$dmg" Reqnest-universal.dmg
+          gh release upload "${{ github.ref_name }}" Reqnest-universal.dmg --clobber
