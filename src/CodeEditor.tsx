@@ -209,7 +209,7 @@ export function CodeEditor({ value, onChange, lang = "text", readOnly, placehold
         langC.current.of(langExt(lang)),
         extC.current.of(extensions ?? []),
         roC.current.of(EditorState.readOnly.of(!!readOnly)),
-        wrapC.current.of(wrap || singleLine ? EditorView.lineWrapping : []),
+        wrapC.current.of(wrap ? EditorView.lineWrapping : []),
         // Sources are added through language data (not `override`), so they sit alongside the language's own
         // completions, e.g. GraphQL schema fields.
         compC.current.of([
@@ -251,6 +251,37 @@ export function CodeEditor({ value, onChange, lang = "text", readOnly, placehold
         base.push(
           EditorState.transactionFilter.of((tr) => (tr.docChanged && tr.newDoc.lines > 1 ? [{ changes: { from: 0, to: tr.startState.doc.length, insert: tr.newDoc.toString().replace(/\s*\n\s*/g, " ") }, selection: { anchor: tr.newDoc.toString().replace(/\s*\n\s*/g, " ").length } }] : tr)),
           keymap.of([{ key: "Enter", run: () => (cb.current.onSubmit?.(), true) }]),
+          // one line that scrolls sideways: a plain mouse wheel scrolls it too, and a fade at the edges shows there is more
+          EditorView.domEventHandlers({
+            wheel(e, view) {
+              const s = view.scrollDOM;
+              if (Math.abs(e.deltaY) <= Math.abs(e.deltaX) || s.scrollWidth <= s.clientWidth) return false;
+              s.scrollLeft += e.deltaY;
+              e.preventDefault();
+              return true;
+            },
+          }),
+          ViewPlugin.fromClass(
+            class {
+              f = () => this.sync();
+              constructor(readonly v: EditorView) {
+                v.scrollDOM.addEventListener("scroll", this.f, { passive: true });
+                requestAnimationFrame(this.f);
+              }
+              update() {
+                this.sync();
+              }
+              sync() {
+                const s = this.v.scrollDOM;
+                const more = s.scrollWidth - s.clientWidth > 1;
+                this.v.dom.classList.toggle("more-right", more && s.scrollLeft + s.clientWidth < s.scrollWidth - 1);
+                this.v.dom.classList.toggle("more-left", more && s.scrollLeft > 0);
+              }
+              destroy() {
+                this.v.scrollDOM.removeEventListener("scroll", this.f);
+              }
+            },
+          ),
           keymap.of([...closeBracketsKeymap, ...defaultKeymap, ...historyKeymap, ...completionKeymap]),
           EditorView.contentAttributes.of({ spellcheck: "false", autocapitalize: "off", autocorrect: "off" }),
         );
@@ -298,7 +329,7 @@ export function CodeEditor({ value, onChange, lang = "text", readOnly, placehold
   }, [value]);
   useEffect(() => view.current?.dispatch({ effects: langC.current.reconfigure(langExt(lang)) }), [lang]);
   useEffect(() => view.current?.dispatch({ effects: roC.current.reconfigure(EditorState.readOnly.of(!!readOnly)) }), [readOnly]);
-  useEffect(() => view.current?.dispatch({ effects: wrapC.current.reconfigure(wrap || singleLine ? EditorView.lineWrapping : []) }), [wrap, singleLine]);
+  useEffect(() => view.current?.dispatch({ effects: wrapC.current.reconfigure(wrap ? EditorView.lineWrapping : []) }), [wrap]);
   useEffect(() => view.current?.dispatch({ effects: setVarsEffect.of(vars ?? {}) }), [vars]);
   useEffect(() => view.current?.dispatch({ effects: extC.current.reconfigure(extensions ?? []) }), [extensions]);
 

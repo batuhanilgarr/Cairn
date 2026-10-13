@@ -22,7 +22,9 @@ import { GraphQLPanel } from "./GraphQLPanel";
 import { StreamLog } from "./StreamLog";
 import { CodePanel } from "./CodePanel";
 import { rowsFromUrl, syncParams, urlFromRows } from "./lib/query";
-import { IconCollections, IconEnvironments, IconHistory, IconSearch, IconSettings, IconSpark } from "./Icons";
+import { IconCode, IconCollections, IconEnvironments, IconFolderPlus, IconHistory, IconInbox, IconMore, IconPlay, IconPlus, IconSidebar, IconSearch, IconSettings, IconSpark } from "./Icons";
+import { Menu } from "./Menu";
+import { useRequestLabels } from "./lib/useRequestLabels";
 import { AiPanel } from "./AiPanel";
 import { AsideTabs, type AsideKind } from "./AsideTabs";
 import { DiffModal, type HistEntry } from "./DiffModal";
@@ -134,6 +136,7 @@ export default function App() {
   const [side, setSide] = useState<SideSection>(() => load("rq.side", "collections"));
   const [collection, setCollection] = useState<Collection | null>(() => load("rq.collection", null));
   const [tree, setTree] = useState<TreeNode[]>([]);
+  const [labels, setLabel] = useRequestLabels(tree);
   const [selectedDir, setSelectedDir] = useState<string>(() => load<Collection | null>("rq.collection", null)?.root ?? "");
   const [dialog, setDialog] = useState<DialogState | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -1032,6 +1035,9 @@ export default function App() {
   }, [settings]);
   useEffect(() => save("rq.sidebar", sidebarOpen), [sidebarOpen]);
   useEffect(() => save("rq.aside", aside), [aside]);
+  useEffect(() => {
+    for (const t of tabs) if (t.file) setLabel(t.file, pillOf(t));
+  }, [tabs]);
 
   const nextTab = (d: number) => {
     const i = tabs.findIndex((t) => t.id === active.id);
@@ -1211,7 +1217,10 @@ export default function App() {
   return (
     <div className={`app ${sidebarOpen ? "" : "no-side"} ${aside ? "with-aside" : ""}`}>
       <aside className="sidebar">
-        <div className="titlebar-drag" data-tauri-drag-region />
+        <div className="titlebar-drag" data-tauri-drag-region>
+          <span className="titlebar-brand"><Logo size={18} />Reqnest</span>
+          <button className="icon-btn" onClick={() => fire("toggle-sidebar")} title="Hide sidebar (⌘B)" aria-label="Hide sidebar"><IconSidebar /></button>
+        </div>
         <div className="side-wrap">
           <nav className="rail" aria-label="Sections">
             <button className={side === "collections" ? "on" : ""} onClick={() => setSide("collections")} title="Collections" aria-label="Collections"><IconCollections /></button>
@@ -1222,9 +1231,6 @@ export default function App() {
             <button onClick={() => fire("settings")} title="Settings (⌘,)" aria-label="Settings"><IconSettings /></button>
           </nav>
           <div className="side-main">
-        <div className="brand">
-          <Logo size={20} /> Reqnest
-        </div>
         <div className="side-title">{side === "collections" ? "Collections" : side === "history" ? "History" : "Environments"}</div>
         <div className="side-body">
           {side === "collections" && (
@@ -1240,14 +1246,21 @@ export default function App() {
                   <div className="coll-head">
                     <span className="coll-name" title={collection.root}>{collection.name}</span>
                     <span className="row-actions always">
-                      <button title="New request" onClick={() => newRequestIn(selectedDir || collection.root)}>＋</button>
-                      <button title="New folder" onClick={() => newFolderIn(selectedDir || collection.root)}>▤</button>
-                      <button title="Collection defaults (headers, auth, scripts)" onClick={() => openDefaults(collection.root, `Defaults for “${collection.name}”`)}>⚙</button>
-                      <button title={mockPort ? `Mock server (running on :${mockPort})` : "Mock server"} onClick={() => fire("mock")} className={mockPort ? "live" : ""}>⚑</button>
-                      <button title="Run all requests" onClick={() => runFolder(collection.root, `Run ${collection.name}`)}>▶</button>
-                      <button title="Import (OpenAPI, Postman, Bruno)" onClick={importMenu}>⇩</button>
-                      <button title="Open another collection" onClick={openCollection}>⌂</button>
-                      <button title="Close collection" onClick={closeCollection}>×</button>
+                      <button title="New request" aria-label="New request" onClick={() => newRequestIn(selectedDir || collection.root)}><IconPlus /></button>
+                      <button title="New folder" aria-label="New folder" onClick={() => newFolderIn(selectedDir || collection.root)}><IconFolderPlus /></button>
+                      <button title="Run all requests" aria-label="Run all requests" onClick={() => runFolder(collection.root, `Run ${collection.name}`)}><IconPlay /></button>
+                      <Menu
+                        title="More collection actions"
+                        trigger={<IconMore />}
+                        items={[
+                          { label: "Import…", hint: "OpenAPI, Postman, Bruno", onClick: importMenu },
+                          { label: "Collection settings…", hint: "variables, headers, auth, scripts", onClick: () => openDefaults(collection.root, `Defaults for “${collection.name}”`) },
+                          { label: mockPort ? `Mock server (running on :${mockPort})` : "Mock server…", onClick: () => fire("mock") },
+                          "sep",
+                          { label: "Open another collection…", onClick: openCollection },
+                          { label: "Close collection", onClick: closeCollection, danger: true },
+                        ]}
+                      />
                     </span>
                   </div>
                   {tree.length === 0 && <p className="muted pad">No requests yet. Click ＋ to add one, or press ⌘S on a request.</p>}
@@ -1256,6 +1269,7 @@ export default function App() {
                     activeFile={active.file ?? null}
                     selectedDir={selectedDir}
                     dirty={dirtyFiles}
+                    labels={labels}
                     onOpen={openFile}
                     onSelectDir={setSelectedDir}
                     onRun={(dir) => runFolder(dir, `Run ${basename(dir)}`)}
@@ -1364,6 +1378,7 @@ export default function App() {
 
       <main className="main">
         <div className="tabbar" data-tauri-drag-region>
+          {!sidebarOpen && <button className="icon-btn show-side" onClick={() => fire("toggle-sidebar")} title="Show sidebar (⌘B)" aria-label="Show sidebar"><IconSidebar /></button>}
           {tabs.map((t) => (
             <div key={t.id} className={`tab ${t.id === active.id ? "on" : ""}`} onClick={() => setActiveId(t.id)}>
               <span className={`m m-${pillOf(t)}`}>{pillOf(t)}</span>
@@ -1413,6 +1428,7 @@ export default function App() {
               <span className="muted">stdio</span> {active.mcp.command || "command"} {active.mcp.args}
             </div>
           ) : (
+          <div className="url-cell">
           <CodeEditor
             singleLine
             className="url"
@@ -1428,6 +1444,7 @@ export default function App() {
             }}
             onChange={(v) => (looksLikeCurl(v) ? applyCurl(v) : patch({ url: v, params: rowsFromUrl(v, active.params) }))}
           />
+          </div>
           )}
           </div>
           <button
@@ -1440,7 +1457,7 @@ export default function App() {
           </button>
           {active.kind !== "ws" && active.kind !== "grpc" && (
             <button className={`btn code-btn ${aside === "code" ? "on" : ""}`} onClick={() => fire("codegen")} title="Code snippet (⇧⌘G)" aria-label="Toggle code snippet panel" aria-pressed={aside === "code"}>
-              {"</>"}
+              <IconCode />
             </button>
           )}
           <button className={`btn code-btn ${aside === "ai" ? "on" : ""}`} onClick={() => fire("ai")} title="Ask AI about this request (⇧⌘A)" aria-label="Toggle AI assistant" aria-pressed={aside === "ai"}>
@@ -1711,7 +1728,13 @@ export default function App() {
           )}
           <div className={`panel-body ${resSection === "body" && response && !("error" in response) ? "fill" : ""}`}>
             {loading[active.id] && <p className="muted">Sending request…</p>}
-            {!loading[active.id] && !response && active.url.trim() && <p className="muted center">Hit <kbd>⌘↵</kbd> to send a request.</p>}
+            {!loading[active.id] && !response && active.url.trim() && (
+              <div className="empty-resp">
+                <IconInbox />
+                <b>No response yet</b>
+                <span>Press <kbd>⌘↵</kbd> or Send to run this request.</span>
+              </div>
+            )}
             {response && "error" in response && resSection !== "tests" && resSection !== "console" && <pre className="err">{response.error}</pre>}
             {resSection === "tests" && run && (
               <div className="tests-list">
