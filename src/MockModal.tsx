@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { buildRoutes, type MockHit, type MockRoute } from "./lib/mock";
+import { focusScope } from "./lib/focusScope";
 
 type Props = {
   root: string;
@@ -33,7 +34,7 @@ export function MockModal({ root, name, port, log, onStart, onStop, onClearLog, 
   const url = port ? `http://127.0.0.1:${port}` : "";
   return (
     <div className="scrim" onMouseDown={onClose}>
-      <div className="mock" onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-label="Mock server">
+      <div className="mock" ref={focusScope} tabIndex={-1} onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-label="Mock server">
         <div className="mock-head">
           <h3>Mock server <span className="muted">· {name}</span></h3>
           <div className="spacer" />

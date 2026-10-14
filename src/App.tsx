@@ -1392,11 +1392,13 @@ export default function App() {
       <main className="main">
         <div className="tabbar" data-tauri-drag-region>
           {!sidebarOpen && <button className="icon-btn show-side" onClick={() => fire("toggle-sidebar")} title="Show sidebar (⌘B)" aria-label="Show sidebar"><IconSidebar /></button>}
-          <div className="tabstrip" ref={tabStrip} onWheel={(e) => { if (Math.abs(e.deltaY) > Math.abs(e.deltaX) && tabStrip.current) tabStrip.current.scrollLeft += e.deltaY; }}>
+          <div className="tabstrip" role="group" aria-label="Open requests" ref={tabStrip} onWheel={(e) => { if (Math.abs(e.deltaY) > Math.abs(e.deltaX) && tabStrip.current) tabStrip.current.scrollLeft += e.deltaY; }}>
           {tabs.map((t) => (
-            <div key={t.id} role="tab" aria-selected={t.id === active.id} className={`tab ${t.id === active.id ? "on" : ""}`} onClick={() => setActiveId(t.id)}>
-              <span className={`m m-${pillOf(t)}`}>{pillOf(t)}</span>
-              <span className="tab-title">{tabTitle(t)}</span>
+            <div key={t.id} className={`tab ${t.id === active.id ? "on" : ""}`}>
+              <button className="tab-main" aria-current={t.id === active.id ? "true" : undefined} onClick={() => setActiveId(t.id)}>
+                <span className={`m m-${pillOf(t)}`}>{pillOf(t)}</span>
+                <span className="tab-title">{tabTitle(t)}</span>
+              </button>
               {isDirty(t) && <b className="unsaved">●</b>}
               <button
                 className="icon-btn"
@@ -1438,7 +1440,7 @@ export default function App() {
             ))}
           </select>
           {(active.kind === "http" || active.kind === "sse") && (
-          <select className={`method m-${active.method}`} value={active.method} onChange={(e) => patch({ method: e.target.value })}>
+          <select className={`method m-${active.method}`} aria-label="HTTP method" value={active.method} onChange={(e) => patch({ method: e.target.value })}>
             {METHODS.map((m) => (
               <option key={m}>{m}</option>
             ))}

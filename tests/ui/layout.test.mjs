@@ -557,3 +557,115 @@ for (const width of [760, 1360]) {
     }
   });
 }
+
+/* ------------------------------ accessibility ------------------------------ */
+
+const AXE = fs.readFileSync(path.join(ROOT, "node_modules/axe-core/axe.min.js"), "utf8");
+
+/** WCAG 2 A and AA rules from axe-core, on whatever is on screen right now. */
+async function axeViolations(page) {
+  await page.addScriptTag({ content: AXE });
+  return page.evaluate(async () => {
+    const r = await window.axe.run(document, { runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] } });
+    return r.violations.map((v) => ({ id: v.id, impact: v.impact, help: v.help, count: v.nodes.length, where: v.nodes.slice(0, 8).map((n) => n.target.join(" ") + (n.html.length < 160 && v.id === "label" ? ` ${n.html}` : "") + (n.any[0]?.data?.contrastRatio ? ` (${n.any[0].data.contrastRatio}:1 ${n.any[0].data.fgColor} on ${n.any[0].data.bgColor})` : "")) }));
+  });
+}
+
+const A11Y_STATES = [
+  { name: "empty request", go: async () => {} },
+  { name: "with a response", go: async (page) => { await page.click(".url-cell"); await page.keyboard.type("https://api.example.com/v1/x"); await page.click(".urlbar > .btn.primary"); await page.waitForSelector(".panel.res .pill"); } },
+  { name: "settings", go: async (page) => { await page.click('.rail button[aria-label="Settings"]'); await page.waitForSelector(".settings"); } },
+  { name: "command palette", go: async (page) => { await page.keyboard.press("Control+k"); await page.waitForSelector(".palette"); } },
+  { name: "code panel", aside: "code", go: async () => {} },
+  { name: "AI panel", aside: "ai", go: async () => {} },
+];
+
+for (const theme of THEMES) {
+  for (const st of A11Y_STATES) {
+    test(`accessibility (axe, WCAG A/AA): ${st.name}, ${theme}`, async () => {
+      const { page, context, errors } = await open({ width: 1360, theme, aside: st.aside ?? null }, `axe ${st.name} ${theme}`);
+      try {
+        await st.go(page);
+        await page.waitForTimeout(300);
+        const v = await axeViolations(page);
+        assert.deepEqual(errors, []);
+        assert.deepEqual(v.map((x) => `${x.id} [${x.impact}] ${x.help}: ${x.where.join(" | ")}`), [], "accessibility violations");
+      } finally {
+        await context.close();
+      }
+    });
+  }
+}
+
+const REQUEST_TABS = ["Params", "Headers", "Body", "Auth", "Scripts", "Tests", "Examples", "Settings"];
+for (const theme of THEMES) {
+  for (const width of [760, 1360]) {
+    test(`every request tab is accessible and fits: ${width}px, ${theme}`, async () => {
+      const { page, context, errors } = await open({ width, theme }, `tabs ${width} ${theme}`);
+      try {
+        await page.click(".url-cell");
+        await page.keyboard.type("https://api.example.com/v1/x");
+        await page.waitForSelector(".panel.req .subtabs");
+        const found = [];
+        for (const name of REQUEST_TABS) {
+          await page.locator(".panel.req .subtabs button", { hasText: new RegExp(`^${name}`) }).click();
+          await page.waitForTimeout(150);
+          const fit = await page.evaluate(() => ({ over: document.documentElement.scrollWidth - innerWidth, pane: (() => { const p = document.querySelector(".panel.req").getBoundingClientRect(); return p.right <= innerWidth + 1 && p.left >= -1; })() }));
+          assert.ok(fit.over <= 0 && fit.pane, `${name}: the page overflows sideways (${fit.over}px)`);
+          const v = await axeViolations(page);
+          found.push(...v.map((x) => `${name}: ${x.id}: ${x.where.join(" | ")}`));
+        }
+        assert.deepEqual(found, [], "accessibility violations");
+        assert.deepEqual(errors, []);
+      } finally {
+        await context.close();
+      }
+    });
+  }
+}
+
+test("keyboard: Settings and the command palette take focus, close on Escape and give it back", async () => {
+  const { page, context, errors } = await open({ width: 1360 }, "keyboard dialogs");
+  try {
+    await page.focus('.rail button[aria-label="Settings"]');
+    await page.keyboard.press("Enter");
+    await page.waitForSelector(".settings");
+    const inside = await page.evaluate(() => !!document.activeElement?.closest(".settings"));
+    await page.keyboard.press("Escape");
+    await page.waitForSelector(".settings", { state: "detached" });
+    await page.keyboard.press("Control+k");
+    await page.waitForSelector(".palette");
+    const paletteFocus = await page.evaluate(() => !!document.activeElement?.closest(".palette"));
+    await page.keyboard.press("Escape");
+    await page.waitForSelector(".palette", { state: "detached" });
+    assert.deepEqual(errors, []);
+    assert.ok(inside, "opening Settings with the keyboard should move focus into it");
+    assert.ok(paletteFocus, "opening the command palette should focus its search box");
+  } finally {
+    await context.close();
+  }
+});
+
+test("keyboard: Tab reaches Send, and every control that takes focus shows a visible focus ring", async () => {
+  const { page, context } = await open({ width: 1360 }, "keyboard focus");
+  try {
+    const seen = [];
+    await page.click(".url-cell");
+    for (let i = 0; i < 40; i++) {
+      await page.keyboard.press("Tab");
+      const f = await page.evaluate(() => {
+        const el = document.activeElement;
+        if (!el || el === document.body) return null;
+        const cs = getComputedStyle(el);
+        const ring = (cs.outlineStyle !== "none" && parseFloat(cs.outlineWidth) > 0) || cs.boxShadow !== "none" || !!el.closest(".cm-editor, .tree, .tabstrip");
+        return { label: el.getAttribute("aria-label") || el.textContent.trim().slice(0, 24) || el.tagName, ring, send: el.matches(".urlbar > .btn.primary") };
+      });
+      if (f) seen.push(f);
+    }
+    assert.ok(seen.some((f) => f.send), "Tab never reached the Send button");
+    const bare = seen.filter((f) => !f.ring).map((f) => f.label);
+    assert.deepEqual(bare, [], `these controls take focus but show no focus ring: ${bare.join(", ")}`);
+  } finally {
+    await context.close();
+  }
+});

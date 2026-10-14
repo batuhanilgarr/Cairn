@@ -7,6 +7,7 @@ import { MergeView } from "@codemirror/merge";
 import { highlight, theme } from "./CodeEditor";
 import type { ResponseData } from "./lib/types";
 import { tryPrettyJson } from "./lib/util";
+import { focusScope } from "./lib/focusScope";
 
 export type HistEntry = { n: number; at: number; response: ResponseData };
 
@@ -50,7 +51,7 @@ export function DiffModal({ items, onClose }: { items: HistEntry[]; onClose: () 
   const same = docs[0] === docs[1];
   return (
     <div className="scrim" onMouseDown={onClose}>
-      <div className="diff" onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-label="Compare responses">
+      <div className="diff" ref={focusScope} tabIndex={-1} onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-label="Compare responses">
         <div className="diff-head">
           <h3>Compare responses</h3>
           <div className="seg">

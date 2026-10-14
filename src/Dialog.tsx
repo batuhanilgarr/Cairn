@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { focusScope } from "./lib/focusScope";
 
 export type DialogState =
   | { kind: "prompt"; title: string; label?: string; initial: string; confirm: string; resolve: (v: string | null) => void }
@@ -29,7 +30,7 @@ export function Dialog({ state }: { state: DialogState | null }) {
 
   return (
     <div className="scrim" onMouseDown={cancel} onKeyDown={(e) => e.key === "Escape" && cancel()}>
-      <div className="dialog" onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-label={state.title}>
+      <div className="dialog" ref={focusScope} tabIndex={-1} onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-label={state.title}>
         <h3>{state.title}</h3>
         {state.kind === "prompt" && (
           <>

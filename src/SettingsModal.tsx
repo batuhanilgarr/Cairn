@@ -7,6 +7,7 @@ import { CookiesPanel } from "./CookiesPanel";
 import { KVEditor } from "./KVEditor";
 import { AiSettings } from "./AiSettings";
 import { emptyKV } from "./lib/util";
+import { focusScope } from "./lib/focusScope";
 
 export type SettingsSection = "general" | "appearance" | "variables" | "ai" | "network" | "cookies" | "shortcuts" | "data" | "about";
 
@@ -71,15 +72,15 @@ export function SettingsModal({ settings: s, onChange, section, onSection, onClo
       <div className="set-control">{control}</div>
     </div>
   );
-  const toggle = (k: keyof Settings) => (
+  const toggle = (k: keyof Settings, name: string) => (
     <label className="switch">
-      <input type="checkbox" checked={Boolean(s[k])} onChange={(e) => onChange({ [k]: e.target.checked } as Partial<Settings>)} />
+      <input type="checkbox" aria-label={name} checked={Boolean(s[k])} onChange={(e) => onChange({ [k]: e.target.checked } as Partial<Settings>)} />
       <span />
     </label>
   );
   const pathField = (k: "caCert" | "clientCert" | "clientKey", ph: string, ext: string[]) => (
     <div className="path-field">
-      <input className="cell" placeholder={ph} value={s[k]} spellCheck={false} onChange={(e) => onChange({ [k]: e.target.value } as Partial<Settings>)} />
+      <input className="cell" aria-label={ph} placeholder={ph} value={s[k]} spellCheck={false} onChange={(e) => onChange({ [k]: e.target.value } as Partial<Settings>)} />
       <button className="btn small" onClick={async () => { const f = await pickFile("Choose a file", ext); if (f) onChange({ [k]: f } as Partial<Settings>); }}>Choose…</button>
       {s[k] && <button className="btn small" onClick={() => onChange({ [k]: "" } as Partial<Settings>)}>Clear</button>}
     </div>
@@ -87,7 +88,7 @@ export function SettingsModal({ settings: s, onChange, section, onSection, onClo
 
   return (
     <div className="scrim" onMouseDown={onClose}>
-      <div className="settings" onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-label="Settings">
+      <div className="settings" ref={focusScope} tabIndex={-1} onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-label="Settings">
         <nav className="settings-nav">
           <h3>Settings</h3>
           {NAV.map((n) => (
@@ -103,16 +104,16 @@ export function SettingsModal({ settings: s, onChange, section, onSection, onClo
           {section === "general" && (
             <>
               <h2>Requests</h2>
-              {row("Timeout", "New requests start with this timeout (ms).", <input className="cell narrow" type="number" min={100} value={s.timeoutMs} onChange={(e) => onChange({ timeoutMs: Math.max(100, Number(e.target.value) || 30000) })} />)}
-              {row("Follow redirects", "Default for new requests.", toggle("followRedirects"))}
-              {row("Verify TLS certificates", "Turn off only for local development with self-signed certificates. Applies to new requests; each request can still override it.", toggle("verifyTls"))}
-              {row("Auto-save requests", "Write changes to the request file automatically a moment after you stop typing. Only requests saved in a collection.", toggle("autoSave"))}
+              {row("Timeout", "New requests start with this timeout (ms).", <input className="cell narrow" aria-label="Timeout in milliseconds" type="number" min={100} value={s.timeoutMs} onChange={(e) => onChange({ timeoutMs: Math.max(100, Number(e.target.value) || 30000) })} />)}
+              {row("Follow redirects", "Default for new requests.", toggle("followRedirects", "Follow redirects"))}
+              {row("Verify TLS certificates", "Turn off only for local development with self-signed certificates. Applies to new requests; each request can still override it.", toggle("verifyTls", "Verify TLS certificates"))}
+              {row("Auto-save requests", "Write changes to the request file automatically a moment after you stop typing. Only requests saved in a collection.", toggle("autoSave", "Auto-save requests"))}
               {row("History size", "How many sent requests to remember.", (
-                <select value={s.historyLimit} onChange={(e) => onChange({ historyLimit: Number(e.target.value) })}>
+                <select aria-label="History size" value={s.historyLimit} onChange={(e) => onChange({ historyLimit: Number(e.target.value) })}>
                   {[25, 50, 100, 250, 500].map((n) => <option key={n} value={n}>{n}</option>)}
                 </select>
               ))}
-              {row("Confirm before deleting", "Ask before deleting requests, folders and environments.", toggle("confirmDelete"))}
+              {row("Confirm before deleting", "Ask before deleting requests, folders and environments.", toggle("confirmDelete", "Confirm before deleting"))}
             </>
           )}
 
@@ -157,7 +158,7 @@ export function SettingsModal({ settings: s, onChange, section, onSection, onClo
               <h2>Network</h2>
               <p className="muted small">Applies to every request, OAuth token call and spec download.</p>
               {row("Proxy", undefined, (
-                <select value={s.proxyMode} onChange={(e) => onChange({ proxyMode: e.target.value as Settings["proxyMode"] })}>
+                <select aria-label="Proxy" value={s.proxyMode} onChange={(e) => onChange({ proxyMode: e.target.value as Settings["proxyMode"] })}>
                   <option value="env">System (HTTP_PROXY / HTTPS_PROXY)</option>
                   <option value="none">No proxy</option>
                   <option value="custom">Custom</option>
@@ -165,21 +166,21 @@ export function SettingsModal({ settings: s, onChange, section, onSection, onClo
               ))}
               {s.proxyMode === "custom" && (
                 <>
-                  {row("Proxy URL", "http://, https:// or socks5://", <input className="cell" placeholder="http://127.0.0.1:8080" value={s.proxyUrl} spellCheck={false} onChange={(e) => onChange({ proxyUrl: e.target.value })} />)}
-                  {row("Bypass proxy for", "Comma-separated hosts.", <input className="cell" placeholder="localhost, 127.0.0.1, .internal.example.com" value={s.noProxy} spellCheck={false} onChange={(e) => onChange({ noProxy: e.target.value })} />)}
+                  {row("Proxy URL", "http://, https:// or socks5://", <input className="cell" aria-label="Proxy URL" placeholder="http://127.0.0.1:8080" value={s.proxyUrl} spellCheck={false} onChange={(e) => onChange({ proxyUrl: e.target.value })} />)}
+                  {row("Bypass proxy for", "Comma-separated hosts.", <input className="cell" aria-label="Bypass proxy for" placeholder="localhost, 127.0.0.1, .internal.example.com" value={s.noProxy} spellCheck={false} onChange={(e) => onChange({ noProxy: e.target.value })} />)}
                 </>
               )}
               {row("CA certificate", "PEM file with extra trusted roots, e.g. a corporate CA.", pathField("caCert", "Not set", ["pem", "crt", "cer"]))}
               {row("Client certificate", "For mutual TLS. PEM certificate (and key, below).", pathField("clientCert", "Not set", ["pem", "crt", "cer"]))}
               {row("Client key", "PEM private key, if separate from the certificate.", pathField("clientKey", "Not set", ["pem", "key"]))}
-              {row("User agent", "Leave empty for the default.", <input className="cell" placeholder="Cairn/0.2.5" value={s.userAgent} spellCheck={false} onChange={(e) => onChange({ userAgent: e.target.value })} />)}
+              {row("User agent", "Leave empty for the default.", <input className="cell" aria-label="User agent" placeholder="Cairn/0.2.5" value={s.userAgent} spellCheck={false} onChange={(e) => onChange({ userAgent: e.target.value })} />)}
             </>
           )}
 
           {section === "cookies" && (
             <>
               <h2>Cookies</h2>
-              {row("Store and send cookies", "Like a browser: cookies from responses are saved and sent with later requests to the same site. Kept on this Mac.", toggle("cookies"))}
+              {row("Store and send cookies", "Like a browser: cookies from responses are saved and sent with later requests to the same site. Kept on this Mac.", toggle("cookies", "Store and send cookies"))}
               <CookiesPanel />
             </>
           )}

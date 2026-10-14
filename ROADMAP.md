@@ -62,7 +62,7 @@ Bütçeler artık testte: `tests/ui/layout.test.mjs` içinde "budget:" testleri 
 1. Koleksiyon ağacını **sanallaştır** (hedef: 10.000 istek < 1 sn ilk çizim, DOM'da yalnız görünen satırlar) ve metod etiketlerini tembel/önbellekli oku.
 2. **Büyük yanıt hattı:** biçimlendirme ve arama Rust/Worker'da, görüntüleyici sanal, çok kopya yok, 100 MB+ için akıtma/diske yazma ve "ham aç" yolu. Hedef: 50 MB < 1 sn, donma yok, bellek < 3× boyut.
 3. ~~Bench'i bütçeye çevir ve sonuçları donanımla birlikte yayınla.~~ **Yapıldı** (yukarıdaki tablo ve "budget:" testleri).
-4. UI test paketini büyüt: tüm modallar, diğer sekmeler, klavye odağı, erişilebilirlik (axe).
+4. ~~UI test paketini büyüt: tüm modallar, diğer sekmeler, klavye odağı, erişilebilirlik (axe).~~ **Büyük ölçüde yapıldı:** axe-core (WCAG A/AA) ana ekranlarda, Settings/komut paleti, kod/AI panelinde ve tüm istek sekmelerinde, açık ve koyu temada temiz; modallar odağı içeri alıp tutuyor ve kapanınca geri veriyor; Tab ile Send'e ulaşılıyor ve odak halkası görünüyor. **Kalan:** Runner, Mock, Defaults, Diff ve onay diyalogları için axe taraması ve gerçek ekran okuyucuyla (VoiceOver) elle deneme.
 
 **P1, kanıtlı eksik özellikler:** yukarıdaki talep listesi 1–6 (yeniden kullanılabilir istek, jq filtresi, çoklu .env/ortam, sekme geliştirmeleri, anahtarlık + sır tarayıcı, OpenAPI export + HAR import) ve biçim şemasının yayınlanması.
 

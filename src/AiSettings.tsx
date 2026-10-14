@@ -35,16 +35,16 @@ export function AiSettings({ ai, onChange }: Props) {
         <code>{"{{variables}}"}</code> hidden or left unresolved.
       </p>
       {row("Server type", "Ollama's own API, or any OpenAI-compatible server (OpenAI, OpenRouter, LM Studio, vLLM, Groq…).", (
-        <select value={ai.format} onChange={(e) => { setModels([]); set({ format: e.target.value as AiConfig["format"] }); }}>
+        <select aria-label="API format" value={ai.format} onChange={(e) => { setModels([]); set({ format: e.target.value as AiConfig["format"] }); }}>
           <option value="ollama">Ollama</option>
           <option value="openai">OpenAI-compatible</option>
         </select>
       ))}
       {row("Endpoint", ai.format === "ollama" ? "The server root. Pasting …/api/generate works too." : "The base URL, usually ending in /v1.", (
-        <input className="cell" placeholder={ai.format === "ollama" ? "https://ollama.example.com" : "https://api.openai.com/v1"} value={ai.baseUrl} spellCheck={false} onChange={(e) => set({ baseUrl: e.target.value })} />
+        <input className="cell" aria-label="Endpoint" placeholder={ai.format === "ollama" ? "https://ollama.example.com" : "https://api.openai.com/v1"} value={ai.baseUrl} spellCheck={false} onChange={(e) => set({ baseUrl: e.target.value })} />
       ))}
       {row("Token", "Optional. Leave empty when the server needs none. Stored on this Mac, never in a collection.", (
-        <input className="cell" type="password" placeholder="No token" value={ai.token} spellCheck={false} autoComplete="off" onChange={(e) => set({ token: e.target.value })} />
+        <input className="cell" aria-label="Token" type="password" placeholder="No token" value={ai.token} spellCheck={false} autoComplete="off" onChange={(e) => set({ token: e.target.value })} />
       ))}
       {ai.token.trim() !== "" && row("Auth header", "Sent as “name: scheme token”. Clear the scheme to send the bare token.", (
         <div className="path-field">
@@ -54,7 +54,7 @@ export function AiSettings({ ai, onChange }: Props) {
       ))}
       {row("Model", "Fetch the list from the server, or type a name.", (
         <div className="path-field">
-          <input className="cell" list="ai-models" placeholder="e.g. qwen3:8b" value={ai.model} spellCheck={false} onChange={(e) => set({ model: e.target.value })} />
+          <input className="cell" aria-label="Model" list="ai-models" placeholder="e.g. qwen3:8b" value={ai.model} spellCheck={false} onChange={(e) => set({ model: e.target.value })} />
           <datalist id="ai-models">{models.map((m) => <option key={m} value={m} />)}</datalist>
           <button
             className="btn small"
@@ -71,7 +71,7 @@ export function AiSettings({ ai, onChange }: Props) {
         </div>
       ))}
       {models.length > 0 && row("Available", undefined, (
-        <select value={models.includes(ai.model) ? ai.model : ""} onChange={(e) => e.target.value && set({ model: e.target.value })}>
+        <select aria-label="Pick a model" value={models.includes(ai.model) ? ai.model : ""} onChange={(e) => e.target.value && set({ model: e.target.value })}>
           <option value="">Choose…</option>
           {models.map((m) => <option key={m} value={m}>{m}</option>)}
         </select>

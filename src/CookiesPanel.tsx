@@ -46,7 +46,7 @@ export function CookiesPanel() {
         <b>Add a cookie</b>
         <div className="row">
           <input className="cell" placeholder="domain (api.example.com)" value={draft.domain} onChange={(e) => setDraft({ ...draft, domain: e.target.value })} />
-          <input className="cell narrow" placeholder="/" value={draft.path} onChange={(e) => setDraft({ ...draft, path: e.target.value })} />
+          <input className="cell narrow" aria-label="Cookie path" placeholder="/" value={draft.path} onChange={(e) => setDraft({ ...draft, path: e.target.value })} />
         </div>
         <div className="row">
           <input className="cell" placeholder="name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />

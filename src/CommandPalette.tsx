@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { focusScope } from "./lib/focusScope";
 
 export type Command = { id: string; title: string; hint?: string; group: string; run: () => void };
 
@@ -48,7 +49,7 @@ export function CommandPalette({ commands, onClose }: { commands: Command[]; onC
 
   return (
     <div className="scrim top" onMouseDown={onClose}>
-      <div className="palette" onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-label="Command palette">
+      <div className="palette" ref={focusScope} tabIndex={-1} onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-label="Command palette">
         <input
           autoFocus
           className="pal-input"

@@ -1,3 +1,5 @@
+import { focusScope } from "./lib/focusScope";
+
 export type RunItem = {
   name: string;
   state: "pending" | "running" | "done";
@@ -21,7 +23,7 @@ export function RunnerModal({ run, onStop, onClose }: { run: RunState; onStop: (
   const pct = run.items.length ? Math.round((done.length / run.items.length) * 100) : 0;
   return (
     <div className="scrim" onMouseDown={run.done ? onClose : undefined}>
-      <div className="dialog runner" onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-label="Run results">
+      <div className="dialog runner" ref={focusScope} tabIndex={-1} onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-label="Run results">
         <h3>{run.title}</h3>
         <div className="run-progress" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}><i style={{ width: `${pct}%` }} /></div>
         <p className="run-summary">

@@ -48,6 +48,8 @@ type Props = {
   editorRef?: React.MutableRefObject<EditorView | null>;
   /** Extra extensions (e.g. a lazily loaded GraphQL language); swapped without recreating the editor. */
   extensions?: Extension;
+  /** Accessible name for screen readers (defaults to the placeholder). */
+  label?: string;
 };
 
 /* ------------------------------- theme ------------------------------- */
@@ -178,7 +180,7 @@ const langExt = (lang: Lang): Extension => {
   }
 };
 
-export function CodeEditor({ value, onChange, lang = "text", readOnly, placeholder, vars, wrap, singleLine, onSubmit, onPasteText, className, completions, editorRef, extensions }: Props) {
+export function CodeEditor({ value, onChange, lang = "text", readOnly, placeholder, vars, wrap, singleLine, onSubmit, onPasteText, className, completions, editorRef, extensions, label }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
   const cb = useRef({ onChange, onSubmit, onPasteText });
@@ -283,7 +285,7 @@ export function CodeEditor({ value, onChange, lang = "text", readOnly, placehold
             },
           ),
           keymap.of([...closeBracketsKeymap, ...defaultKeymap, ...historyKeymap, ...completionKeymap]),
-          EditorView.contentAttributes.of({ spellcheck: "false", autocapitalize: "off", autocorrect: "off" }),
+          EditorView.contentAttributes.of({ spellcheck: "false", autocapitalize: "off", autocorrect: "off", "aria-label": label ?? placeholder ?? (readOnly ? "Read-only text" : "Text editor"), tabindex: "0" }),
         );
       } else {
         base.push(
@@ -294,7 +296,7 @@ export function CodeEditor({ value, onChange, lang = "text", readOnly, placehold
           search({ top: true }),
           highlightSelectionMatches(),
           keymap.of([...closeBracketsKeymap, ...defaultKeymap, ...searchKeymap, ...historyKeymap, ...foldKeymap, ...completionKeymap, indentWithTab]),
-          EditorView.contentAttributes.of({ spellcheck: "false", autocapitalize: "off", autocorrect: "off" }),
+          EditorView.contentAttributes.of({ spellcheck: "false", autocapitalize: "off", autocorrect: "off", "aria-label": label ?? placeholder ?? (readOnly ? "Read-only text" : "Text editor"), tabindex: "0" }),
         );
       }
       return base;

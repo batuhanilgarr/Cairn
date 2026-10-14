@@ -4,6 +4,7 @@ import { KVEditor } from "./KVEditor";
 import { emptyKV } from "./lib/util";
 import { AuthPanel } from "./AuthPanel";
 import { ScriptsPanel } from "./ScriptsPanel";
+import { focusScope } from "./lib/focusScope";
 
 type Section = "variables" | "headers" | "auth" | "scripts";
 
@@ -16,7 +17,7 @@ export function DefaultsModal({ title, initial, onSave, onClose }: { title: stri
   const varCount = (tab.vars ?? []).filter((v) => v.key && v.enabled).length;
   return (
     <div className="scrim" onMouseDown={onClose}>
-      <div className="dialog defaults" onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-label={title}>
+      <div className="dialog defaults" ref={focusScope} tabIndex={-1} onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-label={title}>
         <h3>{title}</h3>
         <p className="muted small">
           Applies to every request in here and below. A folder overrides what's above it; a request overrides both. Variables are defaults: an environment or a script can still override them. Saved as <code>folder.yaml</code> next to your requests.

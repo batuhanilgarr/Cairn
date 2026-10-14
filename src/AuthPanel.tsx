@@ -35,7 +35,7 @@ export function AuthPanel({ tab, patch, token, busy, onGetToken, onResetToken, i
 
   return (
     <div className="col wide auth">
-      <select value={tab.authMode} onChange={(e) => patch({ authMode: e.target.value as AuthMode })}>
+      <select aria-label="Authorization type" value={tab.authMode} onChange={(e) => patch({ authMode: e.target.value as AuthMode })}>
         {inheritFrom !== undefined && <option value="inherit">Inherit from folder / collection</option>}
         <option value="none">No auth</option>
         <option value="bearer">Bearer token</option>
@@ -58,7 +58,7 @@ export function AuthPanel({ tab, patch, token, busy, onGetToken, onResetToken, i
         <>
           <label className="field">
             <span>Grant type</span>
-            <select value={o.grant} onChange={(e) => set({ grant: e.target.value as OAuthGrant })}>
+            <select aria-label="Grant type" value={o.grant} onChange={(e) => set({ grant: e.target.value as OAuthGrant })}>
               <option value="client_credentials">Client credentials</option>
               <option value="authorization_code">Authorization code (browser sign-in)</option>
               <option value="password">Password (legacy)</option>
@@ -82,7 +82,7 @@ export function AuthPanel({ tab, patch, token, busy, onGetToken, onResetToken, i
               </label>
               <label className="check">
                 Redirect port
-                <input className="cell narrow" type="number" value={o.redirectPort} onChange={(e) => set({ redirectPort: Number(e.target.value) || 8976 })} />
+                <input className="cell narrow" aria-label="Redirect port" type="number" value={o.redirectPort} onChange={(e) => set({ redirectPort: Number(e.target.value) || 8976 })} />
               </label>
             </div>
           )}
@@ -93,7 +93,7 @@ export function AuthPanel({ tab, patch, token, busy, onGetToken, onResetToken, i
           )}
           <label className="field">
             <span>Send client credentials</span>
-            <select value={o.clientAuth} onChange={(e) => set({ clientAuth: e.target.value as "basic" | "body" })}>
+            <select aria-label="Client authentication" value={o.clientAuth} onChange={(e) => set({ clientAuth: e.target.value as "basic" | "body" })}>
               <option value="basic">As Basic auth header</option>
               <option value="body">In the request body</option>
             </select>
