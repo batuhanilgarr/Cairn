@@ -669,3 +669,46 @@ test("keyboard: Tab reaches Send, and every control that takes focus shows a vis
     await context.close();
   }
 });
+
+for (const width of [760, 1360]) {
+  test(`response filter: jq and JSONPath narrow the body, errors keep it, and the row fits: ${width}px`, async () => {
+    const { page, context, errors, check } = await open({ width }, `${width}px response filter`);
+    try {
+      await page.click(".url-cell");
+      await page.keyboard.type("https://api.example.com/v1/x");
+      await page.click(".urlbar > .btn.primary");
+      await page.waitForSelector(".filter-input");
+      const text = () => page.evaluate(() => [...document.querySelectorAll(".panel.res .cm-line")].map((l) => l.textContent).join("\n"));
+      const status = () => page.locator(".filter-row [role=status]").textContent();
+      await page.fill(".filter-input", "$.data[*].id");
+      await page.waitForSelector(".filter-row [role=status]");
+      const jsonpath = { status: await status(), body: await text() };
+      await page.fill(".filter-input", ".data | map(.amount) | add");
+      await page.waitForTimeout(150);
+      const jq = { status: await status(), body: await text() };
+      await page.fill(".filter-input", ".data[");
+      await page.waitForTimeout(150);
+      const broken = { status: await status(), body: await text() };
+      await page.fill(".filter-input", "");
+      await page.waitForTimeout(150);
+      const cleared = await text();
+      const fit = await page.evaluate(() => {
+        const r = document.querySelector(".filter-row")?.getBoundingClientRect();
+        return { over: document.documentElement.scrollWidth - innerWidth, inside: !r || (r.right <= innerWidth + 1 && r.left >= -1) };
+      });
+      await check(async () => {
+        assert.deepEqual(errors, []);
+        assert.match(jsonpath.status, /^6 results \(JSONPath\)/);
+        assert.ok(jsonpath.body.includes('"inv_0"') && jsonpath.body.includes('"inv_5"') && !jsonpath.body.includes("amount"), `JSONPath output: ${jsonpath.body}`);
+        assert.match(jq.status, /^1 result \(jq\)/);
+        assert.equal(jq.body.trim(), String(12900 * 6 + 15), "jq output");
+        assert.ok(!/results?\b/.test(broken.status ?? "") && broken.status.length > 0, `an invalid filter should say why: ${broken.status}`);
+        assert.ok(broken.body.includes('"amount"'), "an invalid filter should keep showing the whole body");
+        assert.ok(cleared.includes('"amount"'), "clearing the filter should bring the body back");
+        assert.ok(fit.over <= 0 && fit.inside, `the filter row overflows: ${JSON.stringify(fit)}`);
+      });
+    } finally {
+      await context.close();
+    }
+  });
+}

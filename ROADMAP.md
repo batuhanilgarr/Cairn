@@ -20,7 +20,7 @@ Kaynaklar GitHub issue listeleri, Postman topluluk forumu, HN ve rakip belgeleri
 
 **Talep edilen ama karşılanmayan özellikler** (talep × efor sırasıyla):
 1. Aynı isteği birden çok koleksiyonda yeniden kullanma (Postman #1535, 2015'ten beri açık, en yüksek sayı) — **M**
-2. Yanıtlarda jq/JSONPath filtresi (Bruno #7423, Insomnia #777) — **S/M**
+2. ~~Yanıtlarda jq/JSONPath filtresi (Bruno #7423, Insomnia #777)~~ — **Yapıldı** (yanıt gövdesinin üstünde filtre satırı; `$` ile başlarsa JSONPath, aksi halde jq alt kümesi; `src/lib/filter.ts`, 9 birim testi + UI testi). Sınır: tam jq değil, bir alt küme; 8 MB üstü (Rust'ta tutulan) yanıtlarda henüz yok.
 3. Birden çok .env dosyası, iç içe ve çoklu ortam seçimi (Bruno #409/#7217, Postman #4968, Yaak) — **S–M**
 4. Sekme geliştirmeleri: önizleme (geçici) sekme, birden çok koleksiyondan sekme, yan yana (Yaak 66 oy, Insomnia #1003, Postman #9180) — **S–M** *(kısmen yapıldı: kaydırmalı şerit + tüm sekmeler menüsü)*
 5. Sır/kasa entegrasyonu: anahtarlık, HashiCorp, 1Password (Postman #13605, Hoppscotch #5643) — **M**

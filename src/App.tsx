@@ -37,6 +37,8 @@ import { buildRoutes, mockStart, mockStop, type MockHit } from "./lib/mock";
 import { BinaryView, suggestFileName } from "./BinaryView";
 import { BigBodyView, bigFind } from "./BigBodyView";
 import { bodyText } from "./lib/bigbody";
+import { formatFilterValues, runFilter } from "./lib/filter";
+import { parseJsonSafe } from "./lib/assert";
 import { parseSetCookie } from "./lib/cookies";
 import { GrpcPanel, type GrpcSchema } from "./GrpcPanel";
 import { McpPanel } from "./McpPanel";
@@ -136,6 +138,7 @@ export default function App() {
   const [loading, setLoading] = useState<Record<string, boolean>>({});
   const [reqSection, setReqSection] = useState<ReqSection>("params");
   const [resSection, setResSection] = useState<ResSection>("body");
+  const [resFilter, setResFilter] = useState("");
   const [side, setSide] = useState<SideSection>(() => load("rq.side", "collections"));
   const [collection, setCollection] = useState<Collection | null>(() => load("rq.collection", null));
   const [tree, setTree] = useState<TreeNode[]>([]);
@@ -1223,6 +1226,14 @@ export default function App() {
     return { pretty, text: response.body };
   }, [response, resLang]);
 
+  // The response filter (jq or JSONPath) only applies to JSON that was shipped to the page, not to big or binary bodies.
+  const filterable = !!response && !("error" in response) && !response.bodyBase64 && response.bodyId == null && resLang === "json";
+  const parsedBody = useMemo(() => (filterable && response && !("error" in response) ? parseJsonSafe(response.body) : undefined), [filterable, response]);
+  const filtered = useMemo(() => {
+    if (!filterable || !resFilter.trim() || parsedBody === undefined) return null;
+    return runFilter(parsedBody, resFilter);
+  }, [filterable, parsedBody, resFilter]);
+
   return (
     <div className={`app ${sidebarOpen ? "" : "no-side"} ${aside ? "with-aside" : ""}`}>
       <aside className="sidebar">
@@ -1820,6 +1831,24 @@ export default function App() {
                     </button>
                   )}
                 </div>
+                {filterable && parsedBody !== undefined && (
+                  <div className="filter-row">
+                    <input
+                      className="cell filter-input"
+                      aria-label="Filter response"
+                      placeholder="Filter: $.data[*].id   or   .data | map(.id)"
+                      spellCheck={false}
+                      value={resFilter}
+                      onChange={(e) => setResFilter(e.target.value)}
+                    />
+                    {filtered && (
+                      <span className={`small ${filtered.ok ? "muted" : "bad-text"}`} role="status">
+                        {filtered.ok ? `${filtered.values.length} ${filtered.values.length === 1 ? "result" : "results"} (${filtered.syntax === "jq" ? "jq" : "JSONPath"})` : filtered.error}
+                      </span>
+                    )}
+                    {resFilter && <button className="btn small" onClick={() => setResFilter("")}>Clear</button>}
+                  </div>
+                )}
                 {response.bodyBase64 ? (
                   <div className="editor-slot scroll"><BinaryView base64={response.bodyBase64} contentType={response.contentType ?? ""} size={response.sizeBytes} /></div>
                 ) : response.bodyId != null ? (
@@ -1830,7 +1859,7 @@ export default function App() {
                     readOnly
                     wrap={wrapRes}
                     lang={resLang}
-                    value={resBody.pretty && !rawView ? resBody.pretty : resBody.text}
+                    value={filtered?.ok ? formatFilterValues(filtered.values) : resBody.pretty && !rawView ? resBody.pretty : resBody.text}
                     vars={undefined}
                     editorRef={resView}
                     className="fill"
