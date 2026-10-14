@@ -1,4 +1,4 @@
-# Reqnest Yol Haritası
+# Cairn Yol Haritası
 
 ## Değişmez ilkeler
 
@@ -12,10 +12,10 @@
 Kaynaklar GitHub issue listeleri, Postman topluluk forumu, HN ve rakip belgeleri. **Sınırlar:** Reddit sonuç vermedi, forum oyları alınamadı, GitHub'daki sayılar "reaksiyon mu yorum mu" ayırt edilemeden okundu (bu yüzden "n gösterildi" diye anılır) ve rakip bloglarının çoğu kendi ürününü öven kaynaklardır. Kesin talep ölçüsü olarak değil, yön gösterici olarak oku.
 
 **En sık ve en yoğun şikâyetler** (Postman):
-1. Zorunlu hesap/bulut ve çevrimdışı çalışmanın kaybı (Scratch Pad kaldırıldı). *Reqnest: karşılıyor (yerel öncelikli, hesap yok).*
-2. Sırların bulut senkronuyla sızması ve kurumsal yasaklar (Truffle Security: ~4.000 canlı kimlik bilgisi). *Reqnest: sırlar git-ignored dosyada, Postman import'u kimlik bilgilerini dosyalardan çıkarıyor. **Eksik:** OS anahtarlığı, paylaşım/dışa aktarım öncesi sır tarayıcı.*
-3. v12 YAML formatı (Mart 2026): eski koleksiyonlar içe aktarılamadı, Git senkronu bozuldu, **şema yayınlanmadı**. *Reqnest: **eksik:** biçimin yayınlanmış, sürümlü şeması; kuru-çalıştırma (dry-run) import önizlemesi.*
-4. Performans: RAM, açılış, büyük koleksiyonlarda takılma, yanıt gösterimi 50 MB'ta kesiliyor (100 MB üstü çökme riski). *Reqnest: aşağıdaki ölçümlere bak.*
+1. Zorunlu hesap/bulut ve çevrimdışı çalışmanın kaybı (Scratch Pad kaldırıldı). *Cairn: karşılıyor (yerel öncelikli, hesap yok).*
+2. Sırların bulut senkronuyla sızması ve kurumsal yasaklar (Truffle Security: ~4.000 canlı kimlik bilgisi). *Cairn: sırlar git-ignored dosyada, Postman import'u kimlik bilgilerini dosyalardan çıkarıyor. **Eksik:** OS anahtarlığı, paylaşım/dışa aktarım öncesi sır tarayıcı.*
+3. v12 YAML formatı (Mart 2026): eski koleksiyonlar içe aktarılamadı, Git senkronu bozuldu, **şema yayınlanmadı**. *Cairn: **eksik:** biçimin yayınlanmış, sürümlü şeması; kuru-çalıştırma (dry-run) import önizlemesi.*
+4. Performans: RAM, açılış, büyük koleksiyonlarda takılma, yanıt gösterimi 50 MB'ta kesiliyor (100 MB üstü çökme riski). *Cairn: aşağıdaki ölçümlere bak.*
 5. Arayüz şişkinliği, 6. araya giren yapay zekâ (kapatılamayan modal; Nisan 2026'da geri çekildi), 7. fiyat/plan değişiklikleri (Free tek kullanıcı oldu), 8. Git dostu dosya tabanlı koleksiyon isteği, 9. script'lerin uygulama ile CLI'da farklı davranması, 10. içe/dışa aktarım doğruluğu.
 
 **Talep edilen ama karşılanmayan özellikler** (talep × efor sırasıyla):
@@ -110,7 +110,7 @@ Mock server, response history + diff, CLI/CI runner (JUnit/HTML), OpenAPI re-syn
 | **Görsel akışlar (Flows)** | Capture + runner zaten zincirleme yapıyor; görsel editör sonra |
 | **Takım senkronizasyonu** | Önerilen model: git zaten çalışıyor. Ücretli katman olarak self-host sync sunucusu (README'de planlı) |
 | **Gizli bilgi taraması** | Commit öncesi koleksiyonda token/anahtar yakalama; secrets zaten ayrı dosyada |
-| **Secret'lar için macOS Keychain** | Şu an `.reqnest/secrets.yaml` düz dosya |
+| **Secret'lar için macOS Keychain** | Şu an `.cairn/secrets.yaml` düz dosya |
 | **Ek protokoller**: SOAP/WSDL, Socket.IO, MQTT | İstek geldikçe |
 
 ### P3: Sağlamlaştırma

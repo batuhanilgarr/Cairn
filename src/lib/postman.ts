@@ -59,7 +59,7 @@ function convertAuth(a: Obj | undefined, label: string, notes: string[], protect
       const grant: OAuthConfig["grant"] = raw.includes("client_credentials") ? "client_credentials" : raw.includes("password") ? "password" : "authorization_code";
       const redirect = g("redirect_uri");
       const port = redirect.match(/^https?:\/\/(?:localhost|127\.0\.0\.1):(\d+)/)?.[1];
-      if (grant === "authorization_code" && redirect && !port) notes.push(`"${label}": OAuth redirect ${redirect} was replaced by Reqnest's local callback (127.0.0.1:<port>/callback); register that URL with your provider`);
+      if (grant === "authorization_code" && redirect && !port) notes.push(`"${label}": OAuth redirect ${redirect} was replaced by Cairn's local callback (127.0.0.1:<port>/callback); register that URL with your provider`);
       const extra: KV[] = [];
       for (const k of ["audience", "resource"]) if (g(k)) extra.push({ ...emptyKV(), key: k, value: g(k) });
       const oauth: OAuthConfig = {
@@ -97,7 +97,7 @@ function scriptsOf(events: any, label: string, notes: string[]): { pre: string; 
     if (e.listen === "prerequest") out.pre += (out.pre ? "\n" : "") + code;
     else if (e.listen === "test") out.post += (out.post ? "\n" : "") + code;
     const bad = UNSUPPORTED_SCRIPT.find((re) => re.test(code));
-    if (bad) notes.push(`"${label}": the script uses ${bad.source.replace(/\\b|\\s\*|\\\(|\\/g, "")}, which isn't available in Reqnest scripts`);
+    if (bad) notes.push(`"${label}": the script uses ${bad.source.replace(/\\b|\\s\*|\\\(|\\/g, "")}, which isn't available in Cairn scripts`);
   }
   return out;
 }
@@ -257,7 +257,7 @@ export function parsePostman(text: string, prefix?: string[]): ImportResult {
   };
   walk(col.item, base);
 
-  if (unknownDynamic.size) notes.push(`Postman dynamic variables Reqnest doesn't generate yet are left as-is: ${[...unknownDynamic].join(", ")}`);
+  if (unknownDynamic.size) notes.push(`Postman dynamic variables Cairn doesn't generate yet are left as-is: ${[...unknownDynamic].join(", ")}`);
   return { title, vars: {}, folders, secrets, requests, notes: [...new Set(notes)] };
 }
 

@@ -64,7 +64,7 @@ export function htmlReport(rep: Report): string {
       return `<tr class="${r.skipped ? "s" : ok ? "p" : "f"}"><td>${r.skipped ? "–" : ok ? "✓" : "✗"}</td><td><b>${esc(r.name)}</b><br><small>${esc(r.rel)}</small></td><td>${esc(r.method)}</td><td>${r.status ?? ""}</td><td>${r.ms ?? ""}</td><td>${r.error ? `<span class="e">${esc(r.error)}</span>` : r.skipped ? esc(r.skipped) : ""}<ul>${tests}</ul></td></tr>`;
     })
     .join("\n");
-  return `<!doctype html><meta charset="utf-8"><title>Reqnest report: ${esc(rep.collection)}</title>
+  return `<!doctype html><meta charset="utf-8"><title>Cairn report: ${esc(rep.collection)}</title>
 <style>body{font:14px -apple-system,system-ui,sans-serif;margin:32px auto;max-width:1000px;color:#1d1d1f}h1{font-size:20px}table{width:100%;border-collapse:collapse}td,th{padding:8px 10px;border-bottom:1px solid #e3e3e8;vertical-align:top;text-align:left}th{font-size:11px;text-transform:uppercase;color:#7a7a85}.p td:first-child{color:#17a34a}.f td:first-child{color:#dc2626}.f{background:#fef2f2}ul{margin:4px 0 0;padding-left:18px;list-style:none}li.f{color:#dc2626}li.p{color:#17a34a}em{color:#7a7a85}.e{color:#dc2626}small{color:#7a7a85}.sum{margin:8px 0 20px;color:#555}</style>
 <h1>◆ ${esc(rep.collection)}${rep.environment ? ` · ${esc(rep.environment)}` : ""}</h1>
 <p class="sum">${real.length} requests, ${real.filter(bad).length} failed · ${rep.durationMs} ms · ${esc(rep.startedAt)}</p>

@@ -664,7 +664,7 @@ message CountReply { int32 i = 1; }
 "#;
 
     fn proto_file(tag: &str) -> String {
-        let dir = std::env::temp_dir().join(format!("reqnest-grpc-{tag}-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("cairn-grpc-{tag}-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let f = dir.join("echo.proto");
         std::fs::write(&f, PROTO).unwrap();

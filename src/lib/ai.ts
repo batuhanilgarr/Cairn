@@ -177,9 +177,9 @@ export function buildContext(tab: RequestTab, response: ResponseData | null | un
   return lines.join("\n");
 }
 
-export const SYSTEM_PROMPT = `You are the assistant built into Reqnest, a desktop API client. Help the user understand and debug the HTTP request they have open: explain what the endpoint and its parameters do, find the likely cause of an error, suggest fixes, and write example bodies, test scripts or code.
+export const SYSTEM_PROMPT = `You are the assistant built into Cairn, a desktop API client. Help the user understand and debug the HTTP request they have open: explain what the endpoint and its parameters do, find the likely cause of an error, suggest fixes, and write example bodies, test scripts or code.
 Be concise and concrete. Answer in the language the user writes in. Use fenced code blocks for code.
-Reqnest scripts use test(name, fn) and expect(value).toBe(...); Postman-style pm.test and pm.expect also work. Variables look like {{name}}: their values and any credentials are hidden from you, so don't ask for them.
+Cairn scripts use test(name, fn) and expect(value).toBe(...); Postman-style pm.test and pm.expect also work. Variables look like {{name}}: their values and any credentials are hidden from you, so don't ask for them.
 You only know what is shown below. If you are guessing about a server you can't see, say so.`;
 
 export const systemMessage = (context: string): ChatMsg => ({ role: "system", content: `${SYSTEM_PROMPT}\n\n--- The request the user has open ---\n${context}` });

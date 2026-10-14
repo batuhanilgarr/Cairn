@@ -6,7 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { execFile } from "node:child_process";
 
-const CLI = path.resolve(import.meta.dirname, "../dist/reqnest.mjs");
+const CLI = path.resolve(import.meta.dirname, "../dist/cairn.mjs");
 let server, base, dir;
 const seen = [];
 
@@ -45,8 +45,8 @@ before(async () => {
   await new Promise((r) => server.listen(0, "127.0.0.1", r));
   base = `http://127.0.0.1:${server.address().port}`;
 
-  dir = fs.mkdtempSync(path.join(os.tmpdir(), "reqnest-cli-"));
-  write("reqnest.yaml", "name: Demo API\n");
+  dir = fs.mkdtempSync(path.join(os.tmpdir(), "cairn-cli-"));
+  write("cairn.yaml", "name: Demo API\n");
   write("environments/local.env.yaml", `name: Local\nvars:\n  - key: baseUrl\n    value: ${base}\n  - key: clientSecret\n    value: ""\n    secret: true\n  - key: c\n    value: env\n`);
   // collection-wide defaults: header + bearer token taken from a variable set by the login request
   write("folder.yaml", "headers:\n  - key: X-Api\n    value: team\nauth:\n  mode: bearer\n  token: '{{token}}'\n");
@@ -305,13 +305,13 @@ test("data-driven runs: one iteration per CSV row, values become variables", asy
   assert.deepEqual(seen.filter((s) => s.url.startsWith("/echo")).map((s) => decodeURIComponent(s.url.split("name=")[1])), ["ada", "grace, h"]);
 });
 
-test("--var and REQNEST_VAR_ both feed variables; --var wins", async () => {
+test("--var and CAIRN_VAR_ both feed variables; --var wins", async () => {
   seen.length = 0;
-  const r = await run([path.join(dir, "data/07-echo.req.yaml"), "--var", "who=cli"], { REQNEST_VAR_who: "env" });
+  const r = await run([path.join(dir, "data/07-echo.req.yaml"), "--var", "who=cli"], { CAIRN_VAR_who: "env" });
   assert.equal(r.code, 0, r.stdout);
   assert.match(seen.at(-1).url, /name=cli/);
   seen.length = 0;
-  await run([path.join(dir, "data/07-echo.req.yaml")], { REQNEST_VAR_who: "fromenv" });
+  await run([path.join(dir, "data/07-echo.req.yaml")], { CAIRN_VAR_who: "fromenv" });
   assert.match(seen.at(-1).url, /name=fromenv/);
 });
 
@@ -359,4 +359,13 @@ test("Postman pm.* scripts run: chai expectations, environment, request headers,
   assert.match(stdout, /a failing expectation is reported — expected 1 to equal 2/);
   const req = seen.slice(before).find((r) => r.url.startsWith("/echo?name=ada"));
   assert.equal(req.headers["x-from-pre"], base);
+});
+
+test("a collection created before the rename (reqnest.yaml) is still found", async () => {
+  const old = fs.mkdtempSync(path.join(os.tmpdir(), "cairn-legacy-"));
+  fs.writeFileSync(path.join(old, "reqnest.yaml"), "name: Old\n");
+  fs.mkdirSync(path.join(old, "sub"));
+  fs.writeFileSync(path.join(old, "sub", "a.req.yaml"), `name: a\nmethod: GET\nurl: ${base}/echo?name=legacy\ntests:\n  - kind: status\n    op: eq\n    value: "200"\n`);
+  const r = await new Promise((resolve) => execFile("node", [CLI, "run", path.join(old, "sub")], { env: { ...process.env, NO_COLOR: "1" }, cwd: old }, (err, stdout) => resolve({ code: err ? err.code : 0, stdout })));
+  assert.equal(r.code, 0, r.stdout);
 });

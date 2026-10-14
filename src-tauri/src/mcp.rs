@@ -196,7 +196,7 @@ impl Session {
 
         let session = Arc::new(Session { t, next: AtomicU64::new(1), emit, id });
         let init = session
-            .request("initialize", json!({"protocolVersion": PROTOCOL_VERSION, "capabilities": {}, "clientInfo": {"name": "Reqnest", "version": env!("CARGO_PKG_VERSION")}}))
+            .request("initialize", json!({"protocolVersion": PROTOCOL_VERSION, "capabilities": {}, "clientInfo": {"name": "Cairn", "version": env!("CARGO_PKG_VERSION")}}))
             .await?;
         session.notify("notifications/initialized", json!({})).await?;
         Ok((session, init))

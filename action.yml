@@ -1,5 +1,5 @@
-name: Reqnest
-description: Run a Reqnest collection (assertions, scripts, OAuth, JUnit report)
+name: Cairn
+description: Run a Cairn collection (assertions, scripts, OAuth, JUnit report)
 inputs:
   path:
     description: Collection folder, sub-folder or a single .req.yaml file
@@ -11,7 +11,7 @@ inputs:
     description: Write a JUnit XML report to this file
     required: false
   args:
-    description: Extra arguments for `reqnest run` (e.g. "--bail --delay 200")
+    description: Extra arguments for `cairn run` (e.g. "--bail --delay 200")
     required: false
 runs:
   using: composite
@@ -29,4 +29,4 @@ runs:
         args=("${{ inputs.path }}")
         [ -n "${{ inputs.env }}" ] && args+=(--env "${{ inputs.env }}")
         [ -n "${{ inputs.junit }}" ] && args+=(--junit "${{ inputs.junit }}")
-        node "${{ github.action_path }}/cli/dist/reqnest.mjs" run "${args[@]}" ${{ inputs.args }}
+        node "${{ github.action_path }}/cli/dist/cairn.mjs" run "${args[@]}" ${{ inputs.args }}

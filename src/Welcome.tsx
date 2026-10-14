@@ -18,7 +18,7 @@ export function Welcome({ hasCollection, onCurl, onSample, onNewCollection, onOp
       <div className="welcome-head">
         <Logo size={44} />
         <div>
-          <h2>Welcome to Reqnest</h2>
+          <h2>Welcome to Cairn</h2>
           <p className="muted">A local-first API client. Your collections are plain files; no account, no cloud.</p>
         </div>
       </div>

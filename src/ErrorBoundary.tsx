@@ -10,7 +10,7 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, { error: E
     if (!this.state.error) return this.props.children;
     return (
       <div style={{ padding: 32, maxWidth: 560, margin: "10vh auto", font: "14px -apple-system, system-ui, sans-serif" }}>
-        <h2>Reqnest hit a problem</h2>
+        <h2>Cairn hit a problem</h2>
         <p style={{ opacity: 0.7 }}>{this.state.error.message}</p>
         <p style={{ opacity: 0.7 }}>
           Your collections on disk are untouched. Resetting clears only the app's remembered tabs, history and settings.

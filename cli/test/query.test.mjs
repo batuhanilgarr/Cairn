@@ -9,7 +9,7 @@ const ROOT = path.resolve(import.meta.dirname, "../..");
 let Q, U, C;
 
 async function bundle(entry) {
-  const out = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "reqnest-q-")), "m.mjs");
+  const out = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "cairn-q-")), "m.mjs");
   await build({
     entryPoints: [path.join(ROOT, entry)],
     outfile: out,

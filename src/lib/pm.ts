@@ -153,7 +153,7 @@ function buildPm(a) {
     response: pmResponse,
     test,
     expect: chaiExpect,
-    sendRequest: () => { throw new Error('pm.sendRequest is not supported in Reqnest scripts yet'); },
+    sendRequest: () => { throw new Error('pm.sendRequest is not supported in Cairn scripts yet'); },
   };
   const postman = {
     setEnvironmentVariable: (k, v) => env.set(k, v),

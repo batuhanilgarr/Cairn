@@ -48,7 +48,7 @@ fn quote_param(s: &str) -> String {
 
 /// Encode parts as multipart/form-data. Returns the body and the Content-Type header value.
 pub(crate) fn build_multipart(parts: &[MultipartPart]) -> Result<(Vec<u8>, String), String> {
-    let boundary = format!("----ReqnestBoundary{:032x}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0));
+    let boundary = format!("----CairnBoundary{:032x}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0));
     let mut out: Vec<u8> = Vec::new();
     for p in parts {
         out.extend_from_slice(format!("--{boundary}\r\n").as_bytes());
@@ -228,7 +228,7 @@ async fn oauth_listen(port: u16, timeout_secs: u64) -> Result<String, String> {
             }
             let ok = !query.split('&').any(|kv| kv.starts_with("error="));
             let page = format!(
-                "<!doctype html><meta charset=utf-8><title>Reqnest</title><body style=\"font:16px -apple-system,system-ui,sans-serif;display:grid;place-items:center;height:100vh;margin:0;background:#17171a;color:#ececf1\"><div style=\"text-align:center\"><div style=\"font-size:42px;color:#8b74ff\">&#9670;</div><h2>{}</h2><p style=\"color:#8e8e99\">You can close this tab and return to Reqnest.</p></div>",
+                "<!doctype html><meta charset=utf-8><title>Cairn</title><body style=\"font:16px -apple-system,system-ui,sans-serif;display:grid;place-items:center;height:100vh;margin:0;background:#17171a;color:#ececf1\"><div style=\"text-align:center\"><div style=\"font-size:42px;color:#8b74ff\">&#9670;</div><h2>{}</h2><p style=\"color:#8e8e99\">You can close this tab and return to Cairn.</p></div>",
                 if ok { "Signed in" } else { "Sign-in failed" }
             );
             let resp = format!("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", page.len(), page);
@@ -244,7 +244,7 @@ async fn oauth_listen(port: u16, timeout_secs: u64) -> Result<String, String> {
 pub(crate) fn build_client(spec: &RequestSpec, redirect: reqwest::redirect::Policy, streaming: bool) -> Result<reqwest::Client, String> {
     let n = &spec.network;
     let ua = if n.user_agent.trim().is_empty() {
-        concat!("Reqnest/", env!("CARGO_PKG_VERSION")).to_string()
+        concat!("Cairn/", env!("CARGO_PKG_VERSION")).to_string()
     } else {
         n.user_agent.clone()
     };
@@ -391,7 +391,7 @@ fn write_text(path: String, content: String) -> Result<(), String> {
     if let Some(parent) = p.parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
-    let tmp = p.with_extension("tmp-reqnest");
+    let tmp = p.with_extension("tmp-cairn");
     fs::write(&tmp, content).map_err(|e| format!("{path}: {e}"))?;
     fs::rename(&tmp, p).map_err(|e| format!("{path}: {e}"))
 }
@@ -442,9 +442,9 @@ fn build_menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::
         b.build(app)
     };
 
-    let app_menu = SubmenuBuilder::new(app, "Reqnest")
+    let app_menu = SubmenuBuilder::new(app, "Cairn")
         .about(Some(AboutMetadata {
-            name: Some("Reqnest".into()),
+            name: Some("Cairn".into()),
             version: Some(env!("CARGO_PKG_VERSION").into()),
             comments: Some("Local-first API client".into()),
             ..Default::default()
@@ -510,7 +510,7 @@ fn build_menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::
         .item(&item("shortcuts", "Keyboard Shortcuts", Some("CmdOrCtrl+/"))?)
         .separator()
         .item(&item("help-docs", "Documentation", None)?)
-        .item(&item("help-github", "Reqnest on GitHub", None)?)
+        .item(&item("help-github", "Cairn on GitHub", None)?)
         .item(&item("help-issue", "Report an Issue…", None)?)
         .build()?;
 
@@ -588,7 +588,7 @@ mod tests {
     use super::*;
 
     fn tmp(name: &str) -> String {
-        let d = std::env::temp_dir().join(format!("reqnest-test-{name}-{}", std::process::id()));
+        let d = std::env::temp_dir().join(format!("cairn-test-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&d);
         fs::create_dir_all(&d).unwrap();
         d.to_string_lossy().to_string()
@@ -600,7 +600,7 @@ mod tests {
         write_text(format!("{root}/b.req.yaml"), "name: b".into()).unwrap();
         write_text(format!("{root}/A.req.yaml"), "name: a".into()).unwrap();
         write_text(format!("{root}/notes.txt"), "x".into()).unwrap();
-        write_text(format!("{root}/.reqnest/secrets.yaml"), "x".into()).unwrap();
+        write_text(format!("{root}/.cairn/secrets.yaml"), "x".into()).unwrap();
         write_text(format!("{root}/users/get.req.yaml"), "name: g".into()).unwrap();
         let t = list_tree(root).unwrap();
         let names: Vec<_> = t.iter().map(|n| n.name.as_str()).collect();
@@ -615,7 +615,7 @@ mod tests {
         write_text(f.clone(), "1".into()).unwrap();
         write_text(f.clone(), "2".into()).unwrap();
         assert_eq!(read_text(f.clone()).unwrap().as_deref(), Some("2"));
-        assert!(!Path::new(&format!("{root}/x.req.tmp-reqnest")).exists());
+        assert!(!Path::new(&format!("{root}/x.req.tmp-cairn")).exists());
         write_text(format!("{root}/y.req.yaml"), "y".into()).unwrap();
         assert!(rename_path(f.clone(), format!("{root}/y.req.yaml")).is_err());
         remove_path(f.clone()).unwrap();
@@ -701,14 +701,14 @@ mod network_tests {
         let net = NetworkSettings {
             proxy_mode: "custom".into(),
             proxy_url: format!("http://127.0.0.1:{port}"),
-            user_agent: "ReqnestTest/9".into(),
+            user_agent: "CairnTest/9".into(),
             ..Default::default()
         };
         let res = send_request(spec("http://api.invalid/path?q=1", net)).await.unwrap();
         assert_eq!(res.body, "via-proxy");
         let head = seen.await.unwrap();
         assert!(head.starts_with("GET http://api.invalid/path?q=1 HTTP/1.1"), "got: {head}");
-        assert!(head.to_lowercase().contains("user-agent: reqnesttest/9"));
+        assert!(head.to_lowercase().contains("user-agent: cairntest/9"));
     }
 
     async fn serve_once(content_type: &str, body: Vec<u8>) -> u16 {
@@ -751,7 +751,7 @@ mod network_tests {
 
     #[test]
     fn save_bytes_writes_text_and_binary() {
-        let dir = std::env::temp_dir().join(format!("reqnest-save-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("cairn-save-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let t = dir.join("a.txt").to_string_lossy().to_string();
         save_bytes(t.clone(), None, Some("hi".into())).unwrap();
@@ -783,7 +783,7 @@ mod multipart_tests {
 
     #[test]
     fn multipart_encodes_text_and_file_parts() {
-        let dir = std::env::temp_dir().join(format!("reqnest-mp-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("cairn-mp-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let file = dir.join("report.txt");
         std::fs::write(&file, b"FILEDATA").unwrap();

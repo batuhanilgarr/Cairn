@@ -30,17 +30,17 @@ jobs:
           # APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: "Reqnest ${{ github.ref_name }}"
-          releaseBody: "Download **Reqnest-universal.dmg**, open it and drag Reqnest to Applications. This build is not signed with an Apple Developer ID, so macOS blocks the first launch: run `xattr -dr com.apple.quarantine /Applications/Reqnest.app` once, or open System Settings > Privacy & Security and choose **Open Anyway**."
+          releaseName: "Cairn ${{ github.ref_name }}"
+          releaseBody: "Download **Cairn-universal.dmg**, open it and drag Cairn to Applications. This build is not signed with an Apple Developer ID, so macOS blocks the first launch: run `xattr -dr com.apple.quarantine /Applications/Cairn.app` once, or open System Settings > Privacy & Security and choose **Open Anyway**."
           releaseDraft: false
           prerelease: false
           args: --target universal-apple-darwin
-      # The website links to releases/latest/download/Reqnest-universal.dmg, a name that does not change with the version.
+      # The website links to releases/latest/download/Cairn-universal.dmg, a name that does not change with the version.
       - name: Attach a stable-named DMG
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           dmg=$(find src-tauri/target -name '*.dmg' -path '*bundle/dmg*' | head -1)
           test -n "$dmg" || { echo "no .dmg found"; exit 1; }
-          cp "$dmg" Reqnest-universal.dmg
-          gh release upload "${{ github.ref_name }}" Reqnest-universal.dmg --clobber
+          cp "$dmg" Cairn-universal.dmg
+          gh release upload "${{ github.ref_name }}" Cairn-universal.dmg --clobber

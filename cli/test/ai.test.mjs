@@ -11,7 +11,7 @@ let A, U, server, base;
 const seen = [];
 
 before(async () => {
-  const out = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "reqnest-ai-")), "ai.mjs");
+  const out = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "cairn-ai-")), "ai.mjs");
   await build({
     entryPoints: [path.join(ROOT, "src/lib/ai.ts")],
     outfile: out,

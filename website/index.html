@@ -3,9 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Reqnest: the API client that lives in your repo</title>
+  <title>Cairn: the API client that lives in your repo</title>
   <meta name="description" content="A fast, local-first API client for macOS. REST, GraphQL, gRPC, WebSocket, SSE and MCP. Every request is a small file you commit to Git, Postman collections import with their scripts, and an AI assistant runs on your own model. No account, no cloud, no telemetry.">
-  <meta property="og:title" content="Reqnest: the API client that lives in your repo">
+  <meta property="og:title" content="Cairn: the API client that lives in your repo">
   <meta property="og:description" content="Local-first API client for REST, GraphQL, gRPC, WebSocket, SSE and MCP. Plain-file collections, Postman import, an AI assistant on your own model, a CI runner and a mock server built in.">
   <meta property="og:image" content="https://batuhanilgarr.github.io/Reqnest/assets/og.png">
   <meta name="twitter:card" content="summary_large_image">
@@ -15,7 +15,7 @@
 </head>
 <body>
 <header class="nav">
-  <a class="brand" href="#top" aria-label="Reqnest home"><img src="assets/logo.svg" alt="" width="26" height="26"><span>Reqnest</span></a>
+  <a class="brand" href="#top" aria-label="Cairn home"><img src="assets/logo.svg" alt="" width="26" height="26"><span>Cairn</span></a>
   <nav aria-label="Main">
     <a href="#files">Plain files</a>
     <a href="#postman">Postman</a>
@@ -24,7 +24,7 @@
     <a href="#compare">Compare</a>
     <a href="#faq">FAQ</a>
     <a href="https://github.com/batuhanilgarr/Reqnest" rel="noopener">GitHub</a>
-    <a class="btn small" href="https://github.com/batuhanilgarr/Reqnest/releases/latest/download/Reqnest-universal.dmg">Download</a>
+    <a class="btn small" href="https://github.com/batuhanilgarr/Reqnest/releases/latest/download/Cairn-universal.dmg">Download</a>
   </nav>
 </header>
 
@@ -33,9 +33,9 @@
     <div class="wrap hero-grid">
       <div class="hero-copy">
         <h1>Your API requests are files.</h1>
-        <p class="lead">Reqnest is a native Mac client for REST, GraphQL, gRPC, WebSocket, SSE and MCP. Each request is a small YAML file: review it in a pull request, run it in CI, keep it forever. Bring your Postman collections along, and ask your own AI model about any request. No account, no cloud, no telemetry.</p>
+        <p class="lead">Cairn is a native Mac client for REST, GraphQL, gRPC, WebSocket, SSE and MCP. Each request is a small YAML file: review it in a pull request, run it in CI, keep it forever. Bring your Postman collections along, and ask your own AI model about any request. No account, no cloud, no telemetry.</p>
         <div class="cta">
-          <a class="btn big" href="https://github.com/batuhanilgarr/Reqnest/releases/latest/download/Reqnest-universal.dmg">Download for macOS</a>
+          <a class="btn big" href="https://github.com/batuhanilgarr/Reqnest/releases/latest/download/Cairn-universal.dmg">Download for macOS</a>
           <a class="btn big ghost" href="https://github.com/batuhanilgarr/Reqnest" rel="noopener">View on GitHub</a>
         </div>
         <p class="fine">About 11 MB. macOS 11 or later, Apple silicon and Intel.</p>
@@ -88,9 +88,9 @@
       <div class="prose">
         <h2>Reviews that read like code reviews</h2>
         <p>Keys are always in the same order. There are no generated IDs and no sequence numbers. Bodies are literal blocks, so a changed JSON field is one changed line in the diff.</p>
-        <p>The collection is a folder. Open it in any editor, check it in, run it in CI with the CLI. If you stop using Reqnest tomorrow, you still have readable files.</p>
+        <p>The collection is a folder. Open it in any editor, check it in, run it in CI with the CLI. If you stop using Cairn tomorrow, you still have readable files.</p>
         <ul class="plain">
-          <li>Secrets live in <code>.reqnest/secrets.yaml</code>, which is git-ignored for you.</li>
+          <li>Secrets live in <code>.cairn/secrets.yaml</code>, which is git-ignored for you.</li>
           <li>Order comes from file names, never from file contents.</li>
           <li>Edits made outside the app are picked up when the window regains focus.</li>
         </ul>
@@ -119,7 +119,7 @@
     <div class="wrap diff-grid">
       <div class="prose">
         <h2>Bring your Postman collections with you</h2>
-        <p>In Postman, open Settings, Data, Export Data. In Reqnest, choose Import and pick that folder. Every collection, environment and your globals come across in one go.</p>
+        <p>In Postman, open Settings, Data, Export Data. In Cairn, choose Import and pick that folder. Every collection, environment and your globals come across in one go.</p>
         <ul class="plain">
           <li>Each collection becomes a folder. Its folders keep their own auth, variables and scripts.</li>
           <li>OAuth 2.0, API key, bearer and basic auth, form-data, file and GraphQL bodies, and saved example responses are carried over.</li>
@@ -128,7 +128,7 @@
         </ul>
         <p class="fine">Digest, AWS and NTLM auth and <code>pm.sendRequest</code> are not supported yet. The import lists everything it could not carry over.</p>
       </div>
-      <figure class="card" aria-label="The summary Reqnest shows after an import">
+      <figure class="card" aria-label="The summary Cairn shows after an import">
         <figcaption>Postman import finished</figcaption>
 <pre>3 collections (128 requests), each in its own folder.
 2 environments, 5 secret values kept out of Git.
@@ -141,7 +141,7 @@ on this Mac, so nothing secret gets committed.
 &#8226; Payments: digest auth isn&#8217;t supported yet,
   imported without auth
 &#8226; Admin: the script uses pm.sendRequest, which
-  isn&#8217;t available in Reqnest scripts</pre>
+  isn&#8217;t available in Cairn scripts</pre>
       </figure>
     </div>
   </section>
@@ -229,10 +229,10 @@ Last response: 401 Unauthorized in 84 ms
   <section id="compare" class="sec">
     <div class="wrap">
       <h2 class="left">How it compares</h2>
-      <p class="sub">A good API client is a great tool. Here is what Reqnest chooses to be.</p>
+      <p class="sub">A good API client is a great tool. Here is what Cairn chooses to be.</p>
       <div class="tablewrap">
         <table>
-          <thead><tr><th><span class="vh">Capability</span></th><th class="us">Reqnest</th><th>Cloud-first clients</th><th>File-based clients</th></tr></thead>
+          <thead><tr><th><span class="vh">Capability</span></th><th class="us">Cairn</th><th>Cloud-first clients</th><th>File-based clients</th></tr></thead>
           <tbody>
             <tr><th scope="row">Works without an account</th><td class="us">Yes</td><td>Varies</td><td>Yes</td></tr>
             <tr><th scope="row">Collections are plain, diff-friendly files</th><td class="us">Yes</td><td>Exports are JSON blobs</td><td>Yes</td></tr>
@@ -252,13 +252,13 @@ Last response: 401 Unauthorized in 84 ms
   <section id="download" class="sec dl">
     <div class="wrap dl-grid">
       <div>
-        <h2>Get Reqnest</h2>
+        <h2>Get Cairn</h2>
         <p class="sub left">macOS 11 or later. One universal build for Apple silicon and Intel.</p>
         <div class="cta left">
-          <a class="btn big" href="https://github.com/batuhanilgarr/Reqnest/releases/latest/download/Reqnest-universal.dmg">Download Reqnest.dmg</a>
+          <a class="btn big" href="https://github.com/batuhanilgarr/Reqnest/releases/latest/download/Cairn-universal.dmg">Download Cairn.dmg</a>
           <a class="btn big ghost" href="https://github.com/batuhanilgarr/Reqnest/releases" rel="noopener">All releases</a>
         </div>
-        <p class="fine">Open the DMG and drag Reqnest into Applications. Reqnest is not signed with an Apple Developer ID yet, so macOS blocks the first launch. Run <code>xattr -dr com.apple.quarantine /Applications/Reqnest.app</code> in Terminal once, or open System Settings, Privacy &amp; Security and choose Open Anyway.</p>
+        <p class="fine">Open the DMG and drag Cairn into Applications. Cairn is not signed with an Apple Developer ID yet, so macOS blocks the first launch. Run <code>xattr -dr com.apple.quarantine /Applications/Cairn.app</code> in Terminal once, or open System Settings, Privacy &amp; Security and choose Open Anyway.</p>
       </div>
       <div id="build" class="term-block">
         <button class="copy" type="button" data-copy="git clone https://github.com/batuhanilgarr/Reqnest.git &amp;&amp; cd Reqnest &amp;&amp; npm install &amp;&amp; npm run tauri build">Copy</button>
@@ -273,11 +273,11 @@ npm run tauri build</pre>
   <section id="faq" class="sec">
     <div class="wrap narrow">
       <h2 class="left">Questions</h2>
-      <details><summary>What does it cost?</summary><p>Pricing is announced on this page and in the releases. Your collections are plain files, so you are never locked in: they stay readable without Reqnest.</p></details>
+      <details><summary>What does it cost?</summary><p>Pricing is announced on this page and in the releases. Your collections are plain files, so you are never locked in: they stay readable without Cairn.</p></details>
       <details><summary>What does it send to your servers?</summary><p>Nothing. There is no account, no analytics and no telemetry. Requests go straight from your Mac to the API you are calling. The one other thing that can leave your Mac is a question you ask the AI assistant, and it goes only to the endpoint you configured.</p></details>
       <details><summary>How do I move over from Postman, Bruno or Insomnia?</summary><p>For Postman, export your data (Settings, Data, Export Data) and import that folder in one step: collections, environments, globals, auth and your scripts come across. For Bruno, import its folder; for OpenAPI, import the spec; and any curl command can be pasted straight into the URL bar.</p></details>
-      <details><summary>Where are my secrets stored?</summary><p>Variables marked as secret live in <code>.reqnest/secrets.yaml</code>, which Reqnest adds to <code>.gitignore</code>. Tokens fetched by OAuth stay in memory only.</p></details>
-      <details><summary>Does the AI assistant need an account or a subscription?</summary><p>No. You bring the model: Ollama running on your machine or server, or any OpenAI-compatible service you already use. Reqnest adds nothing in between. A token is optional, and credentials from your requests are hidden before a question is sent.</p></details>
+      <details><summary>Where are my secrets stored?</summary><p>Variables marked as secret live in <code>.cairn/secrets.yaml</code>, which Cairn adds to <code>.gitignore</code>. Tokens fetched by OAuth stay in memory only.</p></details>
+      <details><summary>Does the AI assistant need an account or a subscription?</summary><p>No. You bring the model: Ollama running on your machine or server, or any OpenAI-compatible service you already use. Cairn adds nothing in between. A token is optional, and credentials from your requests are hidden before a question is sent.</p></details>
       <details><summary>Windows and Linux?</summary><p>The app is built on Tauri, so other platforms are possible. Today it targets macOS. The CLI already runs anywhere Node 20 does.</p></details>
       <details><summary>Can scripts access my files?</summary><p>In the app, scripts run in an isolated sandbox with a time limit and cannot reach your files or secrets. The CLI runs them in a Node worker, so treat CLI scripts like the rest of your CI code.</p></details>
     </div>
@@ -286,7 +286,7 @@ npm run tauri build</pre>
 
 <footer>
   <div class="wrap foot">
-    <a class="brand" href="#top"><img src="assets/logo.svg" alt="" width="22" height="22"><span>Reqnest</span></a>
+    <a class="brand" href="#top"><img src="assets/logo.svg" alt="" width="22" height="22"><span>Cairn</span></a>
     <span class="spacer"></span>
     <a href="https://github.com/batuhanilgarr/Reqnest" rel="noopener">GitHub</a>
     <a href="https://github.com/batuhanilgarr/Reqnest/issues" rel="noopener">Issues</a>

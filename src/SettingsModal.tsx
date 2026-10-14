@@ -172,7 +172,7 @@ export function SettingsModal({ settings: s, onChange, section, onSection, onClo
               {row("CA certificate", "PEM file with extra trusted roots, e.g. a corporate CA.", pathField("caCert", "Not set", ["pem", "crt", "cer"]))}
               {row("Client certificate", "For mutual TLS. PEM certificate (and key, below).", pathField("clientCert", "Not set", ["pem", "crt", "cer"]))}
               {row("Client key", "PEM private key, if separate from the certificate.", pathField("clientKey", "Not set", ["pem", "key"]))}
-              {row("User agent", "Leave empty for the default.", <input className="cell" placeholder="Reqnest/0.2.5" value={s.userAgent} spellCheck={false} onChange={(e) => onChange({ userAgent: e.target.value })} />)}
+              {row("User agent", "Leave empty for the default.", <input className="cell" placeholder="Cairn/0.2.5" value={s.userAgent} spellCheck={false} onChange={(e) => onChange({ userAgent: e.target.value })} />)}
             </>
           )}
 
@@ -209,7 +209,7 @@ export function SettingsModal({ settings: s, onChange, section, onSection, onClo
           {section === "about" && (
             <div className="about">
               <div className="about-logo">◆</div>
-              <h2>Reqnest</h2>
+              <h2>Cairn</h2>
               <p className="muted">Version {version}</p>
               <p>Local-first API client. No account, no cloud, no telemetry.</p>
               <div className="row center-row">

@@ -268,39 +268,44 @@ export const requestPath = (dir: string, name: string) => uniquePath(dir, slug(n
 /* ------------------------------ collections ------------------------------ */
 
 export async function initCollection(root: string, name: string) {
-  await writeText(join(root, "reqnest.yaml"), stringify({ name }, YAML_OPTS));
-  // Secrets live in .reqnest/ which is git-ignored by default.
+  await writeText(join(root, "cairn.yaml"), stringify({ name }, YAML_OPTS));
+  // Secrets live in .cairn/ which is git-ignored by default.
   const gi = join(root, ".gitignore");
   const cur = (await readText(gi)) ?? "";
-  if (!/^\.reqnest\/?$/m.test(cur)) await writeText(gi, cur + (cur && !cur.endsWith("\n") ? "\n" : "") + ".reqnest/\n");
+  if (!/^\.cairn\/?$/m.test(cur)) await writeText(gi, cur + (cur && !cur.endsWith("\n") ? "\n" : "") + ".cairn/\n");
   await makeDir(join(root, "environments"));
 }
 
 export type CollectionMeta = { name: string; openapi?: { source: string } };
 
+/** The collection file is cairn.yaml; collections made before the rename have reqnest.yaml, which is still read. */
+async function readMetaText(root: string): Promise<string | null> {
+  return (await readText(join(root, "cairn.yaml"))) ?? (await readText(join(root, "reqnest.yaml")));
+}
+
 export async function readCollectionMeta(root: string): Promise<CollectionMeta | null> {
-  const t = await readText(join(root, "reqnest.yaml"));
+  const t = await readMetaText(root);
   if (t === null) return null;
   const d: any = parse(t) ?? {};
   return { name: String(d.name ?? basename(root)), openapi: d.openapi?.source ? { source: String(d.openapi.source) } : undefined };
 }
 
 export async function writeCollectionMeta(root: string, meta: CollectionMeta) {
-  await writeText(join(root, "reqnest.yaml"), stringify(meta, YAML_OPTS));
+  await writeText(join(root, "cairn.yaml"), stringify(meta, YAML_OPTS));
 }
 
 export async function readCollectionName(root: string): Promise<string | null> {
-  const t = await readText(join(root, "reqnest.yaml"));
+  const t = await readMetaText(root);
   if (t === null) return null;
   return String((parse(t) as any)?.name ?? basename(root));
 }
 
 /* ------------------------------ environments ----------------------------- */
 
-const secretsPath = (root: string) => join(root, ".reqnest", "secrets.yaml");
+const secretsPath = (root: string) => join(root, ".cairn", "secrets.yaml");
 
 async function readSecrets(root: string): Promise<Record<string, Record<string, string>>> {
-  const t = await readText(secretsPath(root));
+  const t = (await readText(secretsPath(root))) ?? (await readText(join(root, ".reqnest", "secrets.yaml")));
   return (t && (parse(t) as any)) || {};
 }
 

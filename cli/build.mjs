@@ -7,7 +7,7 @@ const shim = (f) => path.join(here, "shims", f);
 
 await build({
   entryPoints: [path.join(here, "src/main.ts")],
-  outfile: path.join(here, "dist/reqnest.mjs"),
+  outfile: path.join(here, "dist/cairn.mjs"),
   bundle: true,
   platform: "node",
   format: "esm",

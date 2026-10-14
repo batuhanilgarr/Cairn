@@ -268,8 +268,8 @@ export default function App() {
       if (!root) return;
       if ((await readCollectionName(root)) === null) {
         const ok = await confirmDialog(
-          "Not a Reqnest collection yet",
-          `"${basename(root)}" has no reqnest.yaml. Turn this folder into a collection? Existing files are left untouched.`,
+          "Not a Cairn collection yet",
+          `"${basename(root)}" has no cairn.yaml. Turn this folder into a collection? Existing files are left untouched.`,
         ).catch(() => false);
         if (!ok) return;
         await initCollection(root, basename(root));
@@ -1227,7 +1227,7 @@ export default function App() {
     <div className={`app ${sidebarOpen ? "" : "no-side"} ${aside ? "with-aside" : ""}`}>
       <aside className="sidebar">
         <div className="titlebar-drag" data-tauri-drag-region>
-          <span className="titlebar-brand"><Logo size={18} />Reqnest</span>
+          <span className="titlebar-brand"><Logo size={18} />Cairn</span>
           <button className="icon-btn" onClick={() => fire("toggle-sidebar")} title="Hide sidebar (⌘B)" aria-label="Hide sidebar"><IconSidebar /></button>
         </div>
         <div className="side-wrap">
@@ -1492,8 +1492,8 @@ export default function App() {
               hasCollection={!!collection}
               onCurl={() => fire("focus-url")}
               onSample={(k) => {
-                if (k === "get") patch({ url: "https://httpbin.org/get?hello=reqnest", method: "GET" });
-                else if (k === "post") patch({ url: "https://httpbin.org/post", method: "POST", bodyMode: "json", body: '{\n  "name": "Reqnest",\n  "message": "Hello"\n}' });
+                if (k === "get") patch({ url: "https://httpbin.org/get?hello=cairn", method: "GET" });
+                else if (k === "post") patch({ url: "https://httpbin.org/post", method: "POST", bodyMode: "json", body: '{\n  "name": "Cairn",\n  "message": "Hello"\n}' });
                 else patch({ kind: "graphql", url: "https://countries.trevorblades.com/graphql", gql: { query: "query {\n  country(code: \"TR\") {\n    name\n    capital\n    languages { name }\n  }\n}", variables: "", operation: "" } });
               }}
               onNewCollection={() => fire("new-collection")}

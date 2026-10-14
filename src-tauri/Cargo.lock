@@ -437,6 +437,44 @@ dependencies = [
 ]
 
 [[package]]
+name = "cairn"
+version = "0.2.5"
+dependencies = [
+ "base64 0.23.1",
+ "bytes",
+ "cookie_store",
+ "futures-util",
+ "http",
+ "http-body-util",
+ "hyper",
+ "hyper-rustls",
+ "hyper-util",
+ "prost",
+ "prost-reflect",
+ "prost-types",
+ "protox",
+ "reqwest",
+ "rustls",
+ "rustls-pemfile",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-dialog",
+ "tauri-plugin-opener",
+ "time",
+ "tokio",
+ "tokio-stream",
+ "tokio-tungstenite",
+ "tonic",
+ "tonic-reflection",
+ "tower",
+ "url",
+ "uuid",
+ "webpki-roots 1.0.9",
+]
+
+[[package]]
 name = "cairo-rs"
 version = "0.18.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3380,44 +3418,6 @@ name = "regex-syntax"
 version = "0.8.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
-
-[[package]]
-name = "reqnest"
-version = "0.2.5"
-dependencies = [
- "base64 0.23.1",
- "bytes",
- "cookie_store",
- "futures-util",
- "http",
- "http-body-util",
- "hyper",
- "hyper-rustls",
- "hyper-util",
- "prost",
- "prost-reflect",
- "prost-types",
- "protox",
- "reqwest",
- "rustls",
- "rustls-pemfile",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-dialog",
- "tauri-plugin-opener",
- "time",
- "tokio",
- "tokio-stream",
- "tokio-tungstenite",
- "tonic",
- "tonic-reflection",
- "tower",
- "url",
- "uuid",
- "webpki-roots 1.0.9",
-]
 
 [[package]]
 name = "reqwest"

@@ -11,14 +11,14 @@ import { junitXml, htmlReport, type Report, type ReqResult } from "./reporters";
 
 export const VERSION = "0.2.5";
 
-const HELP = `reqnest ${VERSION}: run Reqnest collections from the command line
+const HELP = `cairn ${VERSION}: run Cairn collections from the command line
 
 Usage
-  reqnest run <collection | folder | request.req.yaml> [options]
+  cairn run <collection | folder | request.req.yaml> [options]
 
 Options
   -e, --env <name>         Environment to use (by name or file name). Defaults to the only one, if there is only one
-      --var <key=value>    Set a variable (repeatable). Also: REQNEST_VAR_<name> environment variables, handy for CI secrets
+      --var <key=value>    Set a variable (repeatable). Also: CAIRN_VAR_<name> environment variables, handy for CI secrets
   -d, --data <file>        CSV or JSON rows: run the whole set once per row, row values become variables
   -n, --iterations <n>     Repeat the run n times
       --bail               Stop at the first failing request
@@ -104,7 +104,7 @@ export type RunOptions = {
 function findRoot(start: string): string {
   let dir = fs.statSync(start).isDirectory() ? start : path.dirname(start);
   for (let d = dir; ; d = path.dirname(d)) {
-    if (fs.existsSync(path.join(d, "reqnest.yaml"))) return d;
+    if (fs.existsSync(path.join(d, "cairn.yaml")) || fs.existsSync(path.join(d, "reqnest.yaml"))) return d;
     if (path.dirname(d) === d) return dir;
   }
 }
@@ -127,7 +127,7 @@ export async function runCollection(o: RunOptions): Promise<Report> {
   else if (envs.length > 1) o.onNote?.(`Several environments exist (${envs.map((e) => e.name).join(", ")}); none selected. Use --env.`);
 
   const base: Record<string, string> = {};
-  for (const [k, v] of Object.entries(process.env)) if (k.startsWith("REQNEST_VAR_") && v !== undefined) base[k.slice("REQNEST_VAR_".length)] = v;
+  for (const [k, v] of Object.entries(process.env)) if (k.startsWith("CAIRN_VAR_") && v !== undefined) base[k.slice("CAIRN_VAR_".length)] = v;
   Object.assign(base, o.vars ?? {});
 
   setNetwork({
@@ -236,8 +236,8 @@ async function main(argv: string[]): Promise<number> {
   if (values.version) return console.log(VERSION), 0;
   const [cmd, target] = positionals;
   if (values.help || !cmd) return console.log(HELP), cmd || values.help ? 0 : 2;
-  if (cmd !== "run") throw new UsageError(`Unknown command "${cmd}". Try: reqnest run <collection>`);
-  if (!target) throw new UsageError("Tell me what to run: reqnest run <collection | folder | request.req.yaml>");
+  if (cmd !== "run") throw new UsageError(`Unknown command "${cmd}". Try: cairn run <collection>`);
+  if (!target) throw new UsageError("Tell me what to run: cairn run <collection | folder | request.req.yaml>");
 
   const vars: Record<string, string> = {};
   for (const kv of values.var ?? []) {
@@ -279,7 +279,7 @@ async function main(argv: string[]): Promise<number> {
   return ok ? 0 : 1;
 }
 
-if (process.argv[1] && /reqnest(\.mjs)?$/.test(process.argv[1])) {
+if (process.argv[1] && /cairn(\.mjs)?$/.test(process.argv[1])) {
   main(process.argv.slice(2)).then(
     (code) => process.exit(code),
     (e) => {

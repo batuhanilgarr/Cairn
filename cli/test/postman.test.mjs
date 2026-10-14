@@ -9,7 +9,7 @@ const ROOT = path.resolve(import.meta.dirname, "../..");
 let P; // the Postman importer, bundled for Node
 
 before(async () => {
-  const out = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "reqnest-pm-")), "postman.mjs");
+  const out = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "cairn-pm-")), "postman.mjs");
   await build({
     entryPoints: [path.join(ROOT, "src/lib/postman.ts")],
     outfile: out,
@@ -128,7 +128,7 @@ test("a collection becomes a folder with its settings, requests, auth and script
 
   assert.ok(r.notes.some((n) => /sendRequest/.test(n)), "unsupported script APIs are called out");
   assert.ok(r.notes.some((n) => /digest auth/.test(n)));
-  assert.ok(r.notes.some((n) => /\$randomFirstName/.test(n)), "dynamic variables Reqnest doesn't generate are reported");
+  assert.ok(r.notes.some((n) => /\$randomFirstName/.test(n)), "dynamic variables Cairn doesn't generate are reported");
   assert.ok(r.notes.some((n) => /receipt/.test(n) && /file fields/.test(n)));
 });
 

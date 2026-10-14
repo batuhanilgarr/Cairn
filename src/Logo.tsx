@@ -1,4 +1,4 @@
-/** The Reqnest mark: nested diamonds. Follows the accent colour. */
+/** The Cairn mark: nested diamonds. Follows the accent colour. */
 export function Logo({ size = 20 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" className="logo-svg">

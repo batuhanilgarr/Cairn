@@ -1,10 +1,10 @@
 {
-  "name": "@reqnest/cli",
+  "name": "@cairnhq/cli",
   "version": "0.2.5",
-  "description": "Run Reqnest collections in CI: assertions, scripts, OAuth, JUnit/JSON/HTML reports",
+  "description": "Run Cairn collections in CI: assertions, scripts, OAuth, JUnit/JSON/HTML reports",
   "type": "module",
   "bin": {
-    "reqnest": "dist/reqnest.mjs"
+    "cairn": "dist/cairn.mjs"
   },
   "files": [
     "dist"

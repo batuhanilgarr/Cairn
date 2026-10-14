@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Reqnest",
+  "productName": "Cairn",
   "version": "0.2.5",
-  "identifier": "com.reqnest.app",
+  "identifier": "com.cairnhq.app",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Reqnest",
+        "title": "Cairn",
         "width": 1280,
         "height": 820,
         "minWidth": 760,
@@ -44,8 +44,8 @@
     ],
     "category": "DeveloperTool",
     "shortDescription": "Local-first API client",
-    "longDescription": "Reqnest is a local-first API client for REST, GraphQL, gRPC, WebSocket and SSE. Collections are plain files you can commit to Git. No account, no cloud, no telemetry.",
-    "copyright": "Copyright \u00a9 2026 Reqnest contributors",
+    "longDescription": "Cairn is a local-first API client for REST, GraphQL, gRPC, WebSocket and SSE. Collections are plain files you can commit to Git. No account, no cloud, no telemetry.",
+    "copyright": "Copyright \u00a9 2026 Cairn contributors",
     "macOS": {
       "minimumSystemVersion": "11.0",
       "dmg": {
