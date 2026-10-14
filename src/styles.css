@@ -759,3 +759,27 @@ pre.block { white-space: pre-wrap; word-break: break-word; margin: 0; background
 .popmenu { max-height: 60vh; overflow: auto; }
 .tabbar .popmenu { right: auto; left: 0; min-width: 260px; }
 .env-pick { flex: none; }
+
+/* virtualised tree: each row sits at its index times the row height */
+.tree { position: relative; }
+.tree-slot { position: absolute; left: 0; right: 0; height: 28px; }
+.tree-slot > .tree-row { height: 28px; margin: 0 6px; }
+
+/* ---- big response viewer (virtual lines, body held in Rust) ---- */
+.big-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.big-find { display: flex; align-items: center; gap: 6px; padding: 4px 0 6px; min-width: 0; }
+.big-q { flex: 1; min-width: 0; }
+.big-count { white-space: nowrap; min-width: 8ch; text-align: right; }
+.big-find .btn.on { background: var(--hover); border-color: var(--accent); }
+.big-scroll { flex: 1; min-height: 0; overflow: auto; position: relative; font-family: var(--mono); font-size: 12px; line-height: 19px; border-top: 1px solid var(--border); }
+.big-spacer { position: relative; min-width: 100%; }
+.big-stick { position: sticky; top: 0; overflow-y: clip; }
+.big-line { white-space: pre; display: flex; }
+.big-line.cur { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.big-ln { position: sticky; left: 0; flex: none; text-align: right; padding: 0 10px 0 12px; box-sizing: content-box; color: var(--muted); background: var(--bg); user-select: none; }
+.big-tx { padding-right: 16px; }
+.big-tx .j-k { color: var(--j-key); }
+.big-tx .j-s { color: var(--j-str); }
+.big-tx .j-n { color: var(--j-num); }
+.big-tx .j-b { color: var(--j-bool); }
+.big-tx mark { background: color-mix(in srgb, var(--warn) 45%, transparent); color: inherit; border-radius: 2px; }

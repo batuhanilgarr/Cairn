@@ -12,7 +12,7 @@ export type HistEntry = { n: number; at: number; response: ResponseData };
 
 const when = (t: number) => new Date(t).toTimeString().slice(0, 8);
 const label = (h: HistEntry) => `${when(h.at)} · ${h.response.status} · ${h.response.timeMs} ms · ${h.response.sizeBytes} B`;
-const bodyOf = (r: ResponseData) => (r.bodyBase64 ? `(binary, ${r.sizeBytes} bytes)` : (tryPrettyJson(r.body) ?? r.body));
+const bodyOf = (r: ResponseData) => (r.bodyBase64 ? `(binary, ${r.sizeBytes} bytes)` : r.bodyId != null ? `(large response, ${r.sizeBytes} bytes, not compared)` : (tryPrettyJson(r.body) ?? r.body));
 const headersOf = (r: ResponseData) => r.headers.map(([k, v]) => `${k}: ${v}`).sort().join("\n");
 
 /** Side-by-side diff of two responses of the same request: body or headers, unchanged regions folded. */

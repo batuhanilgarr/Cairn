@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+pub mod bigbody;
 pub mod cookies;
 pub mod grpc;
 pub mod mcp;
@@ -99,6 +100,8 @@ pub struct ResponseData {
     pub body: String,
     /// Set instead of `body` for binary responses (images, PDFs, archives, anything that isn't valid UTF-8).
     pub body_base64: Option<String>,
+    /// Set instead of `body` for big text responses: the body stays in Rust (see bigbody.rs).
+    pub body_id: Option<u64>,
     pub content_type: String,
     pub size_bytes: usize,
     pub time_ms: u128,
@@ -177,11 +180,14 @@ async fn send_request(spec: RequestSpec) -> Result<ResponseData, String> {
     let time_ms = started.elapsed().as_millis();
 
     let binary = !bytes.is_empty() && is_binary(&content_type, &bytes);
-    let (body, body_base64) = if binary {
+    let (body, body_base64, body_id) = if binary {
         use base64::Engine;
-        (String::new(), Some(base64::engine::general_purpose::STANDARD.encode(&bytes)))
+        (String::new(), Some(base64::engine::general_purpose::STANDARD.encode(&bytes)), None)
+    } else if bytes.len() >= bigbody::BIG_BODY_BYTES {
+        // big text stays here; the UI asks for the lines it shows
+        (String::new(), None, Some(bigbody::store(bytes.to_vec())))
     } else {
-        (String::from_utf8_lossy(&bytes).to_string(), None)
+        (String::from_utf8_lossy(&bytes).to_string(), None, None)
     };
 
     Ok(ResponseData {
@@ -191,6 +197,7 @@ async fn send_request(spec: RequestSpec) -> Result<ResponseData, String> {
         size_bytes: bytes.len(),
         body,
         body_base64,
+        body_id,
         content_type,
         time_ms,
         ttfb_ms,
@@ -536,6 +543,12 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             send_request,
+            bigbody::body_prepare,
+            bigbody::body_lines,
+            bigbody::body_search,
+            bigbody::body_save,
+            bigbody::body_text,
+            bigbody::body_release,
             streams::sse_connect,
             streams::ws_connect,
             streams::ws_send,

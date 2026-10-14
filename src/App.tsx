@@ -35,6 +35,8 @@ import { Welcome } from "./Welcome";
 import { Logo } from "./Logo";
 import { buildRoutes, mockStart, mockStop, type MockHit } from "./lib/mock";
 import { BinaryView, suggestFileName } from "./BinaryView";
+import { BigBodyView, bigFind } from "./BigBodyView";
+import { bodyText } from "./lib/bigbody";
 import { parseSetCookie } from "./lib/cookies";
 import { GrpcPanel, type GrpcSchema } from "./GrpcPanel";
 import { McpPanel } from "./McpPanel";
@@ -137,7 +139,7 @@ export default function App() {
   const [side, setSide] = useState<SideSection>(() => load("rq.side", "collections"));
   const [collection, setCollection] = useState<Collection | null>(() => load("rq.collection", null));
   const [tree, setTree] = useState<TreeNode[]>([]);
-  const [labels, setLabel] = useRequestLabels(tree);
+  const [labels, ensureLabels, setLabel] = useRequestLabels();
   const [selectedDir, setSelectedDir] = useState<string>(() => load<Collection | null>("rq.collection", null)?.root ?? "");
   const [dialog, setDialog] = useState<DialogState | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -887,10 +889,10 @@ export default function App() {
       patch({
         examples: [
           ...active.examples,
-          { id: uid(), name, status: response.status, headers: [...headers, emptyKV()], body: response.bodyBase64 ? "" : (resBody?.pretty ?? response.body), delayMs: 0 },
+          { id: uid(), name, status: response.status, headers: [...headers, emptyKV()], body: response.bodyBase64 || response.bodyId != null ? "" : (resBody?.pretty ?? response.body), delayMs: 0 },
         ],
       });
-      flash(response.bodyBase64 ? "Saved (binary bodies aren't stored, only status and headers)" : "Saved as example", 2600);
+      flash(response.bodyBase64 || response.bodyId != null ? "Saved (large and binary bodies aren't stored, only status and headers)" : "Saved as example", 2600);
     });
 
   const send = useCallback(async () => {
@@ -924,7 +926,7 @@ export default function App() {
       setResponses((r) => ({ ...r, [tab.id]: out.response ?? { error: out.error ?? "Request failed" } }));
       setViewing((v) => ({ ...v, [tab.id]: null }));
       if (out.response) {
-        const saved = out.response.sizeBytes > 2_000_000 ? { ...out.response, body: "(too large to keep in history)", bodyBase64: null } : out.response;
+        const saved = out.response.sizeBytes > 2_000_000 ? { ...out.response, body: "(too large to keep in history)", bodyBase64: null, bodyId: null } : out.response;
         setRespHist((h) => ({ ...h, [tab.id]: [...(h[tab.id] ?? []), { n: ++entryN.current, at: Date.now(), response: saved }].slice(-20) }));
       }
       setRuns((r) => ({ ...r, [tab.id]: out.run }));
@@ -1065,6 +1067,7 @@ export default function App() {
       urlView.current?.dispatch({ selection: { anchor: 0, head: urlView.current.state.doc.length } });
     },
     "find-in-response": () => {
+      if (bigFind.focus) return bigFind.focus();
       const v = resView.current;
       if (!v) return;
       v.focus();
@@ -1115,7 +1118,7 @@ export default function App() {
         return fire("ai");
       }
       // ⌘F inside an editor is that editor's own search; anywhere else it searches the response body.
-      if (e.key.toLowerCase() === "f" && !e.shiftKey && resView.current && !(e.target as HTMLElement | null)?.closest?.(".cm-editor")) {
+      if (e.key.toLowerCase() === "f" && !e.shiftKey && (resView.current || bigFind.focus) && !(e.target as HTMLElement | null)?.closest?.(".cm-editor")) {
         e.preventDefault();
         return fire("find-in-response");
       }
@@ -1201,7 +1204,7 @@ export default function App() {
   const resLang: Lang = useMemo(() => {
     if (!response || "error" in response) return "text";
     const ct = (response.headers.find(([k]) => k.toLowerCase() === "content-type")?.[1] ?? "").toLowerCase();
-    if (ct.includes("json") || /^\s*[[{]/.test(response.body.slice(0, 20))) return "json";
+    if (ct.includes("json") || (response.bodyId == null && /^\s*[[{]/.test(response.body.slice(0, 20)))) return "json";
     if (ct.includes("html")) return "html";
     if (ct.includes("xml") || /^\s*<\?xml/.test(response.body.slice(0, 40))) return "xml";
     if (ct.includes("javascript")) return "js";
@@ -1215,6 +1218,7 @@ export default function App() {
 
   const resBody = useMemo(() => {
     if (!response || "error" in response) return null;
+    if (response.bodyId != null) return { pretty: null, text: "" };
     const pretty = resLang === "xml" ? tryPrettyXml(response.body) : tryPrettyJson(response.body);
     return { pretty, text: response.body };
   }, [response, resLang]);
@@ -1275,6 +1279,7 @@ export default function App() {
                     selectedDir={selectedDir}
                     dirty={dirtyFiles}
                     labels={labels}
+                    onVisible={ensureLabels}
                     onOpen={openFile}
                     onSelectDir={setSelectedDir}
                     onRun={(dir) => runFolder(dir, `Run ${basename(dir)}`)}
@@ -1780,16 +1785,18 @@ export default function App() {
                       <input type="checkbox" checked={rawView} onChange={(e) => setRawView(e.target.checked)} /> Raw
                     </label>
                   )}
-                  <label className="check">
-                    <input type="checkbox" checked={wrapRes} onChange={(e) => setWrapRes(e.target.checked)} /> Wrap
-                  </label>
+                  {response.bodyId == null && (
+                    <label className="check">
+                      <input type="checkbox" checked={wrapRes} onChange={(e) => setWrapRes(e.target.checked)} /> Wrap
+                    </label>
+                  )}
                   {!response.bodyBase64 && (
                     <button className="btn small" onClick={() => fire("find-in-response")} title="Search the response (⌘F)">
                       Search
                     </button>
                   )}
                   {!response.bodyBase64 && (
-                    <button className="btn small" onClick={() => navigator.clipboard.writeText(resBody.pretty ?? resBody.text)}>
+                    <button className="btn small" onClick={() => guard(async () => navigator.clipboard.writeText(response.bodyId != null ? await bodyText(response.bodyId) : (resBody.pretty ?? resBody.text)))}>
                       Copy
                     </button>
                   )}
@@ -1798,7 +1805,7 @@ export default function App() {
                     onClick={() =>
                       guard(async () => {
                         const name = suggestFileName(active.url, response.headers, response.contentType ?? "");
-                        const path = await saveResponse(name, { base64: response.bodyBase64, text: resBody.text });
+                        const path = await saveResponse(name, { base64: response.bodyBase64, text: resBody.text, bodyId: response.bodyId });
                         if (path) flash(`Saved to ${path.split("/").pop()}`);
                       })
                     }
@@ -1813,6 +1820,8 @@ export default function App() {
                 </div>
                 {response.bodyBase64 ? (
                   <div className="editor-slot scroll"><BinaryView base64={response.bodyBase64} contentType={response.contentType ?? ""} size={response.sizeBytes} /></div>
+                ) : response.bodyId != null ? (
+                  <div className="editor-slot"><BigBodyView key={response.bodyId} id={response.bodyId} json={resLang === "json"} /></div>
                 ) : (
                 <div className="editor-slot">
                   <CodeEditor

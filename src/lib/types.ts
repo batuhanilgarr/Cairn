@@ -100,6 +100,8 @@ export type ResponseData = {
   body: string;
   /** Present instead of `body` for binary responses. */
   bodyBase64?: string | null;
+  /** Set instead of `body` for big text responses, which stay in Rust (see lib/bigbody.ts). */
+  bodyId?: number | null;
   contentType?: string;
   sizeBytes: number;
   timeMs: number;

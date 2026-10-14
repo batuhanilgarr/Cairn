@@ -1,4 +1,5 @@
 import { sendRaw } from "./net";
+import { bodyText } from "./bigbody";
 import type { Environment, KV, OAuthConfig, RequestTab, ResponseData, RunOutput, TestResult } from "./types";
 import { buildRequest, emptyKV, interpolate } from "./util";
 import { runAssertions, runCaptures } from "./assert";
@@ -152,16 +153,26 @@ export async function executeRequest(rawTab: RequestTab, deps: Deps): Promise<Ou
     return { error: String(e), run, sent: spec };
   }
 
+  // A big body stays in Rust; only fetch it into the page when something has to read it.
+  let seen = response;
+  if (response.bodyId != null && (tab.captures.length || tab.assertions.length || post.length)) {
+    try {
+      seen = { ...response, body: await bodyText(response.bodyId), bodyId: null };
+    } catch (e) {
+      run.logs.push(`Couldn't load the large response for scripts and tests: ${String(e)}`);
+    }
+  }
+
   // captures, assertions, post-response scripts
-  const cap = runCaptures(tab.captures, response);
+  const cap = runCaptures(tab.captures, seen);
   setVars(cap.values);
   for (const v of cap.missed) run.logs.push(`capture: nothing found for "${v}"`);
-  run.tests.push(...runAssertions(tab.assertions, response, (t) => interpolate(t, eff())));
+  run.tests.push(...runAssertions(tab.assertions, seen, (t) => interpolate(t, eff())));
 
   for (const code of post) {
     const r = await runScript(code, {
       req: { method: spec.method, url: spec.url, headers: spec.headers, body: spec.body },
-      res: response,
+      res: seen,
       vars: varsOf(eff()),
     });
     run.logs.push(...r.logs);

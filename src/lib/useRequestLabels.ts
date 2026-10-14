@@ -1,6 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { readText } from "./fs";
-import type { TreeNode } from "./types";
 
 const KIND_LABEL: Record<string, string> = { graphql: "GQL", ws: "WS", sse: "SSE", grpc: "gRPC", mcp: "MCP" };
 
@@ -11,39 +10,54 @@ export function labelOf(yaml: string): string {
   return (yaml.match(/^method:\s*([A-Za-z]+)/m)?.[1] ?? "GET").toUpperCase();
 }
 
-const filesOf = (nodes: TreeNode[]): string[] => nodes.flatMap((n) => (n.isDir ? filesOf(n.children) : [n.path]));
+const BATCH = 24;
 
 /**
- * The method label of every request in the tree, read in the background in small batches so a big collection
- * doesn't stall the sidebar. `set` lets the app update a label right away when a request is edited or saved.
+ * Method labels for request files, read on demand. The tree asks for the rows that are on screen, so a
+ * collection with thousands of requests reads a few dozen files, not all of them. The most recently asked-for
+ * rows are read first (the user has scrolled on). `set` updates a label at once when a request is edited.
  */
-export function useRequestLabels(tree: TreeNode[]): [Record<string, string>, (path: string, label: string) => void] {
+export function useRequestLabels(): [Record<string, string>, (paths: string[]) => void, (path: string, label: string) => void] {
   const [labels, setLabels] = useState<Record<string, string>>({});
   const seen = useRef(new Set<string>());
+  const queue = useRef<string[]>([]);
+  const running = useRef(false);
 
-  useEffect(() => {
-    let live = true;
-    const todo = filesOf(tree).filter((p) => !seen.current.has(p));
-    todo.forEach((p) => seen.current.add(p));
-    (async () => {
-      for (let i = 0; i < todo.length && live; i += 24) {
-        const batch = todo.slice(i, i + 24);
+  const pump = useCallback(async () => {
+    if (running.current) return;
+    running.current = true;
+    try {
+      while (queue.current.length) {
+        const batch = queue.current.splice(0, BATCH);
         const texts = await Promise.all(batch.map((p) => readText(p).catch(() => null)));
-        if (!live) return;
         setLabels((cur) => {
           const next = { ...cur };
-          batch.forEach((p, j) => {
-            if (texts[j] !== null) next[p] = labelOf(texts[j]!);
+          batch.forEach((p, i) => {
+            if (texts[i] !== null) next[p] = labelOf(texts[i]!);
           });
           return next;
         });
       }
-    })();
-    return () => {
-      live = false;
-    };
-  }, [tree]);
+    } finally {
+      running.current = false;
+    }
+  }, []);
 
-  const set = (path: string, label: string) => setLabels((cur) => (cur[path] === label ? cur : { ...cur, [path]: label }));
-  return [labels, set];
+  const ensure = useCallback(
+    (paths: string[]) => {
+      const fresh = paths.filter((p) => !seen.current.has(p));
+      if (!fresh.length) return;
+      fresh.forEach((p) => seen.current.add(p));
+      queue.current = [...fresh, ...queue.current];
+      void pump();
+    },
+    [pump],
+  );
+
+  const set = useCallback((path: string, label: string) => {
+    seen.current.add(path);
+    setLabels((cur) => (cur[path] === label ? cur : { ...cur, [path]: label }));
+  }, []);
+
+  return [labels, ensure, set];
 }

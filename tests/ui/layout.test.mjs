@@ -36,10 +36,10 @@ const STATES = [
 ];
 
 /** What the app would get from Tauri: a small collection and canned responses. The response is deliberately a worst case (120 headers, 12 cookies, 1 GB, two minutes) so that wide numbers can't break the header. Runs before the app loads. */
-const stubSource = ({ sidebar, aside }) => `
+const stubSource = ({ sidebar, aside, bigTree = 0, bigBody = 0 }) => `
 (() => {
   const req = (n, m) => 'name: ' + n + '\\nmethod: ' + m + '\\nurl: https://api.example.com/' + n + '\\n';
-  const files = {
+  let files = {
     '/demo/auth/login.req.yaml': req('login', 'POST'),
     '/demo/invoices/list-invoices.req.yaml': req('list-invoices', 'GET'),
     '/demo/invoices/create-invoice.req.yaml': req('create-invoice', 'POST'),
@@ -47,14 +47,39 @@ const stubSource = ({ sidebar, aside }) => `
   };
   const f = (p) => ({ name: p.split('/').pop(), path: p, isDir: false, children: [] });
   const d = (p, c) => ({ name: p.split('/').pop(), path: p, isDir: true, children: c });
-  const tree = [d('/demo/auth', [f('/demo/auth/login.req.yaml')]), d('/demo/invoices', Object.keys(files).filter((k) => k.includes('invoices/')).map(f))];
-  localStorage.setItem('rq.collection', JSON.stringify({ root: '/demo', name: 'Payments API' }));
+  let tree = [d('/demo/auth', [f('/demo/auth/login.req.yaml')]), d('/demo/invoices', Object.keys(files).filter((k) => k.includes('invoices/')).map(f))];
+  const BIG = ${bigTree};
+  const BODY_LINES = ${bigBody};
+  if (BIG > 0) {
+    files = {};
+    tree = [];
+    for (let k = 0; k < 20; k++) {
+      const kids = [];
+      for (let i = 0; i < BIG / 20; i++) {
+        const p = '/big/f' + k + '/r' + i + '.req.yaml';
+        files[p] = req('r' + i, i % 2 ? 'GET' : 'POST');
+        kids.push(f(p));
+      }
+      tree.push(d('/big/f' + k, kids));
+    }
+  }
+  localStorage.setItem('rq.collection', JSON.stringify(BIG > 0 ? { root: '/big', name: 'Big' } : { root: '/demo', name: 'Payments API' }));
   localStorage.setItem('rq.sidebar', ${JSON.stringify(JSON.stringify(sidebar))});
   localStorage.setItem('rq.aside', ${JSON.stringify(JSON.stringify(aside))});
   window.__TAURI_EVENT_PLUGIN_INTERNALS__ = { unregisterListener() {} };
   window.__TAURI_INTERNALS__ = {
     transformCallback: () => 1,
     invoke: async (cmd, a) => {
+      if (BODY_LINES > 0) {
+        const lineOf = (n) => n === 0 ? '[' : n === BODY_LINES - 1 ? ']' : ['  {', '    "id": "inv_' + Math.floor((n - 1) / 4) + '",', '    "tag": "Alpha"', '  },'][(n - 1) % 4];
+        if (cmd === 'send_request') return { status: 200, statusText: 'OK', headers: [['content-type', 'application/json']], body: '', bodyBase64: null, bodyId: 7, contentType: 'application/json', sizeBytes: BODY_LINES * 22, timeMs: 640, ttfbMs: 80, httpVersion: 'HTTP/1.1' };
+        if (cmd === 'body_prepare') return { lines: BODY_LINES, bytes: BODY_LINES * 22, pretty: true };
+        if (cmd === 'body_lines') return Array.from({ length: Math.max(0, Math.min(a.count, BODY_LINES - a.start)) }, (_, i) => lineOf(a.start + i));
+        if (cmd === 'body_search') {
+          const hits = []; for (let n = 3; n < BODY_LINES - 1; n += 4) hits.push(n);
+          return { total: a.query.toLowerCase() === 'alpha' ? hits.length : 0, capped: false, lines: a.query.toLowerCase() === 'alpha' ? hits : [] };
+        }
+      }
       if (cmd === 'send_request') {
         const body = JSON.stringify({ data: Array.from({ length: 6 }, (_, i) => ({ id: 'inv_' + i, amount: 12900 + i })) });
         return { status: 200, statusText: 'OK', headers: [['content-type', 'application/json'], ...Array.from({ length: 12 }, (_, i) => ['set-cookie', 'sid' + i + '=abc; Path=/; HttpOnly']), ...Array.from({ length: 108 }, (_, i) => ['x-trace-' + i, 'v' + i])], body, bodyBase64: null, contentType: 'application/json', sizeBytes: 1000000000, timeMs: 123456, ttfbMs: 98765, httpVersion: 'HTTP/1.1' };
@@ -93,9 +118,9 @@ after(async () => {
 });
 
 /** Open the app in a fresh browser context. `fail()` saves a screenshot next to the failing assertion. */
-async function open({ width, height = 800, theme = "dark", sidebar = true, aside = null }, label) {
+async function open({ width, height = 800, theme = "dark", sidebar = true, aside = null, bigTree = 0, bigBody = 0 }, label) {
   const context = await browser.newContext({ viewport: { width, height }, colorScheme: theme });
-  await context.addInitScript(stubSource({ sidebar, aside }));
+  await context.addInitScript(stubSource({ sidebar, aside, bigTree, bigBody }));
   const page = await context.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(String(e)));
@@ -338,6 +363,141 @@ for (const width of [760, 1000]) {
       await check(async () => {
         assert.ok(s.l >= 0 && s.r <= s.vw + 1 && s.t >= -1 && s.b <= s.vh + 1, `Settings does not fit: ${JSON.stringify(s)}`);
         if (p) assert.ok(p.l >= 0 && p.r <= p.vw + 1, `the command palette does not fit: ${JSON.stringify(p)}`);
+      });
+    } finally {
+      await context.close();
+    }
+  });
+}
+
+test("a 10,000-request collection renders only what is on screen and stays correct", async () => {
+  const { page, context, errors, check } = await open({ width: 1360, bigTree: 10000 }, "10k collection");
+  try {
+    await page.waitForSelector(".tree-row");
+    const rows = () => page.locator(".tree-row").count();
+    const treeHeight = () => page.evaluate(() => document.querySelector(".tree").getBoundingClientRect().height);
+    const first = await rows();
+    const total = await treeHeight();
+    // scroll to the very end: the last rows must exist, sit at the bottom, and get their method labels
+    await page.evaluate(() => { document.querySelector(".side-body").scrollTop = 1e9; });
+    await page.waitForFunction(() => [...document.querySelectorAll(".tree-row")].some((r) => r.textContent.includes("r499")));
+    await page.waitForFunction(() => [...document.querySelectorAll(".tree-row")].some((r) => r.textContent.includes("r499") && !r.querySelector(".m-none")));
+    const atEnd = await page.evaluate(() => {
+      const scroller = document.querySelector(".side-body");
+      const last = [...document.querySelectorAll(".tree-row")].filter((r) => r.textContent.includes("r499")).pop();
+      const lr = last.getBoundingClientRect();
+      const sr = scroller.getBoundingClientRect();
+      return { lastVisible: lr.top >= sr.top - 1 && lr.bottom <= sr.bottom + 1, method: last.querySelector(".tree-method").textContent, count: document.querySelectorAll(".tree-row").length };
+    });
+    // collapse and expand the first folder
+    await page.evaluate(() => { document.querySelector(".side-body").scrollTop = 0; });
+    await page.waitForFunction(() => [...document.querySelectorAll(".tree-row")].some((r) => r.textContent.trim().startsWith("f0")));
+    await page.locator(".tree-row", { hasText: "f0" }).first().locator(".tree-label").click();
+    await page.waitForTimeout(200);
+    const collapsed = await treeHeight();
+    await page.locator(".tree-row", { hasText: "f0" }).first().locator(".tree-label").click();
+    await page.waitForTimeout(200);
+    const expanded = await treeHeight();
+    // clicking a request opens it in a tab
+    await page.locator(".tree-row", { hasText: "r3" }).first().locator(".tree-label").click();
+    await page.waitForTimeout(400);
+    const tabTitle = await page.evaluate(() => document.querySelector(".tab.on .tab-title")?.textContent);
+    await check(async () => {
+      assert.deepEqual(errors, [], "the page threw errors");
+      assert.ok(first < 120, `${first} rows are in the DOM at the start (only the window around the viewport should be)`);
+      assert.equal(total, 10020 * 28, "the scroll height must still stand for every row");
+      assert.ok(atEnd.count < 120, `${atEnd.count} rows are in the DOM after scrolling`);
+      assert.ok(atEnd.lastVisible, "the last request is not reachable at the end of the list");
+      assert.ok(["GET", "POST"].includes(atEnd.method), `the last row has no method label (got "${atEnd.method}")`);
+      assert.equal(collapsed, (10020 - 500) * 28, "collapsing a folder should remove its 500 rows");
+      assert.equal(expanded, 10020 * 28, "expanding it again should bring them back");
+      assert.equal(tabTitle, "r3", "clicking a request should open it");
+    });
+  } finally {
+    await context.close();
+  }
+});
+
+test("a 3-million-line response shows only what is on screen, scrolls the whole way and searches", async () => {
+  const LINES = 3_000_000;
+  const { page, context, errors, check } = await open({ width: 1360, bigBody: LINES }, "big response");
+  try {
+    await page.click(".url-cell");
+    await page.keyboard.type("https://api.example.com/v1/huge");
+    await page.click(".urlbar > .btn.primary");
+    await page.waitForSelector(".big-line");
+    const dom = () => page.locator(".big-line").count();
+    const startRows = await dom();
+    const label = await page.locator(".big-count").textContent();
+    // jump to the very end: the last line must be the closing bracket
+    await page.evaluate(() => { document.querySelector(".big-scroll").scrollTop = 1e12; });
+    await page.waitForFunction(() => [...document.querySelectorAll(".big-line")].some((l) => l.querySelector(".big-ln").textContent === "3000000"));
+    const end = await page.evaluate(() => {
+      const scroller = document.querySelector(".big-scroll").getBoundingClientRect();
+      const last = [...document.querySelectorAll(".big-line")].find((l) => l.querySelector(".big-ln").textContent === "3000000");
+      const r = last.getBoundingClientRect();
+      return { text: last.querySelector(".big-tx").textContent.trim(), inside: r.bottom <= scroller.bottom + 1 && r.top >= scroller.top - 1, rows: document.querySelectorAll(".big-line").length, spacer: document.querySelector(".big-spacer").getBoundingClientRect().height };
+    });
+    // searching jumps to the first match and counts them all
+    await page.evaluate(() => { document.querySelector(".big-scroll").scrollTop = 0; });
+    await page.locator(".big-q").fill("alpha");
+    await page.waitForFunction(() => document.querySelector(".big-count").textContent.startsWith("1 of"));
+    const found = await page.locator(".big-count").textContent();
+    fs.mkdirSync(SHOTS, { recursive: true });
+    await page.screenshot({ path: path.join(SHOTS, "big-response.png") });
+    const marked = await page.locator(".big-line mark").count();
+    await page.locator(".big-q").press("Enter");
+    await page.waitForFunction(() => document.querySelector(".big-count").textContent.startsWith("2 of"));
+    await page.locator(".big-q").fill("zzz-nothing");
+    await page.waitForFunction(() => document.querySelector(".big-count").textContent === "No matches");
+    await check(async () => {
+      assert.deepEqual(errors, [], "the page threw errors");
+      assert.ok(startRows < 80, `${startRows} lines are in the DOM (only the window around the viewport should be)`);
+      assert.match(label, /3,000,000 lines/);
+      assert.equal(end.text, "]");
+      assert.ok(end.inside, "the last line is not fully visible at the end of the scroll");
+      assert.ok(end.rows < 80, `${end.rows} lines are in the DOM at the end`);
+      assert.ok(end.spacer <= 8_000_000 + 1, `the scroll height (${end.spacer}px) is beyond what browsers can draw`);
+      assert.match(found, /^1 of 749,999/);
+      assert.ok(marked > 0, "matches are not highlighted");
+    });
+  } finally {
+    await context.close();
+  }
+});
+
+for (const width of [760, 1360]) {
+  test(`hovering a row keeps its name readable and never puts an action under its middle: ${width}px`, async () => {
+    const { page, context, check } = await open({ width }, `${width}px tree row hover`);
+    try {
+      await page.waitForSelector(".tree-row");
+      const measure = async (index) => {
+        await page.locator(".tree-row").nth(index).hover();
+        await page.waitForTimeout(120);
+        return page.evaluate((i) => {
+          const row = document.querySelectorAll(".tree-row")[i];
+          const b = row.getBoundingClientRect();
+          const label = row.querySelector(".tree-label").getBoundingClientRect();
+          const actions = row.querySelector(".row-actions").getBoundingClientRect();
+          const mid = document.elementFromPoint((b.left + b.right) / 2, (b.top + b.bottom) / 2);
+          return { rowW: b.width, labelW: label.width, actionsW: actions.width, middleIsAction: !!mid?.closest(".row-actions"), name: row.querySelector(".tree-label").textContent };
+        }, index);
+      };
+      const folder = await measure(0);
+      const file = await measure(1);
+      await check(async () => {
+        for (const [what, m] of [["folder", folder], ["request", file]]) {
+          assert.ok(m.labelW >= 60, `hovering a ${what} row squeezes its name "${m.name}" to ${Math.round(m.labelW)}px`);
+          assert.ok(m.actionsW <= m.rowW * 0.35, `the action buttons take ${Math.round(m.actionsW)}px of a ${Math.round(m.rowW)}px row`);
+          assert.equal(m.middleIsAction, false, `the middle of a ${what} row is an action button, so a normal click would trigger it`);
+        }
+      });
+      await page.locator(".tree-row").first().hover();
+      await page.locator(".tree-row").first().locator('button[aria-label^="More actions"]').click();
+      await page.waitForSelector(".popmenu");
+      const items = await page.locator(".popmenu button").allTextContents();
+      await check(async () => {
+        for (const wanted of ["New folder", "Run folder", "Folder settings", "Rename", "Delete"]) assert.ok(items.some((t) => t.includes(wanted)), `the row menu has no "${wanted}" (has: ${items.join(", ")})`);
       });
     } finally {
       await context.close();

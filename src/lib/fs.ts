@@ -28,9 +28,13 @@ export const dirname = (p: string) => p.slice(0, p.lastIndexOf("/"));
 export const basename = (p: string) => p.slice(p.lastIndexOf("/") + 1);
 
 /** Ask where to save, then write the response body. Returns the chosen path, or null if cancelled. */
-export async function saveResponse(name: string, body: { base64?: string | null; text?: string }): Promise<string | null> {
+export async function saveResponse(name: string, body: { base64?: string | null; text?: string; bodyId?: number | null }): Promise<string | null> {
   const path = await saveDialog({ defaultPath: name, title: "Save response" });
   if (!path) return null;
+  if (body.bodyId != null) {
+    await invoke("body_save", { id: body.bodyId, path });
+    return path;
+  }
   await invoke("save_bytes", { path, base64: body.base64 ?? null, text: body.base64 ? null : (body.text ?? "") });
   return path;
 }

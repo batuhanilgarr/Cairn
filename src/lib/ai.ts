@@ -172,7 +172,7 @@ export function buildContext(tab: RequestTab, response: ResponseData | null | un
     lines.push("", `Last response: ${response.status} ${response.statusText} in ${response.timeMs} ms, ${response.sizeBytes} bytes, ${response.contentType || "unknown type"}`);
     const rh = redactHeaders(response.headers.slice(0, 20));
     if (rh.length) lines.push("Response headers:", ...rh.map(([k, v]) => `  ${k}: ${v}`));
-    lines.push(response.bodyBase64 ? "Response body: binary, not shown" : "Response body:", ...(response.bodyBase64 ? [] : [safeBody(response.body)]));
+    lines.push(response.bodyBase64 || response.bodyId != null ? "Response body: binary or too large, not shown" : "Response body:", ...(response.bodyBase64 || response.bodyId != null ? [] : [safeBody(response.body)]));
   }
   return lines.join("\n");
 }
