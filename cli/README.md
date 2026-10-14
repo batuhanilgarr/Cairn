@@ -11,7 +11,7 @@ npx cairn run ./my-collection --env Staging --junit results.xml
 
 | Option | |
 |---|---|
-| `-e, --env <name>` | environment (by name or file name); defaults to the only one |
+| `-e, --env <name[,name]>` | environment (by name or file name); a comma list layers them, later ones win. An environment file with `extends: Base` also gets Base's variables. Defaults to the only one |
 | `--var key=value` | set a variable, repeatable. Also `CAIRN_VAR_<name>` environment variables, handy for CI secrets |
 | `-d, --data file.csv\|json` | run once per row; columns become variables |
 | `-n, --iterations <n>` | repeat the run |

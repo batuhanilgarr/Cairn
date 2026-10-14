@@ -3,7 +3,7 @@ import path from "node:path";
 import { parseArgs } from "node:util";
 import { executeRequest } from "../../src/lib/pipeline";
 import { setNetwork } from "../../src/lib/net";
-import { loadChain, loadEnvironments, parseRequest, readCollectionName } from "../../src/lib/collection";
+import { effectiveEnv, loadChain, loadEnvironments, parseRequest, readCollectionName } from "../../src/lib/collection";
 import { listFilesRecursive } from "../../src/lib/fs";
 import type { Environment, RequestTab, TestResult } from "../../src/lib/types";
 import type { Layer } from "../../src/lib/inherit";
@@ -17,7 +17,8 @@ Usage
   cairn run <collection | folder | request.req.yaml> [options]
 
 Options
-  -e, --env <name>         Environment to use (by name or file name). Defaults to the only one, if there is only one
+  -e, --env <name[,name]>  Environment to use (by name or file name); a comma list layers them, later ones win.
+                           An environment with an extends: line brings its parent's variables too. Defaults to the only one, if there is only one
       --var <key=value>    Set a variable (repeatable). Also: CAIRN_VAR_<name> environment variables, handy for CI secrets
   -d, --data <file>        CSV or JSON rows: run the whole set once per row, row values become variables
   -n, --iterations <n>     Repeat the run n times
@@ -121,9 +122,15 @@ export async function runCollection(o: RunOptions): Promise<Report> {
   const envs = await loadEnvironments(root);
   let env: Environment | undefined;
   if (o.env) {
-    env = envs.find((e) => e.name.toLowerCase() === o.env!.toLowerCase() || path.basename(e.file ?? "").replace(/\.env\.yaml$/, "") === o.env);
-    if (!env) throw new UsageError(`No environment "${o.env}". Available: ${envs.map((e) => e.name).join(", ") || "none"}`);
-  } else if (envs.length === 1) env = envs[0];
+    const names = o.env.split(",").map((n) => n.trim()).filter(Boolean);
+    const found = names.map((n) => {
+      const e = envs.find((x) => x.name.toLowerCase() === n.toLowerCase() || path.basename(x.file ?? "").replace(/\.env\.yaml$/, "") === n);
+      if (!e) throw new UsageError(`No environment "${n}". Available: ${envs.map((x) => x.name).join(", ") || "none"}`);
+      return e;
+    });
+    env = effectiveEnv(envs, found[0], found.slice(1));
+    if (env && found.length > 1) env = { ...env, name: found.map((e) => e.name).join(" + ") };
+  } else if (envs.length === 1) env = effectiveEnv(envs, envs[0]);
   else if (envs.length > 1) o.onNote?.(`Several environments exist (${envs.map((e) => e.name).join(", ")}); none selected. Use --env.`);
 
   const base: Record<string, string> = {};

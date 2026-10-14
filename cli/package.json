@@ -15,7 +15,7 @@
   "scripts": {
     "build": "node build.mjs",
     "typecheck": "tsc --noEmit -p .",
-    "test": "node build.mjs && node --test test/cli.test.mjs test/postman.test.mjs test/query.test.mjs test/ai.test.mjs test/filter.test.mjs"
+    "test": "node build.mjs && node --test test/cli.test.mjs test/postman.test.mjs test/query.test.mjs test/ai.test.mjs test/filter.test.mjs test/env.test.mjs"
   },
   "dependencies": {},
   "devDependencies": {

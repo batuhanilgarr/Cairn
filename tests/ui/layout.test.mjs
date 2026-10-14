@@ -712,3 +712,46 @@ for (const width of [760, 1360]) {
     }
   });
 }
+
+for (const width of [760, 1360]) {
+  test(`environments: inheritance and .env import fit and are accessible: ${width}px`, async () => {
+    const { page, context, errors, check } = await open({ width }, `${width}px environments`);
+    try {
+      await page.click('.rail button[aria-label="Environments"]');
+      await page.waitForSelector(".side-body .row .btn");
+      // the stand-in collection starts with no environments: make two
+      await page.getByRole("button", { name: "+ New" }).click();
+      await page.getByRole("button", { name: "+ New" }).click();
+      await page.waitForSelector('select[aria-label="Inherits from"]');
+      await page.selectOption('select[aria-label="Inherits from"]', { index: 1 });
+      await page.waitForSelector('.side-body [role="note"]');
+      const m = await page.evaluate(() => {
+        const side = document.querySelector(".side-body").getBoundingClientRect();
+        const row = document.querySelector(".side-body .row");
+        const items = [...row.children].map((c) => c.getBoundingClientRect());
+        return {
+          inside: items.every((r) => r.right <= side.right + 1 && r.left >= side.left - 1),
+          // the picker takes the first line; the two buttons share the second
+          buttonsTogether: new Set([...row.querySelectorAll("button")].map((b) => Math.round(b.getBoundingClientRect().top))).size === 1,
+          pickerWide: row.querySelector("select").getBoundingClientRect().width >= side.width * 0.6,
+          hasImport: [...row.children].some((c) => /Import \.env/.test(c.textContent)),
+          over: document.documentElement.scrollWidth - innerWidth,
+          note: document.querySelector('.side-body [role="note"]').textContent,
+        };
+      });
+      const v = await axeViolations(page);
+      await check(async () => {
+        assert.deepEqual(errors, []);
+        assert.ok(m.hasImport, "the Import .env button is missing");
+        assert.ok(m.inside, "the environment toolbar overflows the sidebar");
+        assert.ok(m.buttonsTogether, "the New and Import .env buttons are not on one line");
+        assert.ok(m.pickerWide, "the environment picker is squeezed");
+        assert.ok(m.over <= 0, "the page overflows sideways");
+        assert.match(m.note, /Also gets \d+ variable/);
+        assert.deepEqual(v.map((x) => `${x.id}: ${x.where.join(" | ")}`), [], "accessibility violations");
+      });
+    } finally {
+      await context.close();
+    }
+  });
+}

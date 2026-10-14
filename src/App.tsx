@@ -37,6 +37,7 @@ import { buildRoutes, mockStart, mockStop, type MockHit } from "./lib/mock";
 import { BinaryView, suggestFileName } from "./BinaryView";
 import { BigBodyView, bigFind } from "./BigBodyView";
 import { bodyText } from "./lib/bigbody";
+import { dotenvName, parseDotenv } from "./lib/dotenv";
 import { formatFilterValues, runFilter } from "./lib/filter";
 import { parseJsonSafe } from "./lib/assert";
 import { parseSetCookie } from "./lib/cookies";
@@ -82,8 +83,7 @@ import {
   saveEnvironment,
   serializeRequest,
   slug,
-  uniquePath,
-} from "./lib/collection";
+  uniquePath, effectiveEnv, envAncestors } from "./lib/collection";
 import type { BodyMode, Collection, RequestKind, Environment, HistoryItem, RequestTab, ResponseData, RunOutput, TreeNode } from "./lib/types";
 import {
   METHODS,
@@ -190,7 +190,8 @@ export default function App() {
   const resView = useRef<EditorView | null>(null);
 
   const active = tabs.find((t) => t.id === activeId) ?? tabs[0];
-  const env = envs.find((e) => e.id === envId);
+  const envRaw = envs.find((e) => e.id === envId);
+  const env = useMemo(() => effectiveEnv(envs, envRaw), [envs, envRaw]);
   const sections = SECTIONS[active?.kind ?? "http"];
   const section: ReqSection = sections.includes(reqSection) ? reqSection : sections[0];
   const isBlank = (t: RequestTab) =>
@@ -573,7 +574,7 @@ export default function App() {
     if (!collection) return;
     const timer = setTimeout(async () => {
       for (const e of envs) {
-        const sig = JSON.stringify([e.name, e.vars.map((v) => [v.key, v.value, v.enabled, v.secret])]);
+        const sig = JSON.stringify([e.name, e.extends ?? "", e.vars.map((v) => [v.key, v.value, v.enabled, v.secret])]);
         if (writtenEnvs.current.get(e.id) === sig) continue;
         try {
           const file = await saveEnvironment(collection.root, e);
@@ -1327,8 +1328,8 @@ export default function App() {
           )}
           {side === "environments" && (
             <div className="pad">
-              <div className="row">
-                <select value={envId} onChange={(e) => setEnvId(e.target.value)}>
+              <div className="row env-bar">
+                <select aria-label="Environment" value={envId} onChange={(e) => setEnvId(e.target.value)}>
                   {envs.map((e) => (
                     <option key={e.id} value={e.id}>
                       {e.name}
@@ -1344,6 +1345,31 @@ export default function App() {
                   }}
                 >
                   + New
+                </button>
+                <button
+                  className="btn small"
+                  title="Create an environment from a .env file"
+                  onClick={() =>
+                    guard(async () => {
+                      const path = await pickAnyFile("Choose a .env file");
+                      if (!path) return;
+                      const vars = parseDotenv((await readText(path)) ?? "");
+                      const entries = Object.entries(vars);
+                      if (!entries.length) return void (await info("Nothing to import", "That file has no KEY=value lines."));
+                      let name = dotenvName(path);
+                      while (envs.some((x) => x.name === name)) name += " 2";
+                      const e: Environment = {
+                        id: uid(),
+                        name,
+                        vars: [...entries.map(([key, value]) => ({ ...emptyKV(), key, value, secret: !!collection && /secret|token|passw|api[_-]?key|private/i.test(key) })), emptyKV()],
+                      };
+                      setEnvs([...envs, e]);
+                      setEnvId(e.id);
+                      flash(`Imported ${entries.length} variable${entries.length > 1 ? "s" : ""} from ${path.split("/").pop()}`);
+                    })
+                  }
+                >
+                  Import .env
                 </button>
               </div>
               {Object.keys(sessionRef.current).length > 0 && (
@@ -1361,30 +1387,51 @@ export default function App() {
                   ))}
                 </div>
               )}
-              {!env && <p className="muted">No environments yet. Create one to use {"{{variables}}"}.</p>}
-              {env && (
+              {!envRaw && <p className="muted">No environments yet. Create one to use {"{{variables}}"}.</p>}
+              {envRaw && (
                 <>
                   <input
                     className="cell name"
-                    value={env.name}
-                    onChange={(e) => setEnvs(envs.map((x) => (x.id === env.id ? { ...x, name: e.target.value } : x)))}
+                    aria-label="Environment name"
+                    value={envRaw.name}
+                    onChange={(e) => setEnvs(envs.map((x) => (x.id === envRaw.id ? { ...x, name: e.target.value } : x.extends === envRaw.name ? { ...x, extends: e.target.value } : x)))}
                   />
+                  {envs.length > 1 && (
+                    <label className="inherit-row">
+                      <span>Inherits from</span>
+                      <select
+                        aria-label="Inherits from"
+                        value={envRaw.extends ?? ""}
+                        onChange={(e) => setEnvs(envs.map((x) => (x.id === envRaw.id ? { ...x, extends: e.target.value || undefined } : x)))}
+                      >
+                        <option value="">Nothing</option>
+                        {envs
+                          .filter((o) => o.id !== envRaw.id && !envAncestors(envs, o).some((a) => a.id === envRaw.id))
+                          .map((o) => <option key={o.id} value={o.name}>{o.name}</option>)}
+                      </select>
+                    </label>
+                  )}
+                  {envRaw.extends && env && (
+                    <p className="muted small" role="note">
+                      Also gets {env.vars.filter((v) => !envRaw.vars.some((r) => r.enabled && r.key === v.key)).length} variable(s) from {envAncestors(envs, envRaw).map((a) => a.name).join(" ← ") || envRaw.extends}. Variables set here win.
+                    </p>
+                  )}
                   <p className="muted">
                     Use variables as <code>{"{{name}}"}</code> in URL, headers, body and auth.
                     {collection ? " Saved in environments/. 🔒 secrets stay local and are never committed." : ""}
                   </p>
                   <KVEditor
                     secrets={!!collection}
-                    rows={env.vars}
+                    rows={envRaw.vars}
                     keyPlaceholder="Variable"
-                    onChange={(vars) => setEnvs(envs.map((x) => (x.id === env.id ? { ...x, vars } : x)))}
+                    onChange={(vars) => setEnvs(envs.map((x) => (x.id === envRaw.id ? { ...x, vars } : x)))}
                   />
                   <button
                     className="link"
                     onClick={async () => {
-                      if (settings.confirmDelete && !(await confirmDialog("Delete environment", `"${env.name}" will be removed.`))) return;
-                      if (env.file) await removePath(env.file).catch(() => {});
-                      const rest = envs.filter((x) => x.id !== env.id);
+                      if (settings.confirmDelete && !(await confirmDialog("Delete environment", `"${envRaw.name}" will be removed.`))) return;
+                      if (envRaw.file) await removePath(envRaw.file).catch(() => {});
+                      const rest = envs.filter((x) => x.id !== envRaw.id);
                       setEnvs(rest);
                       setEnvId(rest[0]?.id ?? "");
                     }}

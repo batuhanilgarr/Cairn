@@ -328,9 +328,40 @@ export async function loadEnvironments(root: string): Promise<Environment[]> {
       };
     });
     vars.push(emptyKV());
-    envs.push({ id: file, name: String(d.name ?? key), vars, file });
+    envs.push({ id: file, name: String(d.name ?? key), vars, file, ...(typeof d.extends === "string" && d.extends ? { extends: d.extends } : {}) });
   }
   return envs;
+}
+
+/** The environment a name refers to (exact match first, then ignoring case). */
+export const findEnvByName = (envs: Environment[], name: string) => envs.find((e) => e.name === name) ?? envs.find((e) => e.name.toLowerCase() === name.toLowerCase());
+
+/** The parents of an environment, nearest first. Stops at a missing parent or a cycle. */
+export function envAncestors(envs: Environment[], env: Environment): Environment[] {
+  const out: Environment[] = [];
+  const seen = new Set([env.id]);
+  for (let cur = env; cur.extends; ) {
+    const parent = findEnvByName(envs, cur.extends);
+    if (!parent || seen.has(parent.id)) break;
+    seen.add(parent.id);
+    out.push(parent);
+    cur = parent;
+  }
+  return out;
+}
+
+/**
+ * What a request sees: the environment's own variables on top of everything it extends.
+ * Disabled variables don't count at any level, so switching one off in a child doesn't hide the parent's value.
+ */
+export function effectiveEnv(envs: Environment[], env: Environment | undefined, also: Environment[] = []): Environment | undefined {
+  if (!env) return env;
+  const layers = [...envAncestors(envs, env).reverse(), env];
+  for (const extra of also) layers.push(...envAncestors(envs, extra).reverse(), extra);
+  if (layers.length === 1) return env;
+  const merged = new Map<string, KV>();
+  for (const l of layers) for (const v of l.vars) if (v.enabled && v.key) merged.set(v.key, v);
+  return { ...env, vars: [...merged.values()] };
 }
 
 export async function saveEnvironment(root: string, env: Environment): Promise<string> {
@@ -343,7 +374,7 @@ export async function saveEnvironment(root: string, env: Environment): Promise<s
       ...(v.enabled ? {} : { enabled: false }),
       ...(v.secret ? { secret: true } : {}),
     }));
-  await writeText(file, stringify({ name: env.name, vars }, YAML_OPTS));
+  await writeText(file, stringify({ name: env.name, ...(env.extends ? { extends: env.extends } : {}), vars }, YAML_OPTS));
 
   const all = await readSecrets(root);
   const mine: Record<string, string> = {};

@@ -21,7 +21,7 @@ Kaynaklar GitHub issue listeleri, Postman topluluk forumu, HN ve rakip belgeleri
 **Talep edilen ama karşılanmayan özellikler** (talep × efor sırasıyla):
 1. Aynı isteği birden çok koleksiyonda yeniden kullanma (Postman #1535, 2015'ten beri açık, en yüksek sayı) — **M**
 2. ~~Yanıtlarda jq/JSONPath filtresi (Bruno #7423, Insomnia #777)~~ — **Yapıldı** (yanıt gövdesinin üstünde filtre satırı; `$` ile başlarsa JSONPath, aksi halde jq alt kümesi; `src/lib/filter.ts`, 9 birim testi + UI testi). Sınır: tam jq değil, bir alt küme; 8 MB üstü (Rust'ta tutulan) yanıtlarda henüz yok.
-3. Birden çok .env dosyası, iç içe ve çoklu ortam seçimi (Bruno #409/#7217, Postman #4968, Yaak) — **S–M**
+3. ~~Birden çok .env dosyası, iç içe ve çoklu ortam seçimi~~ — **Yapıldı:** ortam dosyasında `extends: Ad` (zincirleme, döngüye dayanıklı, devre dışı değişken üst değeri gizlemez), arayüzde "Inherits from", ".env" dosyasından ortam oluşturma (`Import .env`, gizli görünen anahtarlar otomatik secret), CLI'da `--env base,staging` katmanlama. Sınır: arayüzde aynı anda birden çok ortam seçilemiyor (katmanlama yalnız `extends` ile; CLI listesi ayrıca var).
 4. Sekme geliştirmeleri: önizleme (geçici) sekme, birden çok koleksiyondan sekme, yan yana (Yaak 66 oy, Insomnia #1003, Postman #9180) — **S–M** *(kısmen yapıldı: kaydırmalı şerit + tüm sekmeler menüsü)*
 5. Sır/kasa entegrasyonu: anahtarlık, HashiCorp, 1Password (Postman #13605, Hoppscotch #5643) — **M**
 6. OpenAPI'ye dışa aktarma + panodan içe aktarma (Yaak 37/10 oy, Bruno #7043); HAR ve WSDL/SOAP içe aktarma — **M / S**

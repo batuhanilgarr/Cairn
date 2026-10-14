@@ -118,7 +118,14 @@ export type HistoryItem = {
   tab: RequestTab;
 };
 
-export type Environment = { id: string; name: string; vars: KV[]; file?: string };
+export type Environment = {
+  id: string;
+  name: string;
+  vars: KV[];
+  file?: string;
+  /** Name of an environment this one builds on: its variables apply first, this one overrides them. */
+  extends?: string;
+};
 
 export type TreeNode = { name: string; path: string; isDir: boolean; children: TreeNode[] };
 export type Collection = { root: string; name: string };
