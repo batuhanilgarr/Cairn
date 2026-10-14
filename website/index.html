@@ -9,19 +9,20 @@
   <meta property="og:description" content="Local-first API client for REST, GraphQL, gRPC, WebSocket, SSE and MCP. Plain-file collections, Postman import, an AI assistant on your own model, a CI runner and a mock server built in.">
   <meta property="og:image" content="https://batuhanilgarr.github.io/Reqnest/assets/og.png">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="theme-color" content="#6c4cf5">
+  <meta name="theme-color" content="#0b6e8a">
   <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <header class="nav">
-  <a class="brand" href="#top" aria-label="Cairn home"><img src="assets/logo.svg" alt="" width="26" height="26"><span>Cairn</span></a>
+  <a class="brand" href="#top" aria-label="Cairn home"><img src="assets/logo.svg" alt="" width="28" height="28"><span>Cairn</span></a>
   <nav aria-label="Main">
+    <a href="#run">Try it</a>
     <a href="#files">Plain files</a>
     <a href="#postman">Postman</a>
     <a href="#ai">AI</a>
+    <a href="#speed">Speed</a>
     <a href="#features">Features</a>
-    <a href="#compare">Compare</a>
     <a href="#faq">FAQ</a>
     <a href="https://github.com/batuhanilgarr/Reqnest" rel="noopener">GitHub</a>
     <a class="btn small" href="https://github.com/batuhanilgarr/Reqnest/releases/latest/download/Cairn-universal.dmg">Download</a>
@@ -33,7 +34,7 @@
     <div class="wrap hero-grid">
       <div class="hero-copy">
         <h1>Your API requests are files.</h1>
-        <p class="lead">Cairn is a native Mac client for REST, GraphQL, gRPC, WebSocket, SSE and MCP. Each request is a small YAML file: review it in a pull request, run it in CI, keep it forever. Bring your Postman collections along, and ask your own AI model about any request. No account, no cloud, no telemetry.</p>
+        <p class="lead">Cairn is a native Mac client for REST, GraphQL, gRPC, WebSocket, SSE and MCP. Every request is a small YAML file you review in a pull request, run in CI and keep for good. Bring your Postman collections, and ask your own AI model about any request. No account, no cloud, no telemetry.</p>
         <div class="cta">
           <a class="btn big" href="https://github.com/batuhanilgarr/Reqnest/releases/latest/download/Cairn-universal.dmg">Download for macOS</a>
           <a class="btn big ghost" href="https://github.com/batuhanilgarr/Reqnest" rel="noopener">View on GitHub</a>
@@ -41,6 +42,22 @@
         <p class="fine">About 11 MB. macOS 11 or later, Apple silicon and Intel.</p>
       </div>
 
+      <div class="cairn" role="img" aria-label="A stack of request files balanced like a trail cairn">
+        <span class="stone s1"><b class="m post">POST</b> create-invoice</span>
+        <span class="stone s2"><b class="m get">GET</b> list-invoices</span>
+        <span class="stone s3"><b class="m post">POST</b> login</span>
+        <span class="stone s4"><b class="m get">GET</b> health</span>
+        <span class="stone s5"><b class="m del">DEL</b> void-invoice</span>
+        <span class="stone s6">.req.yaml</span>
+        <i class="ground"></i>
+      </div>
+    </div>
+  </section>
+
+  <section id="run" class="sec run">
+    <div class="wrap">
+      <h2 class="left">A request, run</h2>
+      <p class="sub">This is the file on disk, and what comes back. Press Send.</p>
       <figure class="win" id="demo" aria-label="A request file next to the response it produces">
         <div class="win-bar"><i></i><i></i><i></i><span>payments / invoices / create-invoice.req.yaml</span></div>
         <div class="urlrow">
@@ -173,6 +190,19 @@ Last response: 401 Unauthorized in 84 ms
     </div>
   </section>
 
+  <section id="speed" class="sec speed">
+    <div class="wrap">
+      <h2 class="left">Fast with the files you really have</h2>
+      <p class="sub">Measured in our interface benchmark on an Apple M1 with 16 GB, in Chrome, with the app talking to a stand-in for the Mac side. Real disk and network time come on top, so treat these as what the interface itself costs.</p>
+      <dl class="figures">
+        <div><dt>10,000-request collection</dt><dd><b>0.49 s</b> to the first rows</dd><p>609 elements on screen instead of 140,774.</p></div>
+        <div><dt>50 MB JSON response</dt><dd><b>0.06 s</b> to the first lines</dd><p>The window never freezes. Opening and indexing the 50 MB (5.6 million lines) takes the Rust side about 0.16 s, and searching it about 12 ms.</p></div>
+        <div><dt>100 MB JSON response</dt><dd><b>0.05 s</b> to the first lines</dd><p>Still no freeze: only the lines you see are drawn, whatever the size.</p></div>
+      </dl>
+      <p class="fine">Reproduce it with <code>npm run bench:ui</code> in the repository. Numbers vary by machine.</p>
+    </div>
+  </section>
+
   <section id="features" class="sec tint">
     <div class="wrap">
       <h2 class="left">Everything on the way from request to release</h2>
@@ -215,7 +245,7 @@ Last response: 401 Unauthorized in 84 ms
             <dt>Code, live, in a side panel</dt>
             <dd>The open request as cURL, fetch, axios, Python, Go, Java, Kotlin, Swift, C#, PHP, Ruby, Rust, PowerShell or HTTPie, updating as you edit.</dd>
             <dt>Big responses, handled</dt>
-            <dd>JSON and XML are formatted for you, and ⌘F searches a response of any size.</dd>
+            <dd>JSON is formatted for you and responses of 100 MB scroll and search without freezing the window, in our benchmark. ⌘F works on any size.</dd>
             <dt>Made for the Mac</dt>
             <dd>Native menus, a ⌘K command palette, full keyboard control, light and dark themes.</dd>
             <dt>Corporate networks</dt>
