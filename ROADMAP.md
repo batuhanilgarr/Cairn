@@ -43,12 +43,25 @@ Ek: klavye odaklı kullanım/Vim modu, ağ koşulu taklidi (gecikme/kayıp), se�
 
 Not: stub IPC dosya/ağ G/Ç'sini içermez, gerçek uygulamada süreler uzar. Postman'in 50 MB gösterim sınırını geçmek ve 100 MB+ yanıtları çökmeden açmak somut, kanıtlanabilir bir hedef.
 
+## Şimdiki ölçümler (P0-1 ve P0-2 sonrası)
+
+Donanım: Apple M1, 16 GB, Chrome, stub IPC. Komut: `npm run bench:ui`. Rust tarafı: `cargo test --release --lib -- --ignored --nocapture timing`.
+
+| Senaryo | Önce | Şimdi |
+|---|---|---|
+| 10.000 istekli koleksiyon, ilk satırlar | 10,2 sn, 140.774 DOM düğümü, ~180 MB | **0,49 sn**, 609 DOM düğümü, 48 MB |
+| 50 MB yanıt, sayfa tarafı | 2,5–3 sn, 2,9 sn donma, 916 MB | **0,06 sn**, 35 ms donma, 44 MB, 744 DOM düğümü |
+| 100 MB yanıt, sayfa tarafı | ölçülemedi | **0,05 sn**, 29 ms donma, 42 MB |
+| 50 MB JSON, Rust tarafı (5,6 milyon satır) | – | açılış (biçimlendirme + indeks) **0,16 sn**, 50.000 eşleşmeli arama **12 ms** |
+
+Bütçeler artık testte: `tests/ui/layout.test.mjs` içinde "budget:" testleri DOM düğümü ve satır sayısını (her makinede aynı) sınırlıyor, süreyi yalnızca çok gevşek sınırlıyor (CI'ı kararsız yapmasın). Rust açılış/arama bütçesi `timing_of_a_50_mb_body` testinde. Not: gerçek Tauri uygulamasında uçtan uca ölçüm henüz yok.
+
 ## Yeni öncelik sırası
 
 **P0, performans ve kalite kapısı (önce bunlar):**
 1. Koleksiyon ağacını **sanallaştır** (hedef: 10.000 istek < 1 sn ilk çizim, DOM'da yalnız görünen satırlar) ve metod etiketlerini tembel/önbellekli oku.
 2. **Büyük yanıt hattı:** biçimlendirme ve arama Rust/Worker'da, görüntüleyici sanal, çok kopya yok, 100 MB+ için akıtma/diske yazma ve "ham aç" yolu. Hedef: 50 MB < 1 sn, donma yok, bellek < 3× boyut.
-3. Bench'i bütçeye çevir (CI'da gerilemeyi yakala) ve sonuçları donanımla birlikte yayınla.
+3. ~~Bench'i bütçeye çevir ve sonuçları donanımla birlikte yayınla.~~ **Yapıldı** (yukarıdaki tablo ve "budget:" testleri).
 4. UI test paketini büyüt: tüm modallar, diğer sekmeler, klavye odağı, erişilebilirlik (axe).
 
 **P1, kanıtlı eksik özellikler:** yukarıdaki talep listesi 1–6 (yeniden kullanılabilir istek, jq filtresi, çoklu .env/ortam, sekme geliştirmeleri, anahtarlık + sır tarayıcı, OpenAPI export + HAR import) ve biçim şemasının yayınlanması.

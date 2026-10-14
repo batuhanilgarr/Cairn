@@ -430,5 +430,8 @@ mod tests {
         let f = search(&e, "ada", false);
         let searched = t.elapsed();
         println!("{} lines, opened in {opened:?}, search ({} hits) in {searched:?}", v.starts.len(), f.total);
+        // budgets: far above what release builds need, far below what an accidental O(n^2) would take
+        assert!(opened.as_millis() < 1500, "opening 50 MB took {opened:?}");
+        assert!(searched.as_millis() < 500, "searching 50 MB took {searched:?}");
     }
 }

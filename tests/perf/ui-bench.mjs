@@ -22,7 +22,7 @@ for (let i = 0; i < 120; i++) {
   }
   await new Promise((r) => setTimeout(r, 250));
 }
-const initScript = ({ files, mb }) => `
+const initScript = ({ files, mb, big = 0 }) => `
 (() => {
   const N = ${files};
   const tree = []; const texts = {};
@@ -36,7 +36,14 @@ const initScript = ({ files, mb }) => `
   window.__TAURI_EVENT_PLUGIN_INTERNALS__ = { unregisterListener() {} };
   let body = null;
   const makeBody = () => { const row = JSON.stringify({ id: 'inv_000000', status: 'open', amount: 12900, currency: 'usd', customer: { id: 'cus_1', email: 'user@example.com' }, tags: ['a','b','c'] }); const n = Math.floor(${mb} * 1024 * 1024 / (row.length + 1)); return '[' + Array(n).fill(row).join(',') + ']'; };
+  const LINES = ${big};
+  const lineOf = (n) => n === 0 ? '[' : n === LINES - 1 ? ']' : ['  {', '    "id": "inv_' + Math.floor((n - 1) / 4) + '",', '    "tag": "Alpha"', '  },'][(n - 1) % 4];
   window.__TAURI_INTERNALS__ = { transformCallback: () => 1, invoke: async (cmd, a) => {
+    if (LINES > 0) {
+      if (cmd === 'send_request') return { status: 200, statusText: 'OK', headers: [['content-type','application/json']], body: '', bodyBase64: null, bodyId: 1, contentType: 'application/json', sizeBytes: LINES * 22, timeMs: 100, ttfbMs: 50, httpVersion: 'HTTP/1.1' };
+      if (cmd === 'body_prepare') return { lines: LINES, bytes: LINES * 22, pretty: true };
+      if (cmd === 'body_lines') return Array.from({ length: Math.max(0, Math.min(a.count, LINES - a.start)) }, (_, i) => lineOf(a.start + i));
+    }
     if (cmd === 'send_request') { body ??= makeBody(); return { status: 200, statusText: 'OK', headers: [['content-type','application/json']], body, bodyBase64: null, contentType: 'application/json', sizeBytes: body.length, timeMs: 100, ttfbMs: 50, httpVersion: 'HTTP/1.1' }; }
     if (cmd === 'list_tree') return tree; if (cmd === 'read_text') return texts[a.path] ?? null;
     if (cmd === 'list_files' || cmd === 'list_files_recursive') return []; return null; } };
@@ -77,6 +84,26 @@ for (const mb of [5, 50]) {
   const shown = Date.now() - t0;
   const m = await page.evaluate(() => ({ longestFreezeMs: Math.round(window.__gap), lines: document.querySelectorAll(".panel.res .cm-line").length, heapMB: Math.round((performance.memory?.usedJSHeapSize ?? 0) / 1048576) }));
   console.log(`${mb} MB response:`, JSON.stringify({ shown: ok, msToFirstLines: shown, ...m }));
+  await ctx.close();
+}
+// 3) the same sizes through the big-response path (the body stays in Rust; the page draws only the visible lines)
+for (const mb of [50, 100]) {
+  const lines = Math.round((mb * 1048576) / 22);
+  const ctx = await browser.newContext({ viewport: { width: 1360, height: 800 }, colorScheme: "dark" });
+  await ctx.addInitScript(initScript({ files: 200, mb: 1, big: lines }));
+  const page = await ctx.newPage();
+  await page.goto(URL);
+  await page.waitForSelector(".urlbar");
+  await page.click(".url-cell"); await page.keyboard.type("https://x.io/big");
+  await page.evaluate(() => { window.__gap = 0; let last = performance.now(); setInterval(() => { const n = performance.now(); window.__gap = Math.max(window.__gap, n - last); last = n; }, 20); });
+  const t0 = Date.now();
+  await page.click(".urlbar > .btn.primary");
+  await page.waitForSelector(".big-line");
+  const shown = Date.now() - t0;
+  await page.evaluate(() => { document.querySelector(".big-scroll").scrollTop = 1e12; });
+  await page.waitForTimeout(300);
+  const m = await page.evaluate(() => ({ longestFreezeMs: Math.round(window.__gap), lines: document.querySelectorAll(".big-line").length, domNodes: document.getElementsByTagName("*").length, heapMB: Math.round((performance.memory?.usedJSHeapSize ?? 0) / 1048576) }));
+  console.log(`${mb} MB response, big path (page side only; Rust adds ~0.16 s to open 50 MB, see cargo test timing):`, JSON.stringify({ msToFirstLines: shown, ...m }));
   await ctx.close();
 }
 await browser.close();

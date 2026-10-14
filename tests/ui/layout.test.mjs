@@ -466,6 +466,59 @@ test("a 3-million-line response shows only what is on screen, scrolls the whole 
   }
 });
 
+/**
+ * Budgets. These count things (DOM nodes, rendered rows) which are the same on every machine, and only
+ * put a very loose ceiling on time (about 5x what a 2020 laptop needs) so slow CI doesn't make them flaky.
+ * A regression that renders everything again, or blocks the page, blows through them by a wide margin.
+ */
+const BUDGET = { domNodes: 4000, treeRows: 120, bigLines: 80, firstPaintMs: 8000, freezeMs: 700 };
+
+test("budget: a 10,000-request collection stays light", async () => {
+  const { page, context, errors } = await open({ width: 1360, bigTree: 10000 }, "budget 10k tree");
+  try {
+    const t0 = Date.now();
+    await page.waitForSelector(".tree-row");
+    const firstPaint = Date.now() - t0;
+    await page.waitForTimeout(1500);
+    const m = await page.evaluate(() => ({ nodes: document.getElementsByTagName("*").length, rows: document.querySelectorAll(".tree-row").length }));
+    assert.deepEqual(errors, []);
+    assert.ok(m.nodes < BUDGET.domNodes, `${m.nodes} DOM nodes (budget ${BUDGET.domNodes})`);
+    assert.ok(m.rows < BUDGET.treeRows, `${m.rows} tree rows (budget ${BUDGET.treeRows})`);
+    assert.ok(firstPaint < BUDGET.firstPaintMs, `first rows after ${firstPaint} ms (budget ${BUDGET.firstPaintMs})`);
+  } finally {
+    await context.close();
+  }
+});
+
+test("budget: opening and scrolling a huge response never blocks the page", async () => {
+  const { page, context, errors } = await open({ width: 1360, bigBody: 3_000_000 }, "budget big response");
+  try {
+    await page.click(".url-cell");
+    await page.keyboard.type("https://api.example.com/v1/huge");
+    await page.evaluate(() => {
+      window.__gap = 0;
+      let last = performance.now();
+      setInterval(() => { const n = performance.now(); window.__gap = Math.max(window.__gap, n - last); last = n; }, 20);
+    });
+    const t0 = Date.now();
+    await page.click(".urlbar > .btn.primary");
+    await page.waitForSelector(".big-line");
+    const shown = Date.now() - t0;
+    for (const top of [1e5, 5e6, 3e7, 8e6, 0]) {
+      await page.evaluate((t) => { document.querySelector(".big-scroll").scrollTop = t; }, top);
+      await page.waitForTimeout(120);
+    }
+    const m = await page.evaluate(() => ({ nodes: document.getElementsByTagName("*").length, lines: document.querySelectorAll(".big-line").length, freeze: Math.round(window.__gap) }));
+    assert.deepEqual(errors, []);
+    assert.ok(m.nodes < BUDGET.domNodes, `${m.nodes} DOM nodes (budget ${BUDGET.domNodes})`);
+    assert.ok(m.lines < BUDGET.bigLines, `${m.lines} response lines in the DOM (budget ${BUDGET.bigLines})`);
+    assert.ok(shown < BUDGET.firstPaintMs, `first lines after ${shown} ms (budget ${BUDGET.firstPaintMs})`);
+    assert.ok(m.freeze < BUDGET.freezeMs, `the page froze for ${m.freeze} ms (budget ${BUDGET.freezeMs})`);
+  } finally {
+    await context.close();
+  }
+});
+
 for (const width of [760, 1360]) {
   test(`hovering a row keeps its name readable and never puts an action under its middle: ${width}px`, async () => {
     const { page, context, check } = await open({ width }, `${width}px tree row hover`);
