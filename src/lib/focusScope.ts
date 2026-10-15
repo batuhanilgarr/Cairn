@@ -10,13 +10,13 @@ export function focusScope(el: HTMLElement | null): (() => void) | void {
   if (!el) return;
   const before = document.activeElement as HTMLElement | null;
   if (!el.contains(document.activeElement)) {
-    const items = [...el.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(visible);
+    const items = Array.from(el.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(visible);
     const first = items.find((i) => i.matches("[data-autofocus], input:not([type=checkbox]):not([type=radio]):not([type=range]), textarea")) ?? items.find((i) => i.matches(".btn.primary")) ?? items[0];
     (first ?? el).focus({ preventScroll: true });
   }
   const onKey = (e: KeyboardEvent) => {
     if (e.key !== "Tab") return;
-    const items = [...el.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(visible);
+    const items = Array.from(el.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(visible);
     if (!items.length) return e.preventDefault();
     const first = items[0];
     const last = items[items.length - 1];
