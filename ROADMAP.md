@@ -111,7 +111,7 @@ Mock server, response history + diff, CLI/CI runner (JUnit/HTML), OpenAPI re-syn
 | **Takım senkronizasyonu** | Önerilen model: git zaten çalışıyor. Ücretli katman olarak self-host sync sunucusu (README'de planlı) |
 | **Gizli bilgi taraması** | Commit öncesi koleksiyonda token/anahtar yakalama; secrets zaten ayrı dosyada |
 | **Secret'lar için macOS Keychain** | Şu an `.cairn/secrets.yaml` düz dosya |
-| **Ek protokoller**: SOAP/WSDL, Socket.IO, MQTT | SOAP/WSDL **yapıldı**. Socket.IO **yapıldı** (v4, WebSocket taşıması: isim alanı, auth, emit, ack iki yönde, gerçek `socket.io` sunucusuna karşı testli; uzun-yoklama, ikili ekler ve v2 yok). MQTT kaldı |
+| **Ek protokoller**: SOAP/WSDL, Socket.IO, MQTT | SOAP/WSDL **yapıldı**. Socket.IO **yapıldı** (v4, WebSocket taşıması: isim alanı, auth, emit, ack iki yönde, gerçek `socket.io` sunucusuna karşı testli; uzun-yoklama, ikili ekler ve v2 yok). MQTT **yapıldı** (3.1.1; TCP, TLS ve WebSocket; QoS 0/1/2, retained, will, kalıcı oturum, joker abonelikler; gerçek `aedes` brokerına karşı testli; MQTT 5, otomatik yeniden bağlanma ve istemci sertifikası yok; TLS yalnızca kendinden imzalı sertifikayla denendi) |
 
 ### P3: Sağlamlaştırma
 - `tauri.conf.json` içinde `"csp": null`: CSP tanımlanmalı (script worker izolasyonu iyi, ama webview'in kendisi açık).

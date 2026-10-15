@@ -35,6 +35,7 @@
           "sse",
           "ws",
           "socketio",
+          "mqtt",
           "grpc",
           "mcp"
         ],
@@ -43,7 +44,7 @@
       "method": {
         "type": "string",
         "pattern": "^[A-Za-z]+$",
-        "description": "HTTP method, e.g. GET. Omitted for graphql, ws, socketio, grpc and mcp requests."
+        "description": "HTTP method, e.g. GET. Omitted for graphql, ws, socketio, mqtt, grpc and mcp requests."
       },
       "url": {
         "type": "string",
@@ -198,6 +199,94 @@
                 },
                 "body": {
                   "type": "string"
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "mqtt": {
+        "type": "object",
+        "description": "MQTT 3.1.1 over TCP (mqtt://), TLS (mqtts://) or WebSocket (ws://, wss://). The address is `url`; the user name and password come from `auth` (basic).",
+        "properties": {
+          "clientId": {
+            "type": "string",
+            "description": "Left out: a random id for each connection."
+          },
+          "keepAlive": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 65535,
+            "description": "Seconds; 0 turns pings off. Left out: 60."
+          },
+          "cleanSession": {
+            "const": false,
+            "description": "Only written when the session is kept (clean session off)."
+          },
+          "will": {
+            "type": "object",
+            "description": "The last will, published by the broker if the connection drops without a goodbye.",
+            "properties": {
+              "topic": {
+                "type": "string"
+              },
+              "payload": {
+                "type": "string"
+              },
+              "qos": {
+                "enum": [
+                  1,
+                  2
+                ],
+                "description": "Left out: 0."
+              },
+              "retain": {
+                "const": true
+              }
+            },
+            "additionalProperties": false
+          },
+          "topic": {
+            "type": "string",
+            "description": "The topic in the composer."
+          },
+          "payload": {
+            "type": "string",
+            "description": "The payload in the composer."
+          },
+          "qos": {
+            "enum": [
+              1,
+              2
+            ],
+            "description": "Left out: 0."
+          },
+          "retain": {
+            "const": true
+          },
+          "format": {
+            "enum": [
+              "json",
+              "hex"
+            ],
+            "description": "How the payload is read. Left out: text."
+          },
+          "subscribe": {
+            "type": "array",
+            "description": "Topic filters subscribed when the connection is made.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "topic": {
+                  "type": "string"
+                },
+                "qos": {
+                  "enum": [
+                    1,
+                    2
+                  ]
                 }
               },
               "additionalProperties": false

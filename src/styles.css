@@ -852,3 +852,5 @@ pre.block { white-space: pre-wrap; word-break: break-word; margin: 0; background
 .big-filter-out { flex: 1; min-height: 0; display: flex; flex-direction: column; border-top: 1px solid var(--border); }
 .big-filter-out > p { margin: 6px 0 2px; }
 .sio-event { flex: 0 1 260px; min-width: 120px; }
+.mqtt .saved-row select { flex: 0 0 auto; }
+.mqtt .saved-row .cell { flex: 1 1 90px; min-width: 60px; }

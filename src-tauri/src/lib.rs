@@ -558,6 +558,7 @@ pub fn run() {
             bigbody::body_release,
             streams::sse_connect,
             streams::ws_connect,
+            streams::tcp_connect,
             streams::ws_send,
             streams::ws_close,
             streams::stream_stop,

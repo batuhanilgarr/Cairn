@@ -29,6 +29,7 @@ export const setTabDefaults = (d: typeof tabDefaults) => {
 
 export const defaultGql = () => ({ query: "", variables: "", operation: "" });
 export const defaultWs = () => ({ composer: "", messages: [], protocols: "" });
+export const defaultMqtt = (): RequestTab["mqtt"] => ({ clientId: "", keepAlive: 60, clean: true, willTopic: "", willPayload: "", willQos: 0, willRetain: false, topic: "", payload: "", qos: 0, retain: false, format: "text", subs: [] });
 export const defaultSio = (): RequestTab["sio"] => ({ namespace: "", path: "", auth: "", event: "", composer: "", ack: false, messages: [] });
 export const defaultGrpc = (): RequestTab["grpc"] => ({ source: "reflection", protoFiles: [], importPaths: [], method: "", message: "{}", tls: true });
 
@@ -42,6 +43,7 @@ export const newTab = (): RequestTab => ({
   gql: defaultGql(),
   ws: defaultWs(),
   sio: defaultSio(),
+  mqtt: defaultMqtt(),
   grpc: defaultGrpc(),
   mcp: defaultMcp(),
   id: uid(),
@@ -78,6 +80,7 @@ export const normalizeTab = (t: Partial<RequestTab>): RequestTab => {
     gql: { ...base.gql, ...(t.gql ?? {}) },
     ws: { ...base.ws, ...(t.ws ?? {}) },
     sio: { ...base.sio, ...(t.sio ?? {}) },
+    mqtt: { ...base.mqtt, ...(t.mqtt ?? {}) },
     grpc: { ...base.grpc, ...(t.grpc ?? {}) },
     mcp: { ...base.mcp, ...(t.mcp ?? {}) },
   } as RequestTab;
@@ -105,7 +108,7 @@ export function buildRequest(tab: RequestTab, env: Environment | undefined, extr
   if (tab.kind === "ws") {
     url = url.replace(/^http(s?):\/\//i, "ws$1://");
     if (url && !/^wss?:\/\//i.test(url)) url = "ws://" + url;
-  } else if (tab.kind !== "grpc" && url && !/^[a-z][a-z0-9+.-]*:\/\//i.test(url)) url = "http://" + url;
+  } else if (tab.kind !== "grpc" && tab.kind !== "mqtt" && url && !/^[a-z][a-z0-9+.-]*:\/\//i.test(url)) url = "http://" + url;
 
   const headers: [string, string][] = tab.headers
     .filter((h) => h.enabled && h.key)

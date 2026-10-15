@@ -21,6 +21,8 @@ export const sseConnect = (id: string, spec: Record<string, unknown>) =>
 export const wsConnect = (id: string, a: { url: string; headers: [string, string][]; protocols: string[]; insecure: boolean }) =>
   invoke("ws_connect", { id, ...a, network: currentNetwork() });
 
+export const tcpConnect = (id: string, a: { host: string; port: number; tls: boolean; insecure: boolean }) => invoke("tcp_connect", { id, ...a, network: currentNetwork() });
+
 export const wsSend = (id: string, a: { text?: string; base64?: string }) => invoke("ws_send", { id, text: a.text ?? null, base64: a.base64 ?? null });
 export const wsClose = (id: string) => invoke("ws_close", { id });
 export const streamStop = (id: string) => invoke("stream_stop", { id });

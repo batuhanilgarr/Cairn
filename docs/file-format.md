@@ -108,8 +108,8 @@ settings:
 
 | Key | Meaning |
 |---|---|
-| `type` | `graphql`, `sse`, `ws`, `socketio`, `grpc` or `mcp`. Left out for HTTP. |
-| `method` | HTTP method. Left out for `graphql`, `ws`, `socketio`, `grpc`, `mcp`. |
+| `type` | `graphql`, `sse`, `ws`, `socketio`, `mqtt`, `grpc` or `mcp`. Left out for HTTP. |
+| `method` | HTTP method. Left out for `graphql`, `ws`, `socketio`, `mqtt`, `grpc`, `mcp`. |
 | `url` | The full URL **including the query string**. The Params table in the app is a view of it. |
 | `params` | Only query parameters that are *switched off*; enabled ones are in `url`. |
 | `headers` | Rows of `key`, `value` and (only when off) `enabled: false`. |
@@ -163,6 +163,31 @@ socketio:
     - name: Join lobby
       event: join
       body: '["lobby"]'
+```
+
+```yaml request
+name: Kitchen sensor
+type: mqtt
+url: mqtts://broker.example.com
+auth:
+  mode: basic
+  username: ada
+  password: '{{brokerPassword}}'
+mqtt:
+  keepAlive: 30
+  will:
+    topic: status/cairn
+    payload: offline
+    qos: 1
+    retain: true
+  topic: sensors/kitchen/temp
+  payload: '{"celsius": 21.5}'
+  qos: 1
+  format: json
+  subscribe:
+    - topic: sensors/#
+    - topic: alerts/+
+      qos: 2
 ```
 
 ```yaml request

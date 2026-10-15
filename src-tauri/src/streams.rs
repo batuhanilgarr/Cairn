@@ -391,6 +391,79 @@ pub async fn run_ws(id: String, args: WsArgs, mut rx: mpsc::UnboundedReceiver<Ws
     }
 }
 
+
+/* ------------------------------ raw TCP / TLS ------------------------------ */
+
+pub struct TcpArgs {
+    pub host: String,
+    pub port: u16,
+    pub tls: bool,
+    pub insecure: bool,
+    pub network: NetworkSettings,
+}
+
+/// A raw byte stream to `host:port` (optionally over TLS), for protocols that are not HTTP, such as MQTT.
+/// Bytes arrive as `binary` events with a base64 payload (the same shape as a WebSocket binary message) and are sent
+/// with the same commands a WebSocket takes, so `ws_send` and `ws_close` work on it too.
+pub async fn run_tcp(id: String, args: TcpArgs, mut rx: mpsc::UnboundedReceiver<WsCmd>, emit: Emit) {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let ev = |v: Value| {
+        let mut v = v;
+        v["id"] = json!(id);
+        emit(v)
+    };
+    let addr = format!("{}:{}", args.host, args.port);
+    let tcp = match tokio::time::timeout(Duration::from_secs(30), tokio::net::TcpStream::connect(&addr)).await {
+        Ok(Ok(s)) => s,
+        Ok(Err(e)) => return ev(json!({"type": "error", "message": format!("Couldn't connect to {addr}: {e}")})),
+        Err(_) => return ev(json!({"type": "error", "message": format!("Timed out connecting to {addr}")})),
+    };
+    let _ = tcp.set_nodelay(true);
+
+    // one pump for both the plain and the TLS stream
+    async fn pump<S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin>(mut s: S, rx: &mut mpsc::UnboundedReceiver<WsCmd>, ev: &(dyn Fn(Value) + Sync)) {
+        use base64::Engine;
+        let mut buf = vec![0u8; 16 * 1024];
+        loop {
+            tokio::select! {
+                n = s.read(&mut buf) => match n {
+                    Ok(0) => return ev(json!({"type": "close", "code": 1006, "reason": "The server closed the connection"})),
+                    Ok(n) => ev(json!({"type": "binary", "size": n, "base64": base64::engine::general_purpose::STANDARD.encode(&buf[..n]), "preview": ""})),
+                    Err(e) => return ev(json!({"type": "error", "message": format!("{e}")})),
+                },
+                cmd = rx.recv() => match cmd {
+                    Some(WsCmd::Binary(b)) => if let Err(e) = s.write_all(&b).await { return ev(json!({"type": "error", "message": format!("{e}")})); },
+                    Some(WsCmd::Text(t)) => if let Err(e) = s.write_all(t.as_bytes()).await { return ev(json!({"type": "error", "message": format!("{e}")})); },
+                    Some(WsCmd::Close) | None => {
+                        let _ = s.shutdown().await;
+                        return ev(json!({"type": "close", "code": 1000, "reason": "Closed by you"}));
+                    }
+                },
+            }
+        }
+    }
+
+    ev(json!({"type": "open", "protocol": if args.tls { "tls" } else { "tcp" }}));
+    if args.tls {
+        let cfg = match tls_config(args.insecure, &args.network) {
+            Ok(c) => c,
+            Err(e) => return ev(json!({"type": "error", "message": e})),
+        };
+        let name = match rustls::pki_types::ServerName::try_from(args.host.clone()) {
+            Ok(n) => n,
+            Err(_) => return ev(json!({"type": "error", "message": format!("Not a valid host name for TLS: {}", args.host)})),
+        };
+        let connector = tokio_rustls::TlsConnector::from(Arc::new(cfg));
+        match tokio::time::timeout(Duration::from_secs(30), connector.connect(name, tcp)).await {
+            Ok(Ok(tls)) => pump(tls, &mut rx, &ev).await,
+            Ok(Err(e)) => ev(json!({"type": "error", "message": format!("TLS handshake with {addr} failed: {e}")})),
+            Err(_) => ev(json!({"type": "error", "message": format!("Timed out in the TLS handshake with {addr}")})),
+        }
+    } else {
+        pump(tcp, &mut rx, &ev).await;
+    }
+}
+
 /* --------------------------- Tauri commands --------------------------- */
 
 use tauri::{AppHandle, Emitter, State};
@@ -431,6 +504,20 @@ pub async fn ws_connect(
     let sid = id.clone();
     let task = tokio::spawn(async move {
         run_ws(sid.clone(), WsArgs { url, headers, protocols, insecure, network }, rx, emit).await;
+        s.remove(&sid);
+    });
+    streams.put(&id, Handle::Ws { tx, abort: task.abort_handle() });
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn tcp_connect(app: AppHandle, streams: State<'_, Streams>, id: String, host: String, port: u16, tls: bool, insecure: bool, network: NetworkSettings) -> Result<(), String> {
+    let s = streams.inner().clone();
+    let emit = emitter(app);
+    let (tx, rx) = mpsc::unbounded_channel();
+    let sid = id.clone();
+    let task = tokio::spawn(async move {
+        run_tcp(sid.clone(), TcpArgs { host, port, tls, insecure, network }, rx, emit).await;
         s.remove(&sid);
     });
     streams.put(&id, Handle::Ws { tx, abort: task.abort_handle() });
@@ -626,5 +713,106 @@ mod tests {
         assert!(tls_config(false, &Default::default()).is_ok());
         let bad = NetworkSettings { ca_cert: "/no/such.pem".into(), ..Default::default() };
         assert!(tls_config(false, &bad).unwrap_err().contains("CA certificate"));
+    }
+
+    #[tokio::test]
+    async fn tcp_echo_close_and_connect_failure() {
+        let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = l.local_addr().unwrap().port();
+        tokio::spawn(async move {
+            let (mut s, _) = l.accept().await.unwrap();
+            let mut buf = [0u8; 64];
+            loop {
+                let n = s.read(&mut buf).await.unwrap();
+                if n == 0 { break; }
+                s.write_all(&buf[..n]).await.unwrap();
+            }
+        });
+        let log = Arc::new(Mutex::new(Vec::new()));
+        let (tx, rx) = mpsc::unbounded_channel();
+        let args = TcpArgs { host: "127.0.0.1".into(), port, tls: false, insecure: false, network: Default::default() };
+        let task = tokio::spawn(run_tcp("t1".into(), args, rx, collect(&log)));
+        tx.send(WsCmd::Binary(vec![0x10, 0x00, 0xff])).unwrap();
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        tx.send(WsCmd::Close).unwrap();
+        task.await.unwrap();
+        let evs = log.lock().unwrap().clone();
+        let types: Vec<_> = evs.iter().map(|e| e["type"].as_str().unwrap().to_string()).collect();
+        assert_eq!(types, ["open", "binary", "close"], "{evs:?}");
+        assert_eq!(evs[0]["protocol"], "tcp");
+        assert_eq!(evs[1]["size"], 3);
+        assert_eq!(evs[1]["base64"], "EAD/", "the bytes come back exactly, base64 encoded");
+        assert_eq!(evs[2]["code"], 1000);
+
+        let log = Arc::new(Mutex::new(Vec::new()));
+        let (_tx, rx) = mpsc::unbounded_channel();
+        run_tcp("t2".into(), TcpArgs { host: "127.0.0.1".into(), port: 1, tls: false, insecure: false, network: Default::default() }, rx, collect(&log)).await;
+        let evs = log.lock().unwrap().clone();
+        assert_eq!(evs[0]["type"], "error");
+        assert!(evs[0]["message"].as_str().unwrap().contains("Couldn't connect to 127.0.0.1:1"), "{evs:?}");
+    }
+
+    #[tokio::test]
+    async fn tcp_server_closing_is_reported() {
+        let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = l.local_addr().unwrap().port();
+        tokio::spawn(async move {
+            let (mut s, _) = l.accept().await.unwrap();
+            s.write_all(b"bye").await.unwrap();
+        });
+        let log = Arc::new(Mutex::new(Vec::new()));
+        let (_tx, rx) = mpsc::unbounded_channel();
+        run_tcp("t3".into(), TcpArgs { host: "127.0.0.1".into(), port, tls: false, insecure: false, network: Default::default() }, rx, collect(&log)).await;
+        let evs = log.lock().unwrap().clone();
+        let types: Vec<_> = evs.iter().map(|e| e["type"].as_str().unwrap().to_string()).collect();
+        assert_eq!(types, ["open", "binary", "close"], "{evs:?}");
+        assert_eq!(evs[2]["code"], 1006);
+    }
+
+    /// A TLS server with a self-signed certificate: --insecure gets through, a normal connection must refuse it.
+    #[tokio::test]
+    async fn tcp_over_tls_with_a_self_signed_certificate() {
+        let cert_pem = include_bytes!("../testdata/selfsigned-cert.pem");
+        let key_pem = include_bytes!("../testdata/selfsigned-key.pem");
+        let certs = rustls_pemfile::certs(&mut cert_pem.as_slice()).collect::<Result<Vec<_>, _>>().unwrap();
+        let key = rustls_pemfile::private_key(&mut key_pem.as_slice()).unwrap().unwrap();
+        let provider = Arc::new(rustls::crypto::aws_lc_rs::default_provider());
+        let server_cfg = rustls::ServerConfig::builder_with_provider(provider).with_safe_default_protocol_versions().unwrap().with_no_client_auth().with_single_cert(certs, key).unwrap();
+        let acceptor = tokio_rustls::TlsAcceptor::from(Arc::new(server_cfg));
+        let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = l.local_addr().unwrap().port();
+        tokio::spawn(async move {
+            loop {
+                let (s, _) = l.accept().await.unwrap();
+                let acceptor = acceptor.clone();
+                tokio::spawn(async move {
+                    let Ok(mut tls) = acceptor.accept(s).await else { return };
+                    let mut buf = [0u8; 64];
+                    while let Ok(n) = tls.read(&mut buf).await {
+                        if n == 0 { break; }
+                        let _ = tls.write_all(&buf[..n]).await;
+                    }
+                });
+            }
+        });
+        let run = |insecure: bool, label: &'static str| async move {
+            let log = Arc::new(Mutex::new(Vec::new()));
+            let (tx, rx) = mpsc::unbounded_channel();
+            let task = tokio::spawn(run_tcp(label.into(), TcpArgs { host: "127.0.0.1".into(), port, tls: true, insecure, network: Default::default() }, rx, collect(&log)));
+            tx.send(WsCmd::Binary(vec![1, 2, 3, 4])).unwrap();
+            tokio::time::sleep(Duration::from_millis(500)).await;
+            let _ = tx.send(WsCmd::Close);
+            let _ = tokio::time::timeout(Duration::from_secs(3), task).await;
+            let evs = log.lock().unwrap().clone();
+            evs
+        };
+        let ok = run(true, "tls1").await;
+        let types: Vec<_> = ok.iter().map(|e| e["type"].as_str().unwrap().to_string()).collect();
+        assert_eq!(types, ["open", "binary", "close"], "{ok:?}");
+        assert_eq!(ok[0]["protocol"], "tls");
+        assert_eq!(ok[1]["base64"], "AQIDBA==");
+        let strict = run(false, "tls2").await;
+        assert_eq!(strict.last().unwrap()["type"], "error", "{strict:?}");
+        assert!(strict.last().unwrap()["message"].as_str().unwrap().contains("TLS handshake"), "{strict:?}");
     }
 }

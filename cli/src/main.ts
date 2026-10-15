@@ -62,7 +62,7 @@ Options
   -v, --version            Show the version
 
 Exit code: 0 all passed, 1 a test or request failed, 2 bad usage or configuration.
-Browser sign-in (OAuth authorization code), WebSocket, Socket.IO, SSE and gRPC requests are skipped in the CLI.
+Browser sign-in (OAuth authorization code), WebSocket, Socket.IO, MQTT, SSE and gRPC requests are skipped in the CLI.
 `;
 
 class UsageError extends Error {}
@@ -204,7 +204,7 @@ export async function runCollection(o: RunOptions): Promise<Report> {
       if (o.timeoutMs) tab.timeoutMs = o.timeoutMs;
       if (o.insecure) tab.insecure = true;
       const r: ReqResult = { file, rel, name: tab.name, method: tab.method, url: tab.url, iteration: it + 1, tests: [], logs: [] };
-      if (tab.kind === "ws" || tab.kind === "sio" || tab.kind === "sse" || tab.kind === "grpc") {
+      if (tab.kind === "ws" || tab.kind === "sio" || tab.kind === "mqtt" || tab.kind === "sse" || tab.kind === "grpc") {
         r.skipped = `${tab.kind} requests aren't run by the CLI`;
       } else {
         try {

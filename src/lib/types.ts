@@ -36,8 +36,26 @@ export type RunOutput = { tests: TestResult[]; logs: string[]; scriptError?: str
 /** A saved response. Examples document the API and are what the mock server answers with. */
 export type ResponseExample = { id: string; name: string; status: number; headers: KV[]; body: string; delayMs: number };
 
-export type RequestKind = "http" | "graphql" | "sse" | "ws" | "sio" | "grpc" | "mcp";
+export type RequestKind = "http" | "graphql" | "sse" | "ws" | "sio" | "mqtt" | "grpc" | "mcp";
 
+export type MqttQos = 0 | 1 | 2;
+export type MqttSub = { id: string; topic: string; qos: MqttQos };
+/** MQTT 3.1.1. The user name and password come from the request's Basic auth. */
+export type MqttConfig = {
+  clientId: string;
+  keepAlive: number;
+  clean: boolean;
+  willTopic: string;
+  willPayload: string;
+  willQos: MqttQos;
+  willRetain: boolean;
+  topic: string;
+  payload: string;
+  qos: MqttQos;
+  retain: boolean;
+  format: "text" | "json" | "hex";
+  subs: MqttSub[];
+};
 export type McpConfig = { transport: "http" | "stdio"; command: string; args: string; env: KV[] };
 
 export type GraphQLConfig = { query: string; variables: string; operation: string };
@@ -67,6 +85,7 @@ export type RequestTab = {
   gql: GraphQLConfig;
   ws: WsConfig;
   sio: SioConfig;
+  mqtt: MqttConfig;
   grpc: GrpcConfig;
   mcp: McpConfig;
   id: string;

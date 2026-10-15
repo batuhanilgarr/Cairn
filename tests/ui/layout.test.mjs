@@ -36,7 +36,7 @@ const STATES = [
 ];
 
 /** What the app would get from Tauri: a small collection and canned responses. The response is deliberately a worst case (120 headers, 12 cookies, 1 GB, two minutes) so that wide numbers can't break the header. Runs before the app loads. */
-const stubSource = ({ sidebar, aside, bigTree = 0, bigBody = 0, withLink = false, leakyToken = '', keychain = false, sio = false }) => `
+const stubSource = ({ sidebar, aside, bigTree = 0, bigBody = 0, withLink = false, leakyToken = '', keychain = false, sio = false, mqtt = false }) => `
 (() => {
   const req = (n, m) => 'name: ' + n + '\\nmethod: ' + m + '\\nurl: https://api.example.com/' + n + '\\n';
   let files = {
@@ -70,11 +70,39 @@ const stubSource = ({ sidebar, aside, bigTree = 0, bigBody = 0, withLink = false
   localStorage.setItem('rq.aside', ${JSON.stringify(JSON.stringify(aside))});
   window.__TAURI_EVENT_PLUGIN_INTERNALS__ = { unregisterListener() {} };
   const SIO = ${sio};
+  const MQ = ${mqtt};
   const CBS = {}; let cbN = 1; let STREAM_CB = 0;
   const say = (id, payload) => setTimeout(() => CBS[STREAM_CB] && CBS[STREAM_CB]({ event: 'stream', id: 1, payload: { id, ...payload } }), 5);
   window.__TAURI_INTERNALS__ = {
-    transformCallback: (cb) => { if (!SIO) return 1; const n = cbN++; CBS[n] = cb; return n; },
+    transformCallback: (cb) => { if (!SIO && !MQ) return 1; const n = cbN++; CBS[n] = cb; return n; },
     invoke: async (cmd, a) => {
+      if (MQ) {
+        // a broker that answers the way a real one does: CONNACK, SUBACK with the granted QoS, PUBACK, and a message of its own
+        if (cmd === 'plugin:event|listen') { STREAM_CB = a.handler; return 1; }
+        if (cmd === 'tcp_connect') { window.__mqtt = { connect: a, sent: [] }; say(a.id, { type: 'open', protocol: 'tcp' }); return null; }
+        if (cmd === 'ws_close') { say(a.id, { type: 'close', code: 1000, reason: 'Closed by you' }); return null; }
+        if (cmd === 'stream_stop') return null;
+        if (cmd === 'ws_send') {
+          const b = Array.from(atob(a.base64), (c) => c.charCodeAt(0));
+          window.__mqtt.sent.push(b.map((x) => x.toString(16).padStart(2, '0')).join(''));
+          const reply = (bytes) => say(a.id, { type: 'binary', size: bytes.length, base64: btoa(String.fromCharCode(...bytes)), preview: '' });
+          const type = b[0] >> 4;
+          if (type === 1) reply([0x20, 2, 0, 0]);
+          if (type === 8) {
+            const id = [b[2], b[3]]; let i = 4; const codes = [];
+            while (i < b.length) { const l = (b[i] << 8) | b[i + 1]; i += 2 + l; codes.push(b[i]); i++; }
+            reply([0x90, 2 + codes.length, ...id, ...codes]);
+          }
+          if (type === 3) {
+            const qos = (b[0] >> 1) & 3; const l = (b[2] << 8) | b[3]; let i = 4 + l; let pid = [];
+            if (qos > 0) { pid = [b[i], b[i + 1]]; i += 2; }
+            if (qos === 1) reply([0x40, 2, ...pid]);
+            const topic = Array.from('sensors/echo', (c) => c.charCodeAt(0)); const payload = Array.from('pong', (c) => c.charCodeAt(0));
+            reply([0x30, 2 + topic.length + payload.length, 0, topic.length, ...topic, ...payload]);
+          }
+          return null;
+        }
+      }
       if (SIO) {
         // a Socket.IO server that answers the way the real one does: handshake, namespace connect, acks, an event of its own
         if (cmd === 'plugin:event|listen') { STREAM_CB = a.handler; return 1; }
@@ -159,9 +187,9 @@ after(async () => {
 });
 
 /** Open the app in a fresh browser context. `fail()` saves a screenshot next to the failing assertion. */
-async function open({ width, height = 800, theme = "dark", sidebar = true, aside = null, bigTree = 0, bigBody = 0, withLink = false, leakyToken = "", keychain = false, sio = false }, label) {
+async function open({ width, height = 800, theme = "dark", sidebar = true, aside = null, bigTree = 0, bigBody = 0, withLink = false, leakyToken = "", keychain = false, sio = false, mqtt = false }, label) {
   const context = await browser.newContext({ viewport: { width, height }, colorScheme: theme });
-  await context.addInitScript(stubSource({ sidebar, aside, bigTree, bigBody, withLink, leakyToken, keychain, sio }));
+  await context.addInitScript(stubSource({ sidebar, aside, bigTree, bigBody, withLink, leakyToken, keychain, sio, mqtt }));
   const page = await context.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(String(e)));
@@ -710,6 +738,53 @@ test("Socket.IO: connect with auth and a namespace, emit with an acknowledgement
       assert.deepEqual(v.map((x) => `${x.id}: ${x.where.join(" | ")}`), [], "accessibility violations");
       assert.ok(over <= 0, `the page overflows sideways at 760px (${over}px)`);
       assert.ok(sentAfter.includes("41/chat,"), "disconnecting says goodbye to the namespace");
+    });
+  } finally {
+    await context.close();
+  }
+});
+
+test("MQTT: subscriptions travel with the request, connect over TCP, publish with QoS 1 and see the broker's answers", async () => {
+  const { page, context, errors, check } = await open({ width: 1360, mqtt: true }, "mqtt");
+  try {
+    await page.selectOption("select.kind", "mqtt");
+    await page.click(".url-cell");
+    await page.keyboard.type("mqtt://broker.example.com");
+    await page.fill('input[aria-label="Topic filter to subscribe to"]', "sensors/#");
+    await page.getByRole("button", { name: "Add", exact: true }).click();
+    await page.click(".urlbar > .btn.primary");
+    await page.waitForFunction(() => document.querySelector(".log")?.textContent.includes("sensors/# (QoS 0)") && document.querySelector(".log")?.textContent.includes("subscribed"));
+    await page.fill('input[aria-label="Topic to publish to"]', "sensors/kitchen");
+    await page.locator(".ws-compose .cm-content").click();
+    await page.keyboard.insertText("21.5");
+    await page.selectOption('select[aria-label="Publish QoS"]', "1");
+    await page.getByRole("button", { name: /^Publish/ }).click();
+    await page.waitForFunction(() => {
+      const t = document.querySelector(".log")?.textContent ?? "";
+      return t.includes("acknowledged · sensors/kitchen") && t.includes("sensors/echo · QoS 0") && t.includes("pong");
+    });
+    const log = await page.locator(".log").textContent();
+    const state = await page.evaluate(() => window.__mqtt);
+    const v = await axeViolations(page);
+    await page.setViewportSize({ width: 760, height: 800 });
+    await page.waitForTimeout(200);
+    const over = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
+    await page.setViewportSize({ width: 1360, height: 800 });
+    await page.getByRole("button", { name: "Disconnect" }).click();
+    await page.waitForFunction(() => document.querySelector(".log")?.textContent.includes("Closed by you"));
+    const sent = await page.evaluate(() => window.__mqtt.sent);
+    await check(async () => {
+      assert.deepEqual(errors, []);
+      assert.deepEqual({ host: state.connect.host, port: state.connect.port, tls: state.connect.tls }, { host: "broker.example.com", port: 1883, tls: false });
+      assert.match(state.sent[0], /^10[0-9a-f]{2}00044d515454/, "CONNECT with the MQTT protocol name");
+      assert.equal(state.sent[1], "820e0001000973656e736f72732f2300", "SUBSCRIBE for sensors/# at QoS 0");
+      assert.match(state.sent[2], /^32/, "PUBLISH at QoS 1");
+      assert.match(log, /Connected as cairn-/);
+      assert.match(log, /sensors\/kitchen · QoS 1/);
+      assert.match(log, /The broker has the message \(QoS 1/);
+      assert.deepEqual(v.map((x) => `${x.id}: ${x.where.join(" | ")}`), [], "accessibility violations");
+      assert.ok(over <= 0, `the page overflows sideways at 760px (${over}px)`);
+      assert.equal(sent.at(-1), "e000", "disconnecting says goodbye with a DISCONNECT packet");
     });
   } finally {
     await context.close();

@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from "react";
 import { linkTarget } from "./collection";
 import { readText } from "./fs";
 
-const KIND_LABEL: Record<string, string> = { graphql: "GQL", ws: "WS", sio: "SIO", sse: "SSE", grpc: "gRPC", mcp: "MCP" };
+const KIND_LABEL: Record<string, string> = { graphql: "GQL", ws: "WS", sio: "SIO", mqtt: "MQTT", sse: "SSE", grpc: "gRPC", mcp: "MCP" };
 
 /** "GET", "POST", "GQL"… from the head of a request file, without parsing the whole YAML. */
 export function labelOf(yaml: string): string {

@@ -36,7 +36,7 @@ const partsIn = (v: unknown): FormPart[] => {
 export function serializeRequest(t: RequestTab): string {
   const doc: Record<string, unknown> = { name: t.name };
   if (t.kind !== "http") doc.type = t.kind === "sio" ? "socketio" : t.kind;
-  if (t.kind !== "graphql" && t.kind !== "ws" && t.kind !== "sio" && t.kind !== "grpc" && t.kind !== "mcp") doc.method = t.method;
+  if (t.kind !== "graphql" && t.kind !== "ws" && t.kind !== "sio" && t.kind !== "mqtt" && t.kind !== "grpc" && t.kind !== "mcp") doc.method = t.method;
   doc.url = foldParamsIntoUrl(t.url, t.params);
   if (t.source) doc.source = t.source;
   const params = kvOut(t.params.filter((p) => !p.enabled)); // enabled ones are in the url
@@ -76,6 +76,22 @@ export function serializeRequest(t: RequestTab): string {
       ...(s.composer.trim() ? { message: s.composer } : {}),
       ...(s.ack ? { ack: true } : {}),
       ...(s.messages.length ? { saved: s.messages.map((m) => ({ name: m.name, event: m.event, body: m.body })) } : {}),
+    };
+  }
+  if (t.kind === "mqtt") {
+    const m = t.mqtt;
+    const q = (n: number) => (n ? { qos: n } : {});
+    doc.mqtt = {
+      ...(m.clientId.trim() ? { clientId: m.clientId } : {}),
+      ...(m.keepAlive !== 60 ? { keepAlive: m.keepAlive } : {}),
+      ...(m.clean ? {} : { cleanSession: false }),
+      ...(m.willTopic.trim() ? { will: { topic: m.willTopic, ...(m.willPayload ? { payload: m.willPayload } : {}), ...q(m.willQos), ...(m.willRetain ? { retain: true } : {}) } } : {}),
+      ...(m.topic.trim() ? { topic: m.topic } : {}),
+      ...(m.payload ? { payload: m.payload } : {}),
+      ...q(m.qos),
+      ...(m.retain ? { retain: true } : {}),
+      ...(m.format !== "text" ? { format: m.format } : {}),
+      ...(m.subs.length ? { subscribe: m.subs.map((s) => ({ topic: s.topic, ...q(s.qos) })) } : {}),
     };
   }
   if (t.kind === "mcp") {
@@ -255,13 +271,15 @@ export function parseRequest(text: string, file: string): RequestTab {
   return { ...tab, saved: serializeRequest(tab) };
 }
 
+const qosOf = (v: unknown): 0 | 1 | 2 => (v === 1 || v === 2 ? v : 0);
+
 function parseRequestRaw(text: string, file: string): RequestTab {
   const d: any = parse(text) ?? {};
   const t = newTab();
   return {
     ...t,
     name: String(d.name ?? basename(file).replace(/\.req\.ya?ml$/, "")),
-    kind: (d.type === "socketio" ? "sio" : ["graphql", "sse", "ws", "grpc", "mcp"].includes(d.type) ? d.type : "http") as RequestKind,
+    kind: (d.type === "socketio" ? "sio" : ["graphql", "sse", "ws", "mqtt", "grpc", "mcp"].includes(d.type) ? d.type : "http") as RequestKind,
     method: String(d.method ?? "GET").toUpperCase(),
     gql: { query: String(d.graphql?.query ?? ""), variables: String(d.graphql?.variables ?? ""), operation: String(d.graphql?.operation ?? "") },
     ws: {
@@ -277,6 +295,21 @@ function parseRequestRaw(text: string, file: string): RequestTab {
       composer: String(d.socketio?.message ?? ""),
       ack: d.socketio?.ack === true,
       messages: (Array.isArray(d.socketio?.saved) ? d.socketio.saved : []).map((m: any) => ({ id: uid(), name: String(m?.name ?? ""), event: String(m?.event ?? ""), body: String(m?.body ?? "") })),
+    },
+    mqtt: {
+      clientId: String(d.mqtt?.clientId ?? ""),
+      keepAlive: Number.isFinite(Number(d.mqtt?.keepAlive)) && d.mqtt?.keepAlive !== undefined ? Math.max(0, Math.min(65535, Math.round(Number(d.mqtt.keepAlive)))) : 60,
+      clean: d.mqtt?.cleanSession !== false,
+      willTopic: String(d.mqtt?.will?.topic ?? ""),
+      willPayload: String(d.mqtt?.will?.payload ?? ""),
+      willQos: qosOf(d.mqtt?.will?.qos),
+      willRetain: d.mqtt?.will?.retain === true,
+      topic: String(d.mqtt?.topic ?? ""),
+      payload: String(d.mqtt?.payload ?? ""),
+      qos: qosOf(d.mqtt?.qos),
+      retain: d.mqtt?.retain === true,
+      format: ["json", "hex"].includes(d.mqtt?.format) ? d.mqtt.format : "text",
+      subs: (Array.isArray(d.mqtt?.subscribe) ? d.mqtt.subscribe : []).map((s: any) => ({ id: uid(), topic: String(s?.topic ?? ""), qos: qosOf(s?.qos) })),
     },
     mcp: { transport: d.mcp?.transport === "stdio" ? "stdio" : "http", command: String(d.mcp?.command ?? ""), args: String(d.mcp?.args ?? ""), env: kvIn(d.mcp?.env) },
     grpc: {

@@ -28,6 +28,8 @@ import { useRequestLabels } from "./lib/useRequestLabels";
 import { AiPanel } from "./AiPanel";
 import { SettingRow, Switch } from "./SettingRow";
 import { SioPanel } from "./SioPanel";
+import { MqttPanel } from "./MqttPanel";
+import { MqttClient, fromBase64, mqttTarget, payloadBytes, toBase64, topicFilterError, topicNameError, type MqttStep } from "./lib/mqtt";
 import { SioClient, parseSioArgs, sioAuthError, sioTarget, type SioStep } from "./lib/socketio";
 import { AsideTabs, type AsideKind } from "./AsideTabs";
 import { DiffModal, type HistEntry } from "./DiffModal";
@@ -54,7 +56,7 @@ import { GrpcPanel, type GrpcSchema } from "./GrpcPanel";
 import { McpPanel } from "./McpPanel";
 import { loadInfo, mcpClose, mcpConnect, mcpRequest, rpcLabel, splitArgs, type McpInfo } from "./lib/mcp";
 import { WsPanel, type WsMode } from "./WsPanel";
-import { EMPTY_STREAM, MAX_ENTRIES, grpcCall, grpcDescribe, grpcEnd, grpcSend, sseConnect, streamStop, subscribe, unsubscribe, wsClose, wsConnect, wsSend, type StreamEntry, type StreamEvent, type StreamState } from "./lib/stream";
+import { EMPTY_STREAM, MAX_ENTRIES, grpcCall, grpcDescribe, grpcEnd, grpcSend, sseConnect, streamStop, subscribe, unsubscribe, tcpConnect, wsClose, wsConnect, wsSend, type StreamEntry, type StreamEvent, type StreamState } from "./lib/stream";
 import { cachedSchema, loadGraphQL, storeSchema } from "./lib/graphql";
 import { applyDefaults, layerVars, type Layer } from "./lib/inherit";
 import { executeRequest, prepareRequest, resolveOAuth, withSession } from "./lib/pipeline";
@@ -133,10 +135,11 @@ const SECTIONS: Record<RequestKind, ReqSection[]> = {
   sse: ["params", "headers", "body", "auth", "scripts", "settings"],
   ws: ["message", "headers", "auth", "settings"],
   sio: ["message", "headers", "auth", "settings"],
+  mqtt: ["message", "auth", "settings"],
   grpc: ["message", "headers", "auth", "settings"],
   mcp: ["explore", "headers", "auth", "settings"],
 };
-const KIND_LABEL: Record<RequestKind, string> = { http: "HTTP", graphql: "GraphQL", sse: "SSE", ws: "WebSocket", sio: "Socket.IO", grpc: "gRPC", mcp: "MCP" };
+const KIND_LABEL: Record<RequestKind, string> = { http: "HTTP", graphql: "GraphQL", sse: "SSE", ws: "WebSocket", sio: "Socket.IO", mqtt: "MQTT", grpc: "gRPC", mcp: "MCP" };
 const pillOf = (t: RequestTab) => (t.kind === "http" ? t.method : t.kind === "graphql" ? "GQL" : t.kind === "grpc" ? "gRPC" : t.kind === "mcp" ? "MCP" : t.kind.toUpperCase());
 type ResSection = "body" | "headers" | "cookies" | "tests" | "console";
 type SideSection = "collections" | "history" | "environments";
@@ -225,6 +228,7 @@ export default function App() {
   const writtenEnvs = useRef<Map<string, string>>(new Map());
   const tabsRef = useRef<RequestTab[]>([]);
   const sioClients = useRef<Map<string, SioClient>>(new Map());
+  const mqttClients = useRef<Map<string, { client: MqttClient; timer: ReturnType<typeof setInterval> }>>(new Map());
   const sessionRef = useRef<Record<string, string>>({});
   const tokensRef = useRef<TokenCache>(new Map());
   const stopRef = useRef(false);
@@ -297,7 +301,7 @@ export default function App() {
       sections: kinds,
       section: kinds.includes(reqSection) ? reqSection : kinds[0],
       showWelcome: isBlank(t) && !responses[t.id] && !loading[t.id] && !streams[t.id],
-      isStreamKind: t.kind === "ws" || t.kind === "sio" || t.kind === "sse" || t.kind === "grpc" || t.kind === "mcp",
+      isStreamKind: t.kind === "ws" || t.kind === "sio" || t.kind === "mqtt" || t.kind === "sse" || t.kind === "grpc" || t.kind === "mcp",
       streamState: streams[t.id] || EMPTY_STREAM,
       streamStatus: (streams[t.id] || EMPTY_STREAM).status,
       hist,
@@ -919,6 +923,17 @@ export default function App() {
     }
   };
 
+  /** Run what an MQTT client decided: bytes to send, entries to log, a status change. */
+  const applyMqtt = (id: string, step: MqttStep, note?: string) => {
+    for (const b of step.send) wsSend(id, { base64: toBase64(b) }).catch(() => {});
+    const patchState: Partial<StreamState> = {};
+    if (step.status) patchState.status = step.status;
+    if (note) patchState.info = note;
+    if (step.info !== undefined) patchState.info = step.info;
+    if (step.status === "open") patchState.startedAt = Date.now();
+    pushStream(id, step.entries, patchState);
+  };
+
   /** Run what a Socket.IO client decided: frames to send, entries to log, a status change. */
   const applySio = (id: string, step: SioStep) => {
     for (const f of step.send) wsSend(id, { text: f }).catch(() => {});
@@ -934,7 +949,14 @@ export default function App() {
     if (sio && e.type === "open") return pushStream(id, [{ dir: "sys", label: "websocket", text: "Connected, waiting for the Socket.IO handshake" }], { info: "handshake…" });
     if (sio && e.type === "message") return applySio(id, sio.onText(e.text));
     if (sio && e.type === "binary") return applySio(id, sio.onBinary(e.size));
-    if (e.type === "close" || e.type === "error" || e.type === "end") sioClients.current.delete(id);
+    const mq = mqttClients.current.get(id);
+    if (mq && e.type === "open") return applyMqtt(id, mq.client.start(), "Connected, sending CONNECT");
+    if (mq && e.type === "binary") return applyMqtt(id, mq.client.onBytes(fromBase64(e.base64 ?? "")));
+    if (mq && e.type === "message") return;
+    if (e.type === "close" || e.type === "error" || e.type === "end") {
+      sioClients.current.delete(id);
+      if (mq) (clearInterval(mq.timer), mqttClients.current.delete(id));
+    }
     switch (e.type) {
       case "open":
         if (e.headers !== undefined) {
@@ -1034,6 +1056,30 @@ export default function App() {
           messages: [msg],
           metadata: prep.spec.headers,
         });
+      } else if (tab.kind === "mqtt") {
+        const sub = (x: string) => interpolate(x, prep.eff());
+        const m = tab.mqtt;
+        const target = mqttTarget(prep.spec.url);
+        if (m.willTopic.trim()) {
+          const bad = topicNameError(m.willTopic.trim());
+          if (bad) throw new Error(`Last will: ${bad}`);
+        }
+        const will = m.willTopic.trim() ? { topic: sub(m.willTopic.trim()), payload: new TextEncoder().encode(sub(m.willPayload)), qos: m.willQos, retain: m.willRetain } : undefined;
+        const subscriptions = m.subs.filter((s) => s.topic.trim() && !topicFilterError(sub(s.topic.trim()))).map((s) => ({ topic: sub(s.topic.trim()), qos: s.qos }));
+        const client = new MqttClient({
+          clientId: sub(m.clientId.trim()) || `cairn-${uid().replace(/[^a-z0-9]/gi, "").slice(0, 8)}`,
+          keepAlive: m.keepAlive,
+          clean: m.clean,
+          username: tab.authMode === "basic" ? sub(tab.authUser) : undefined,
+          password: tab.authMode === "basic" ? sub(tab.authPass) : undefined,
+          will,
+          subscriptions,
+        });
+        const timer = setInterval(() => applyMqtt(tab.id, client.tick()), 1000);
+        mqttClients.current.get(tab.id) && clearInterval(mqttClients.current.get(tab.id)!.timer);
+        mqttClients.current.set(tab.id, { client, timer });
+        if (target.transport === "ws") await wsConnect(tab.id, { url: target.url, headers: [], protocols: ["mqtt"], insecure: tab.insecure });
+        else await tcpConnect(tab.id, { host: target.host, port: target.port, tls: target.transport === "tls", insecure: tab.insecure });
       } else if (tab.kind === "sio") {
         const sub = (x: string) => interpolate(x, prep.eff());
         const auth = sub(tab.sio.auth);
@@ -1066,7 +1112,10 @@ export default function App() {
         unsubscribe(tab.id);
         pushStream(tab.id, [{ dir: "sys", label: "disconnected", text: "You disconnected" }], { status: "closed" });
       } else if (tab.kind === "ws") await wsClose(tab.id);
-      else if (tab.kind === "sio") {
+      else if (tab.kind === "mqtt") {
+        for (const b of mqttClients.current.get(tab.id)?.client.disconnect() ?? []) await wsSend(tab.id, { base64: toBase64(b) }).catch(() => {});
+        await wsClose(tab.id);
+      } else if (tab.kind === "sio") {
         for (const f of sioClients.current.get(tab.id)?.disconnect() ?? []) await wsSend(tab.id, { text: f }).catch(() => {});
         await wsClose(tab.id);
       }
@@ -1078,6 +1127,34 @@ export default function App() {
     } catch {
       pushStream(tab.id, [], { status: "closed" });
     }
+  };
+
+  const publishMqtt = async () => {
+    const tab = active;
+    const mq = mqttClients.current.get(tab.id);
+    if (!mq) return flash("Connect first", 2500);
+    const vars = withSession(env, sessionRef.current, baseVars);
+    const m = tab.mqtt;
+    const body = payloadBytes(interpolate(m.payload, vars), m.format);
+    if ("error" in body) return flash(body.error, 4000);
+    try {
+      applyMqtt(tab.id, mq.client.publish(interpolate(m.topic.trim(), vars), body.bytes, m.qos, m.retain));
+    } catch (e) {
+      pushStream(tab.id, [{ dir: "sys", label: "error", text: String((e as Error).message ?? e), tone: "error" }]);
+    }
+  };
+  const mqttSubscribe = async (sb: { topic: string; qos: 0 | 1 | 2 }) => {
+    const mq = mqttClients.current.get(active.id);
+    if (!mq) return;
+    try {
+      applyMqtt(active.id, mq.client.subscribe(interpolate(sb.topic, withSession(env, sessionRef.current, baseVars)), sb.qos));
+    } catch (e) {
+      pushStream(active.id, [{ dir: "sys", label: "error", text: String((e as Error).message ?? e), tone: "error" }]);
+    }
+  };
+  const mqttUnsubscribe = async (sb: { topic: string }) => {
+    const mq = mqttClients.current.get(active.id);
+    if (mq) applyMqtt(active.id, mq.client.unsubscribe(interpolate(sb.topic, withSession(env, sessionRef.current, baseVars))));
   };
 
   const emitSio = async (event: string, argsText: string, ack: boolean) => {
@@ -1163,8 +1240,9 @@ export default function App() {
   const send = useCallback(async () => {
     if (!active || (!active.url.trim() && !(active.kind === "grpc" && active.grpc.source === "proto") && !(active.kind === "mcp" && active.mcp.transport === "stdio"))) return;
     const tab = active;
-    if (tab.kind === "ws" || tab.kind === "sio" || tab.kind === "sse" || tab.kind === "grpc" || tab.kind === "mcp") {
+    if (tab.kind === "ws" || tab.kind === "sio" || tab.kind === "mqtt" || tab.kind === "sse" || tab.kind === "grpc" || tab.kind === "mcp") {
       const st = streams[tab.id]?.status;
+      if (tab.kind === "mqtt" && st === "open" && tab.mqtt.topic.trim()) return void publishMqtt();
       if (tab.kind === "sio" && st === "open" && tab.sio.event.trim()) return void emitSio(tab.sio.event, tab.sio.composer, tab.sio.ack);
       if (tab.kind === "ws" && st === "open" && tab.ws.composer.trim()) {
         let isJson = true;
@@ -1730,7 +1808,7 @@ export default function App() {
         <div className="urlbar">
           <div className="reqbar">
           <select className="kind" value={active.kind} onChange={(e) => patch({ kind: e.target.value as RequestKind })} title="Request type">
-            {(["http", "graphql", "sse", "ws", "sio", "grpc", "mcp"] as RequestKind[]).map((k) => (
+            {(["http", "graphql", "sse", "ws", "sio", "mqtt", "grpc", "mcp"] as RequestKind[]).map((k) => (
               <option key={k} value={k}>{KIND_LABEL[k]}</option>
             ))}
           </select>
@@ -1753,7 +1831,7 @@ export default function App() {
             value={active.url}
             vars={varMap}
             editorRef={focused ? urlView : undefined}
-            placeholder={active.kind === "mcp" ? "https://example.com/mcp" : active.kind === "grpc" ? "localhost:50051  or  grpcs://api.example.com:443" : active.kind === "ws" ? "wss://example.com/socket" : active.kind === "sio" ? "https://example.com  (a Socket.IO server)" : "Enter URL, or paste a cURL command  (use {{variables}})"}
+            placeholder={active.kind === "mcp" ? "https://example.com/mcp" : active.kind === "grpc" ? "localhost:50051  or  grpcs://api.example.com:443" : active.kind === "ws" ? "wss://example.com/socket" : active.kind === "sio" ? "https://example.com  (a Socket.IO server)" : active.kind === "mqtt" ? "mqtt://broker.example.com:1883   or  mqtts://…  or  wss://…/mqtt" : "Enter URL, or paste a cURL command  (use {{variables}})"}
             onSubmit={send}
             onPasteText={(text) => {
               if (!looksLikeCurl(text)) return false;
@@ -1773,7 +1851,7 @@ export default function App() {
             {isStreamKind ? (streamStatus === "open" || streamStatus === "connecting" ? (active.kind === "grpc" ? "Cancel" : "Disconnect") : active.kind === "grpc" ? "Invoke" : "Connect") : loading[active.id] ? "Sending…" : "Send"}
             <kbd>⌘↵</kbd>
           </button>
-          {active.kind !== "ws" && active.kind !== "sio" && active.kind !== "grpc" && (
+          {active.kind !== "ws" && active.kind !== "sio" && active.kind !== "mqtt" && active.kind !== "grpc" && (
             <button className={`btn code-btn ${aside === "code" ? "on" : ""}`} onClick={() => fire("codegen")} title="Code snippet (⇧⌘G)" aria-label="Toggle code snippet panel" aria-pressed={aside === "code"}>
               <IconCode />
             </button>
@@ -1927,6 +2005,9 @@ export default function App() {
                 onEndStream={() => void grpcEnd(active.id).then(() => pushStream(active.id, [{ dir: "sys", label: "half-close", text: "You ended the request stream" }])).catch(() => {})}
               />
             )}
+            {section === "message" && active.kind === "mqtt" && (
+              <MqttPanel tab={active} patch={patch} vars={varMap} connected={streamStatus === "open"} onPublish={() => void publishMqtt()} onSubscribe={(sb) => void mqttSubscribe(sb)} onUnsubscribe={(sb) => void mqttUnsubscribe(sb)} />
+            )}
             {section === "message" && active.kind === "sio" && (
               <SioPanel tab={active} patch={patch} vars={varMap} connected={streamStatus === "open"} onEmit={(ev, a, ack) => void emitSio(ev, a, ack)} onAskName={() => ask("Save message", "", "Save", "Give this message a short name.")} />
             )}
@@ -1956,6 +2037,39 @@ export default function App() {
                     <input className="cell" placeholder="graphql-transport-ws, chat" value={active.ws.protocols} spellCheck={false} onChange={(e) => patch({ ws: { ...active.ws, protocols: e.target.value } })} />
                   </SettingRow>
                 )}
+                {active.kind === "mqtt" && (
+                  <>
+                    <SettingRow label="Client id" hint="Left empty: a random one (cairn-…) for each connection.">
+                      <input className="cell" placeholder="cairn-…" value={active.mqtt.clientId} spellCheck={false} onChange={(e) => patch({ mqtt: { ...active.mqtt, clientId: e.target.value } })} />
+                    </SettingRow>
+                    <SettingRow label="Keep-alive (seconds)" hint="0 turns pings off. Brokers drop a connection that is silent for about 1.5 times this.">
+                      <input className="cell" type="number" min={0} max={65535} value={active.mqtt.keepAlive} onChange={(e) => patch({ mqtt: { ...active.mqtt, keepAlive: Math.max(0, Math.min(65535, Math.round(Number(e.target.value) || 0))) } })} />
+                    </SettingRow>
+                    <SettingRow label="Clean session" hint="Off: the broker keeps your subscriptions and queued QoS 1 and 2 messages while you are away (needs a fixed client id).">
+                      <Switch label="Clean session" checked={active.mqtt.clean} onChange={(clean) => patch({ mqtt: { ...active.mqtt, clean } })} />
+                    </SettingRow>
+                    <SettingRow label="Last will topic" hint="The broker publishes the will if the connection drops without a goodbye. Left empty: no will.">
+                      <input className="cell" placeholder="status/my-client" value={active.mqtt.willTopic} spellCheck={false} onChange={(e) => patch({ mqtt: { ...active.mqtt, willTopic: e.target.value } })} />
+                    </SettingRow>
+                    {active.mqtt.willTopic.trim() && (
+                      <>
+                        <SettingRow label="Last will payload">
+                          <input className="cell" placeholder="offline" value={active.mqtt.willPayload} spellCheck={false} onChange={(e) => patch({ mqtt: { ...active.mqtt, willPayload: e.target.value } })} />
+                        </SettingRow>
+                        <SettingRow label="Last will QoS">
+                          <select aria-label="Last will QoS" value={active.mqtt.willQos} onChange={(e) => patch({ mqtt: { ...active.mqtt, willQos: Number(e.target.value) as 0 | 1 | 2 } })}>
+                            <option value={0}>QoS 0</option>
+                            <option value={1}>QoS 1</option>
+                            <option value={2}>QoS 2</option>
+                          </select>
+                        </SettingRow>
+                        <SettingRow label="Retain the last will">
+                          <Switch label="Retain the last will" checked={active.mqtt.willRetain} onChange={(willRetain) => patch({ mqtt: { ...active.mqtt, willRetain } })} />
+                        </SettingRow>
+                      </>
+                    )}
+                  </>
+                )}
                 {active.kind === "sio" && (
                   <>
                     <SettingRow label="Namespace" hint="Left empty: the path in the address, or the main namespace (/).">
@@ -1974,7 +2088,7 @@ export default function App() {
                     <Switch label="Use TLS" checked={active.grpc.tls} onChange={(tls) => patch({ grpc: { ...active.grpc, tls } })} />
                   </SettingRow>
                 )}
-                {active.kind !== "ws" && active.kind !== "sio" && active.kind !== "grpc" && (
+                {active.kind !== "ws" && active.kind !== "sio" && active.kind !== "mqtt" && active.kind !== "grpc" && (
                   <SettingRow label="Follow redirects" hint="Follow 3xx responses automatically.">
                     <Switch label="Follow redirects" checked={active.followRedirects} onChange={(followRedirects) => patch({ followRedirects })} />
                   </SettingRow>
@@ -1997,7 +2111,7 @@ export default function App() {
             <StreamLog
               state={streamState}
               onClear={() => setStreams((m) => ({ ...m, [active.id]: { ...(m[active.id] ?? EMPTY_STREAM), entries: [], dropped: 0, sent: 0, received: 0 } }))}
-              emptyHint={active.kind === "sio" ? "Connect, then emit an event. Events from the server, acknowledgements and your own emits show up here." : active.kind === "ws" ? "Connect, then send a message. Everything in both directions shows up here." : active.kind === "mcp" ? "Connect to a server. Every JSON-RPC message in both directions is logged here, plus the server's stderr for local commands." : active.kind === "grpc" ? "Pick a method and hit Invoke. Requests, responses, headers and the final status appear here." : "Connect to start receiving events."}
+              emptyHint={active.kind === "mqtt" ? "Connect to the broker, add topics to follow, then publish. Messages in both directions, acknowledgements and your subscriptions show up here." : active.kind === "sio" ? "Connect, then emit an event. Events from the server, acknowledgements and your own emits show up here." : active.kind === "ws" ? "Connect, then send a message. Everything in both directions shows up here." : active.kind === "mcp" ? "Connect to a server. Every JSON-RPC message in both directions is logged here, plus the server's stderr for local commands." : active.kind === "grpc" ? "Pick a method and hit Invoke. Requests, responses, headers and the final status appear here." : "Connect to start receiving events."}
             />
           </div>
         ) : (
@@ -2524,7 +2638,7 @@ export default function App() {
       {aside && (() => {
         const tabs = <AsideTabs active={aside} onSelect={setAside} onClose={() => setAside(null)} />;
         return aside === "code" ? (
-          <CodePanel build={buildSnippet} tabs={tabs} unsupported={active.kind === "ws" || active.kind === "sio" || active.kind === "grpc" ? "A snippet isn't available for this request type." : undefined} />
+          <CodePanel build={buildSnippet} tabs={tabs} unsupported={active.kind === "ws" || active.kind === "sio" || active.kind === "mqtt" || active.kind === "grpc" ? "A snippet isn't available for this request type." : undefined} />
         ) : (
           <AiPanel
             config={settings.ai}

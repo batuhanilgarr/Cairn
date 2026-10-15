@@ -74,7 +74,7 @@ export async function runBench(o: BenchOptions): Promise<BenchReport> {
       skipped.push(`${file}: couldn't be read (${(e as Error).message})`);
       continue;
     }
-    if (tab.kind === "ws" || tab.kind === "sio" || tab.kind === "sse" || tab.kind === "grpc") {
+    if (tab.kind === "ws" || tab.kind === "sio" || tab.kind === "mqtt" || tab.kind === "sse" || tab.kind === "grpc") {
       skipped.push(`${tab.name}: ${tab.kind} requests can't be load tested`);
       continue;
     }
