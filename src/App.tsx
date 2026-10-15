@@ -40,6 +40,7 @@ import { bodyText } from "./lib/bigbody";
 import { SecretScanModal, type ScanState } from "./SecretScanModal";
 import { buildOpenApi, collectExportItems, toJson, toYaml } from "./lib/openapiExport";
 import { isHar, parseHar } from "./lib/har";
+import { isWsdl, parseWsdl } from "./lib/wsdl";
 import { keychainAvailable, keychainEvents, secretStore, type SecretStore } from "./lib/keychain";
 import { PasteImportModal } from "./PasteImportModal";
 import { applyFix, checkGitignore, scanText, type Finding } from "./lib/secrets";
@@ -483,7 +484,22 @@ export default function App() {
     if (!collection) return;
     const text = /^https?:\/\//i.test(source) ? await fetchSpec(source) : await readText(source);
     if (text === null) throw new Error(`Couldn't read ${source}`);
+    if (isWsdl(text)) return importWsdlText(text, source);
     await importOpenApiText(text, source, sync);
+  };
+
+  /** A WSDL (SOAP): every operation becomes a POST with a sample envelope. Imports are fetched next to `source`. */
+  const importWsdlText = async (text: string, source: string | null) => {
+    if (!collection) return;
+    const web = !!source && /^https?:\/\//i.test(source);
+    const parsed = await parseWsdl(text, source ?? "", {
+      resolve: source ? (loc) => (web || /^https?:\/\//i.test(loc) ? fetchSpec(loc) : readText(loc)) : undefined,
+    });
+    const summary = await writeImport(collection.root, parsed.requests, true);
+    const env = await ensureEnvironment(collection.root, parsed.title, parsed.vars);
+    await reloadEnvs(env.id);
+    await refreshTree();
+    await info(`${parsed.title}: SOAP imported`, summarize(`Environment "${env.name}" has {{baseUrl}}. Each operation is a POST with a sample envelope: fill in the values.`, summary, parsed.notes));
   };
 
   /** `source` is where the text came from (a URL or file, so it can be re-synced); null for pasted text. */
@@ -507,8 +523,8 @@ export default function App() {
       const meta = await readCollectionMeta(collection.root);
       const choice = await choose("Import into this collection", [
         ...(meta?.openapi ? [{ id: "resync", label: "Re-sync OpenAPI", hint: meta.openapi.source }] : []),
-        { id: "oas-url", label: "OpenAPI / Swagger from URL", hint: "JSON or YAML, v2 or v3" },
-        { id: "oas-file", label: "OpenAPI / Swagger from file" },
+        { id: "oas-url", label: "OpenAPI / Swagger / WSDL from URL", hint: "JSON or YAML (v2 or v3), or a SOAP WSDL" },
+        { id: "oas-file", label: "OpenAPI / Swagger / WSDL from file" },
         { id: "oas-paste", label: "OpenAPI / Swagger from clipboard", hint: "paste a spec or a link to one, with a preview" },
         { id: "postman-folder", label: "Postman export folder", hint: "all collections, environments (with secrets) and globals in one go" },
         { id: "postman", label: "Postman collection or environment file", hint: "one v2.x JSON export" },
@@ -523,7 +539,7 @@ export default function App() {
       }
       if (choice === "oas-paste") return void setPasteImport(true);
       if (choice === "oas-file") {
-        const f = await pickFile("Choose an OpenAPI file", ["json", "yaml", "yml"]);
+        const f = await pickFile("Choose an OpenAPI or WSDL file", ["json", "yaml", "yml", "wsdl", "xml"]);
         if (f) await importOpenApi(f, true);
       }
       if (choice === "har") {
@@ -2415,7 +2431,8 @@ export default function App() {
             setPasteImport(false);
             void guard(async () => {
               if (/^https?:\/\/\S+$/i.test(textOrUrl)) return importOpenApi(textOrUrl, true);
-              await importOpenApiText(textOrUrl, null, true);
+              if (isWsdl(textOrUrl)) await importWsdlText(textOrUrl, null);
+              else await importOpenApiText(textOrUrl, null, true);
             });
           }}
         />

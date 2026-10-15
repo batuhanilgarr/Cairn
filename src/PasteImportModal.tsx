@@ -39,12 +39,12 @@ export function PasteImportModal({ onImport, onClose }: { onImport: (textOrUrl: 
     return () => window.removeEventListener("keydown", esc);
   }, [onClose]);
 
-  const ready = info.kind === "spec" || info.kind === "url" || (info.kind === "other" && /Too large/.test(info.reason));
+  const ready = info.kind === "spec" || info.kind === "wsdl" || info.kind === "url" || (info.kind === "other" && /Too large/.test(info.reason));
   return (
     <div className="scrim" onMouseDown={onClose}>
       <div className="dialog paste" ref={(el) => { box.current = el; return focusScope(el); }} tabIndex={-1} onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-label="Import OpenAPI from clipboard">
         <h3>Import OpenAPI from clipboard</h3>
-        <p className="muted small">Paste an OpenAPI 3 or Swagger 2 document (JSON or YAML), or a link to one.</p>
+        <p className="muted small">Paste an OpenAPI 3 or Swagger 2 document (JSON or YAML), a WSDL (SOAP), or a link to one.</p>
         <textarea
           ref={area}
           className="cell paste-box"
@@ -58,6 +58,15 @@ export function PasteImportModal({ onImport, onClose }: { onImport: (textOrUrl: 
           {info.kind === "empty" && <span className="muted">Nothing pasted yet.</span>}
           {info.kind === "url" && <span>That's a link: Cairn will download the spec from <code>{info.url.length > 60 ? info.url.slice(0, 57) + "…" : info.url}</code> and import it.</span>}
           {info.kind === "other" && <span className={ready ? "muted" : "bad-text"}>{info.reason}</span>}
+          {info.kind === "wsdl" && (
+            <>
+              <b>{info.title}</b> <span className="muted">· WSDL (SOAP) · {info.requests} {info.requests === 1 ? "request" : "requests"}{info.notes ? ` · ${info.notes} note${info.notes === 1 ? "" : "s"}` : ""}</span>
+              <ul className="paste-list">
+                {info.names.map((n) => <li key={n}><code>{n}</code></li>)}
+                {info.requests > info.names.length && <li className="muted">…and {info.requests - info.names.length} more</li>}
+              </ul>
+            </>
+          )}
           {info.kind === "spec" && (
             <>
               <b>{info.title}</b> <span className="muted">· {info.version} · {info.requests} {info.requests === 1 ? "request" : "requests"}{info.notes ? ` · ${info.notes} note${info.notes === 1 ? "" : "s"}` : ""}</span>

@@ -1,6 +1,7 @@
 import { parse } from "yaml";
 import type { AuthMode, BodyMode, KV, RequestTab, ResponseExample } from "./types";
 import { defaultOAuth, emptyKV, newTab, tryPrettyJson, uid } from "./util";
+import { isWsdl, parseWsdlSync } from "./wsdl";
 
 export type ImportedRequest = {
   /** Folder segments under the collection root (derived from tags). */
@@ -316,6 +317,7 @@ export function mergeSpecInto(existing: RequestTab, fresh: RequestTab): RequestT
 /** What a pasted text is, without importing anything: drives the preview in the "from clipboard" dialog. */
 export type SpecInfo =
   | { kind: "spec"; title: string; version: string; requests: number; names: string[]; notes: number }
+  | { kind: "wsdl"; title: string; requests: number; names: string[]; notes: number }
   | { kind: "url"; url: string }
   | { kind: "empty" }
   | { kind: "other"; reason: string };
@@ -326,6 +328,14 @@ export function inspectSpec(text: string): SpecInfo {
   const t = text.trim();
   if (!t) return { kind: "empty" };
   if (/^https?:\/\/\S+$/i.test(t)) return { kind: "url", url: t };
+  if (t.startsWith("<") && isWsdl(t)) {
+    try {
+      const r = parseWsdlSync(t);
+      return { kind: "wsdl", title: r.title, requests: r.requests.length, names: r.requests.slice(0, 6).map((q) => `POST ${q.folder.join("/")}/${q.tab.name}`), notes: r.notes.length };
+    } catch (e) {
+      return { kind: "other", reason: (e as Error).message };
+    }
+  }
   if (t.length > PREVIEW_LIMIT) return { kind: "other", reason: "Too large to preview, but Import will read it." };
   let doc: any;
   try {

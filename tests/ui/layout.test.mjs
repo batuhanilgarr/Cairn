@@ -1190,3 +1190,45 @@ for (const width of [760, 1360]) {
     }
   });
 }
+
+test("import from clipboard: a WSDL is recognised, previewed and imported as SOAP requests", async () => {
+  const { page, context, errors, check } = await open({ width: 1360 }, "paste wsdl");
+  try {
+    await page.keyboard.press("Control+k");
+    await page.waitForSelector(".palette");
+    await page.keyboard.type("openapi from clipboard");
+    await page.waitForTimeout(250);
+    await page.keyboard.press("Enter");
+    await page.waitForSelector(".dialog.paste");
+    await page.waitForTimeout(500);
+    const wsdl = `<?xml version="1.0"?><wsdl:definitions xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/" xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/" xmlns:s="http://www.w3.org/2001/XMLSchema" xmlns:tns="http://tempuri.org/" targetNamespace="http://tempuri.org/" name="Calc">
+      <wsdl:types><s:schema elementFormDefault="qualified" targetNamespace="http://tempuri.org/"><s:element name="Add"><s:complexType><s:sequence><s:element name="a" type="s:int"/><s:element name="b" type="s:int"/></s:sequence></s:complexType></s:element><s:element name="Sub"><s:complexType><s:sequence><s:element name="a" type="s:int"/></s:sequence></s:complexType></s:element></s:schema></wsdl:types>
+      <wsdl:message name="AddIn"><wsdl:part name="p" element="tns:Add"/></wsdl:message><wsdl:message name="SubIn"><wsdl:part name="p" element="tns:Sub"/></wsdl:message>
+      <wsdl:portType name="CalcSoap"><wsdl:operation name="Add"><wsdl:input message="tns:AddIn"/></wsdl:operation><wsdl:operation name="Sub"><wsdl:input message="tns:SubIn"/></wsdl:operation></wsdl:portType>
+      <wsdl:binding name="CalcSoap" type="tns:CalcSoap"><soap:binding transport="http://schemas.xmlsoap.org/soap/http"/>
+        <wsdl:operation name="Add"><soap:operation soapAction="http://tempuri.org/Add"/><wsdl:input><soap:body use="literal"/></wsdl:input></wsdl:operation>
+        <wsdl:operation name="Sub"><soap:operation soapAction="http://tempuri.org/Sub"/><wsdl:input><soap:body use="literal"/></wsdl:input></wsdl:operation></wsdl:binding>
+      <wsdl:service name="Calc"><wsdl:port name="CalcSoap" binding="tns:CalcSoap"><soap:address location="https://calc.example.com/Calc.asmx"/></wsdl:port></wsdl:service></wsdl:definitions>`;
+    await page.fill(".paste-box", wsdl);
+    await page.waitForTimeout(500);
+    const preview = await page.locator(".paste-status").textContent();
+    const enabled = !(await page.getByRole("button", { name: "Import", exact: true }).isDisabled());
+    const v = await axeViolations(page);
+    await page.getByRole("button", { name: "Import", exact: true }).click();
+    await page.waitForSelector(".dialog.paste", { state: "detached" });
+    await page.waitForFunction(() => /SOAP imported/i.test(document.body.textContent));
+    const done = await page.evaluate(() => document.querySelector('[role="dialog"]')?.textContent ?? "");
+    await check(async () => {
+      assert.deepEqual(errors, []);
+      assert.match(preview, /Calc/);
+      assert.match(preview, /WSDL \(SOAP\)/);
+      assert.match(preview, /2 requests/);
+      assert.match(preview, /POST Calc\/Add/);
+      assert.ok(enabled, "a WSDL can be imported");
+      assert.deepEqual(v.map((x) => `${x.id}: ${x.where.join(" | ")}`), [], "accessibility violations");
+      assert.match(done, /Created 2/);
+    });
+  } finally {
+    await context.close();
+  }
+});
