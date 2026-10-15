@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 pub mod bigbody;
+pub mod filter;
 pub mod keychain;
 pub mod cookies;
 pub mod grpc;
@@ -548,6 +549,7 @@ pub fn run() {
             keychain::secret_get,
             keychain::secret_set,
             keychain::secret_delete,
+            bigbody::body_filter,
             bigbody::body_prepare,
             bigbody::body_lines,
             bigbody::body_search,

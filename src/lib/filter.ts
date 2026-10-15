@@ -590,6 +590,15 @@ const FUNCS: Record<string, Fn> = {
   },
 };
 
+/** [fewest, most] arguments each function takes. A call outside that range is "not defined", like in jq. */
+const ARITY: Record<string, [number, number]> = {
+  length: [0, 0], keys: [0, 0], values: [0, 0], map: [1, 1], select: [1, 1], empty: [0, 0], not: [0, 0], first: [0, 1], last: [0, 1], sort: [0, 0], sort_by: [1, 1],
+  group_by: [1, 1], unique: [0, 0], reverse: [0, 0], add: [0, 0], min: [0, 0], max: [0, 0], min_by: [1, 1], max_by: [1, 1], has: [1, 1], contains: [1, 1],
+  startswith: [1, 1], endswith: [1, 1], test: [1, 2], ascii_downcase: [0, 0], ascii_upcase: [0, 0], tostring: [0, 0], tonumber: [0, 0], tojson: [0, 0],
+  fromjson: [0, 0], type: [0, 0], flatten: [0, 1], any: [0, 1], all: [0, 1], join: [1, 1], split: [1, 1], range: [1, 1], limit: [2, 2], to_entries: [0, 0],
+  from_entries: [0, 0], abs: [0, 0], floor: [0, 0], ceil: [0, 0], round: [0, 0],
+};
+
 const MAX_STEPS = 2_000_000;
 let steps = 0;
 
@@ -674,7 +683,8 @@ function* runNode(n: Node, input: unknown): Generator<unknown> {
       return;
     case "call": {
       const f = FUNCS[n.name];
-      if (!f) return fail(`${n.name}/${n.args.length} is not defined`);
+      const [min, max] = ARITY[n.name] ?? [0, 0];
+      if (!f || n.args.length < min || n.args.length > max) return fail(`${n.name}/${n.args.length} is not defined`);
       return yield* f(input, n.args);
     }
     case "bin": {

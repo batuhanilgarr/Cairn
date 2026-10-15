@@ -1,0 +1,3622 @@
+{
+ "inputs": {
+  "main": {
+   "store": {
+    "name": "Corner",
+    "open": true,
+    "tags": [
+     "a",
+     "b"
+    ]
+   },
+   "data": [
+    {
+     "id": "inv_1",
+     "amount": 100,
+     "status": "paid",
+     "tags": [
+      "a",
+      "b"
+     ],
+     "price": 9.5
+    },
+    {
+     "id": "inv_2",
+     "amount": 250,
+     "status": "open",
+     "tags": [],
+     "price": 20
+    },
+    {
+     "id": "inv_3",
+     "amount": 40,
+     "status": "paid",
+     "tags": [
+      "c"
+     ],
+     "price": 5.25
+    }
+   ],
+   "total": 3,
+   "nothing": null,
+   "text": "Hello, World",
+   "nested": {
+    "a": {
+     "b": {
+      "c": [
+       1,
+       2,
+       {
+        "d": "deep"
+       }
+      ]
+     }
+    }
+   },
+   "mixed": [
+    3,
+    "a",
+    null,
+    true,
+    [
+     1
+    ],
+    {
+     "k": 1
+    },
+    2.5
+   ]
+  },
+  "scalars": {
+   "n": -4.5,
+   "s": "x",
+   "t": true,
+   "f": false,
+   "z": null,
+   "big": 12345678,
+   "list": [
+    1,
+    2,
+    3,
+    4,
+    5
+   ],
+   "words": [
+    "b",
+    "a",
+    "c",
+    "a"
+   ]
+  }
+ },
+ "cases": [
+  {
+   "input": "main",
+   "expr": "",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    {
+     "store": {
+      "name": "Corner",
+      "open": true,
+      "tags": [
+       "a",
+       "b"
+      ]
+     },
+     "data": [
+      {
+       "id": "inv_1",
+       "amount": 100,
+       "status": "paid",
+       "tags": [
+        "a",
+        "b"
+       ],
+       "price": 9.5
+      },
+      {
+       "id": "inv_2",
+       "amount": 250,
+       "status": "open",
+       "tags": [],
+       "price": 20
+      },
+      {
+       "id": "inv_3",
+       "amount": 40,
+       "status": "paid",
+       "tags": [
+        "c"
+       ],
+       "price": 5.25
+      }
+     ],
+     "total": 3,
+     "nothing": null,
+     "text": "Hello, World",
+     "nested": {
+      "a": {
+       "b": {
+        "c": [
+         1,
+         2,
+         {
+          "d": "deep"
+         }
+        ]
+       }
+      }
+     },
+     "mixed": [
+      3,
+      "a",
+      null,
+      true,
+      [
+       1
+      ],
+      {
+       "k": 1
+      },
+      2.5
+     ]
+    }
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    {
+     "store": {
+      "name": "Corner",
+      "open": true,
+      "tags": [
+       "a",
+       "b"
+      ]
+     },
+     "data": [
+      {
+       "id": "inv_1",
+       "amount": 100,
+       "status": "paid",
+       "tags": [
+        "a",
+        "b"
+       ],
+       "price": 9.5
+      },
+      {
+       "id": "inv_2",
+       "amount": 250,
+       "status": "open",
+       "tags": [],
+       "price": 20
+      },
+      {
+       "id": "inv_3",
+       "amount": 40,
+       "status": "paid",
+       "tags": [
+        "c"
+       ],
+       "price": 5.25
+      }
+     ],
+     "total": 3,
+     "nothing": null,
+     "text": "Hello, World",
+     "nested": {
+      "a": {
+       "b": {
+        "c": [
+         1,
+         2,
+         {
+          "d": "deep"
+         }
+        ]
+       }
+      }
+     },
+     "mixed": [
+      3,
+      "a",
+      null,
+      true,
+      [
+       1
+      ],
+      {
+       "k": 1
+      },
+      2.5
+     ]
+    }
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".store",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    {
+     "name": "Corner",
+     "open": true,
+     "tags": [
+      "a",
+      "b"
+     ]
+    }
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".store.name",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    "Corner"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".store.tags[1]",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    "b"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".data[0].id",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    "inv_1"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".data[-1].id",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    "inv_3"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".data[1:3] | map(.id)",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    [
+     "inv_2",
+     "inv_3"
+    ]
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".data[:2] | length",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    2
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".data[1:] | length",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    2
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".data[].id",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    "inv_1",
+    "inv_2",
+    "inv_3"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".data[] | .amount",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    100,
+    250,
+    40
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".[\"store\"][\"open\"]",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    true
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".missing",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    null
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".nothing.deeper",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    null
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".nothing[0]",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    null
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".total.x",
+   "ok": false,
+   "error": "Cannot index number with \"x\""
+  },
+  {
+   "input": "main",
+   "expr": ".store[0]",
+   "ok": false,
+   "error": "Cannot index object with number"
+  },
+  {
+   "input": "main",
+   "expr": ".data.id",
+   "ok": false,
+   "error": "Cannot index array with \"id\""
+  },
+  {
+   "input": "main",
+   "expr": ".text | .[0:5]",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    "Hello"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".text[7:]",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    "World"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".data | map(.amount) | add",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    390
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".data | map(.amount) | max, min",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    250,
+    40
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".data | map(.amount) | max",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    250
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".data | sort_by(.amount) | map(.id)",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    [
+     "inv_3",
+     "inv_1",
+     "inv_2"
+    ]
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".data | sort_by(.status, .id) | map(.id)",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    [
+     "inv_2",
+     "inv_1",
+     "inv_3"
+    ]
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".data | group_by(.status) | map(length)",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    [
+     1,
+     2
+    ]
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".data | group_by(.status) | map(map(.id))",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    [
+     [
+      "inv_2"
+     ],
+     [
+      "inv_1",
+      "inv_3"
+     ]
+    ]
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".data | length",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    3
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".data | map(.tags | length)",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    [
+     2,
+     0,
+     1
+    ]
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".data | map(.status) | unique",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    [
+     "open",
+     "paid"
+    ]
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".data | first | .id",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    "inv_1"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".data | last | .id",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    "inv_3"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".data | first(.[] | select(.amount > 90)) | .id",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    "inv_1"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".data | last(.[].id)",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    "inv_3"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".data | any(.amount > 200)",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    true
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".data | all(.amount > 50)",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    false
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".data | map(.amount) | any",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    true
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".data | min_by(.amount) | .id",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    "inv_3"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".data | max_by(.amount) | .id",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    "inv_2"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".data | map(select(.status == \"paid\")) | map(.id)",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    [
+     "inv_1",
+     "inv_3"
+    ]
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".data[] | select(.amount > 90 and .status == \"paid\") | .id",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    "inv_1"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".data[] | select(.status == \"open\" or .amount < 50) | .id",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    "inv_2",
+    "inv_3"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".data[] | select(.tags | length > 0) | .id",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    "inv_1",
+    "inv_3"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".data[0] | {id, amount, paid: (.status == \"paid\")}",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    {
+     "id": "inv_1",
+     "amount": 100,
+     "paid": true
+    }
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".data[0] | {\"x\": .id, (.status): .amount}",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    {
+     "x": "inv_1",
+     "paid": 100
+    }
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "[.data[].id]",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    [
+     "inv_1",
+     "inv_2",
+     "inv_3"
+    ]
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".data | map({id, big: (.amount >= 100)})",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    [
+     {
+      "id": "inv_1",
+      "big": true
+     },
+     {
+      "id": "inv_2",
+      "big": true
+     },
+     {
+      "id": "inv_3",
+      "big": false
+     }
+    ]
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "{a: 1, b: [1, 2]}",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    {
+     "a": 1,
+     "b": [
+      1,
+      2
+     ]
+    }
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".store | keys",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    [
+     "name",
+     "open",
+     "tags"
+    ]
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".data[0] | keys",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    [
+     "amount",
+     "id",
+     "price",
+     "status",
+     "tags"
+    ]
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".data | keys",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    [
+     0,
+     1,
+     2
+    ]
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".store | to_entries | map(.key)",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    [
+     "name",
+     "open",
+     "tags"
+    ]
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".store | to_entries | from_entries",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    {
+     "name": "Corner",
+     "open": true,
+     "tags": [
+      "a",
+      "b"
+     ]
+    }
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "[{\"key\":\"a\",\"value\":1},{\"name\":\"b\",\"v\":2}] | from_entries",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    {
+     "a": 1,
+     "b": 2
+    }
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".data | map(.id) | join(\",\")",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    "inv_1,inv_2,inv_3"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".data | map(.id) | join(\" / \")",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    "inv_1 / inv_2 / inv_3"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".mixed | join(\"-\")",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    "3-a--true-[1]-{\"k\":1}-2.5"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".text | split(\", \")",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    [
+     "Hello",
+     "World"
+    ]
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".text | ascii_downcase",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    "hello, world"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".text | ascii_upcase",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    "HELLO, WORLD"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".text | startswith(\"Hello\")",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    true
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".text | endswith(\"x\")",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    false
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".data[] | select(.id | test(\"_[12]$\")) | .id",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    "inv_1",
+    "inv_2"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".text | test(\"hello\")",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    false
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".text | test(\"hello\"; \"i\")",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    true
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".text | test(\"(\")",
+   "ok": false,
+   "error": "( (at offset 0) is not a valid regex"
+  },
+  {
+   "input": "main",
+   "expr": ".text | contains(\"World\")",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    true
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".store | contains({open: true})",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    true
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".store | has(\"name\")",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    true
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".store | has(\"nope\")",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    false
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".data | has(2)",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    true
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".data | has(5)",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    false
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".data[0] | if .amount > 50 then \"big\" else \"small\" end",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    "big"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".data[] | if .amount > 200 then \"huge\" elif .amount > 50 then \"big\" else \"small\" end",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    "big",
+    "huge",
+    "small"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".data[] | if .amount > 200 then .id end",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    {
+     "id": "inv_1",
+     "amount": 100,
+     "status": "paid",
+     "tags": [
+      "a",
+      "b"
+     ],
+     "price": 9.5
+    },
+    "inv_2",
+    {
+     "id": "inv_3",
+     "amount": 40,
+     "status": "paid",
+     "tags": [
+      "c"
+     ],
+     "price": 5.25
+    }
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".missing // \"fallback\"",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    "fallback"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".total // \"fallback\"",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    3
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".nothing // .total",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    3
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "(.missing, .nothing) // 7",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    7
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "(.data[].amount | select(. > 1000)) // 0",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    0
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".total + 1",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    4
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".total - 1",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    2
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".total * 2",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    6
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".total / 2",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    1.5
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".total % 2",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    1
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".total / 0",
+   "ok": false,
+   "error": "3 and 0 cannot be divided because the divisor is zero"
+  },
+  {
+   "input": "main",
+   "expr": ".total % 0",
+   "ok": false,
+   "error": "3 and 0 cannot be divided because the divisor is zero"
+  },
+  {
+   "input": "main",
+   "expr": "\"a\" + \"b\"",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    "ab"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "\"ab\" * 3",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    "ababab"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "\"a,b\" / \",\"",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    [
+     "a",
+     "b"
+    ]
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "[1,2] + [3]",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    [
+     1,
+     2,
+     3
+    ]
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "[1,2,3] - [2]",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    [
+     1,
+     3
+    ]
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "{a:1} + {b:2}",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    {
+     "a": 1,
+     "b": 2
+    }
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".nothing + 1",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    1
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "1 + .nothing",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    1
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "\"a\" + 1",
+   "ok": false,
+   "error": "string (\"a\") and number (1) cannot be added"
+  },
+  {
+   "input": "main",
+   "expr": "-.total",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    -3
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "-\"x\"",
+   "ok": false,
+   "error": "string (\"x\") cannot be negated"
+  },
+  {
+   "input": "main",
+   "expr": ".data[].tags[]?",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    "a",
+    "b",
+    "c"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".total.x?",
+   "ok": true,
+   "syntax": "jq",
+   "values": []
+  },
+  {
+   "input": "main",
+   "expr": ".total | .[]?",
+   "ok": true,
+   "syntax": "jq",
+   "values": []
+  },
+  {
+   "input": "main",
+   "expr": ".data[] | .tags[0]?",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    "a",
+    null,
+    "c"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".total | .[]",
+   "ok": false,
+   "error": "Cannot iterate over number (3)"
+  },
+  {
+   "input": "main",
+   "expr": ".data[0] | .[]",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    "inv_1",
+    100,
+    "paid",
+    [
+     "a",
+     "b"
+    ],
+    9.5
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".nothing | .[]",
+   "ok": false,
+   "error": "Cannot iterate over null"
+  },
+  {
+   "input": "main",
+   "expr": "..| .amount? // empty",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    100,
+    250,
+    40
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "[..|numbers?]",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    []
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "[.. | .id? | select(. != null)]",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    [
+     "inv_1",
+     "inv_2",
+     "inv_3"
+    ]
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".nested.a.b.c[2].d",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    "deep"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".nested | .. | .d? // empty",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    "deep"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".mixed | map(type)",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    [
+     "number",
+     "string",
+     "null",
+     "boolean",
+     "array",
+     "object",
+     "number"
+    ]
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".mixed | sort",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    [
+     null,
+     true,
+     2.5,
+     3,
+     "a",
+     [
+      1
+     ],
+     {
+      "k": 1
+     }
+    ]
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".mixed | sort | map(type)",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    [
+     "null",
+     "boolean",
+     "number",
+     "number",
+     "string",
+     "array",
+     "object"
+    ]
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".mixed | length",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    7
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".mixed | map(tostring)",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    [
+     "3",
+     "a",
+     "null",
+     "true",
+     "[1]",
+     "{\"k\":1}",
+     "2.5"
+    ]
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".mixed | flatten",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    [
+     3,
+     "a",
+     null,
+     true,
+     1,
+     {
+      "k": 1
+     },
+     2.5
+    ]
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".nested.a.b.c | flatten",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    [
+     1,
+     2,
+     {
+      "d": "deep"
+     }
+    ]
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "[[1,[2]],[3]] | flatten",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    [
+     1,
+     2,
+     3
+    ]
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "[[1,[2]],[3]] | flatten(1)",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    [
+     1,
+     [
+      2
+     ],
+     3
+    ]
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".total | tostring",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    "3"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".text | tostring",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    "Hello, World"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".data[0] | tojson",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    "{\"id\":\"inv_1\",\"amount\":100,\"status\":\"paid\",\"tags\":[\"a\",\"b\"],\"price\":9.5}"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "\"[1,2]\" | fromjson",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    [
+     1,
+     2
+    ]
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "\"nope\" | fromjson",
+   "ok": false,
+   "error": "\"nope\" is not valid JSON"
+  },
+  {
+   "input": "main",
+   "expr": "\"12\" | tonumber",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    12
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "\" 7 \" | tonumber",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    7
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "\"x\" | tonumber",
+   "ok": false,
+   "error": "Cannot parse \"x\" as a number"
+  },
+  {
+   "input": "main",
+   "expr": ".store | type",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    "object"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".total | type",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    "number"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".nothing | type",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    "null"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "[range(5)]",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    [
+     0,
+     1,
+     2,
+     3,
+     4
+    ]
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "[range(2; 4)]",
+   "ok": false,
+   "error": "range/2 is not defined"
+  },
+  {
+   "input": "main",
+   "expr": "[limit(2; .data[])] | length",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    2
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "[limit(0; .data[])] | length",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    0
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "[.data[] | .amount] | sort | reverse",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    [
+     250,
+     100,
+     40
+    ]
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "\"abc\" | reverse",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    "cba"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".nothing | reverse",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    []
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".total | reverse",
+   "ok": false,
+   "error": "Cannot reverse number"
+  },
+  {
+   "input": "main",
+   "expr": ".data | map(.price) | map(floor)",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    [
+     9,
+     20,
+     5
+    ]
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".data | map(.price) | map(ceil)",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    [
+     10,
+     20,
+     6
+    ]
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".data | map(.price) | map(round)",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    [
+     10,
+     20,
+     5
+    ]
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".data | map(.price) | add",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    34.75
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "-2.5 | round",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    -2
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "2.5 | round",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    3
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "-7 | abs",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    7
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "\"x\" | abs",
+   "ok": false,
+   "error": "string (\"x\") has no absolute value"
+  },
+  {
+   "input": "main",
+   "expr": ".nothing | length",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    0
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".text | length",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    12
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".store | length",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    3
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".total | length",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    3
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "-3 | length",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    3
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".store.open | length",
+   "ok": false,
+   "error": "boolean (true) has no length"
+  },
+  {
+   "input": "main",
+   "expr": ".store.open | keys",
+   "ok": false,
+   "error": "boolean (true) has no keys"
+  },
+  {
+   "input": "main",
+   "expr": ".total | not",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    false
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".nothing | not",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    true
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "null | not",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    true
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".data | map(.id) | sort",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    [
+     "inv_1",
+     "inv_2",
+     "inv_3"
+    ]
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".data | map(.amount) | sort",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    [
+     40,
+     100,
+     250
+    ]
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".mixed | unique",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    [
+     null,
+     true,
+     2.5,
+     3,
+     "a",
+     [
+      1
+     ],
+     {
+      "k": 1
+     }
+    ]
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".store | sort",
+   "ok": false,
+   "error": "object ({\"name\":\"Corner\",\"ope...) cannot be sorted, as it is not an array"
+  },
+  {
+   "input": "main",
+   "expr": ".store.name | add",
+   "ok": false,
+   "error": "Cannot iterate over string"
+  },
+  {
+   "input": "main",
+   "expr": ".data | add",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    {
+     "id": "inv_3",
+     "amount": 40,
+     "status": "paid",
+     "tags": [
+      "c"
+     ],
+     "price": 5.25
+    }
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "[[1],[2]] | add",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    [
+     1,
+     2
+    ]
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "[\"a\",\"b\"] | add",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    "ab"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "[] | add",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    null
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "[] | min",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    null
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "[] | max",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    null
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".data[0] | .id, .amount",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    "inv_1",
+    100
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".data[0].id, .data[1].id",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    "inv_1",
+    "inv_2"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".data | map(select(.amount > 50) | .id)",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    [
+     "inv_1",
+     "inv_2"
+    ]
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "[.data[] | select(.amount > 50)] | length",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    2
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".data | map(.amount) | map(. * 2)",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    [
+     200,
+     500,
+     80
+    ]
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".data | map(.amount) | map(select(. > 50))",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    [
+     100,
+     250
+    ]
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "frobnicate",
+   "ok": false,
+   "error": "frobnicate/0 is not defined"
+  },
+  {
+   "input": "main",
+   "expr": ".data[] | frobnicate(1)",
+   "ok": false,
+   "error": "frobnicate/1 is not defined"
+  },
+  {
+   "input": "main",
+   "expr": ".data[",
+   "ok": false,
+   "error": "Expected an expression"
+  },
+  {
+   "input": "main",
+   "expr": ".data[0",
+   "ok": false,
+   "error": "Expected \"]\" at the end"
+  },
+  {
+   "input": "main",
+   "expr": ".data |",
+   "ok": false,
+   "error": "Expected an expression"
+  },
+  {
+   "input": "main",
+   "expr": "| .a",
+   "ok": false,
+   "error": "Unexpected \"|\""
+  },
+  {
+   "input": "main",
+   "expr": ".a b",
+   "ok": false,
+   "error": "Unexpected \"b\""
+  },
+  {
+   "input": "main",
+   "expr": "\"unterminated",
+   "ok": false,
+   "error": "Unterminated string"
+  },
+  {
+   "input": "main",
+   "expr": ".data[] | select(",
+   "ok": false,
+   "error": "Expected an expression"
+  },
+  {
+   "input": "main",
+   "expr": "{a",
+   "ok": false,
+   "error": "Expected \"}\" at the end"
+  },
+  {
+   "input": "main",
+   "expr": "{1: 2}",
+   "ok": false,
+   "error": "Expected an object key"
+  },
+  {
+   "input": "main",
+   "expr": "{(1): 2}",
+   "ok": false,
+   "error": "Object keys must be strings, not number"
+  },
+  {
+   "input": "main",
+   "expr": "[1, 2",
+   "ok": false,
+   "error": "Expected \"]\" at the end"
+  },
+  {
+   "input": "main",
+   "expr": "if . then 1",
+   "ok": false,
+   "error": "Expected \"end\""
+  },
+  {
+   "input": "main",
+   "expr": "if . then 1 else 2",
+   "ok": false,
+   "error": "Expected \"end\""
+  },
+  {
+   "input": "main",
+   "expr": ".. a",
+   "ok": false,
+   "error": "Unexpected \"a\""
+  },
+  {
+   "input": "main",
+   "expr": "(.a",
+   "ok": false,
+   "error": "Expected \")\" at the end"
+  },
+  {
+   "input": "main",
+   "expr": ")",
+   "ok": false,
+   "error": "Unexpected \")\""
+  },
+  {
+   "input": "main",
+   "expr": "1 + ",
+   "ok": false,
+   "error": "Expected an expression"
+  },
+  {
+   "input": "main",
+   "expr": ".a ?? 1",
+   "ok": false,
+   "error": "Unexpected \"1\""
+  },
+  {
+   "input": "main",
+   "expr": "map(.a)",
+   "ok": false,
+   "error": "Cannot iterate over object"
+  },
+  {
+   "input": "main",
+   "expr": ".data | map",
+   "ok": false,
+   "error": "map/0 is not defined"
+  },
+  {
+   "input": "main",
+   "expr": ".data | limit(1)",
+   "ok": false,
+   "error": "limit/1 is not defined"
+  },
+  {
+   "input": "main",
+   "expr": ".data | sort_by",
+   "ok": false,
+   "error": "sort_by/0 is not defined"
+  },
+  {
+   "input": "main",
+   "expr": ".data | has",
+   "ok": false,
+   "error": "has/0 is not defined"
+  },
+  {
+   "input": "main",
+   "expr": ".data | test(1)",
+   "ok": false,
+   "error": "array ([{\"id\":\"inv_1\",\"amoun...) cannot be matched, as it is not a string"
+  },
+  {
+   "input": "main",
+   "expr": ".data | startswith(\"a\")",
+   "ok": false,
+   "error": "startswith() requires string inputs"
+  },
+  {
+   "input": "main",
+   "expr": ".data | join(\",\")",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    "{\"id\":\"inv_1\",\"amount\":100,\"status\":\"paid\",\"tags\":[\"a\",\"b\"],\"price\":9.5},{\"id\":\"inv_2\",\"amount\":250,\"status\":\"open\",\"tags\":[],\"price\":20},{\"id\":\"inv_3\",\"amount\":40,\"status\":\"paid\",\"tags\":[\"c\"],\"price\":5.25}"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".data | split(\",\")",
+   "ok": false,
+   "error": "split input must be a string"
+  },
+  {
+   "input": "main",
+   "expr": "\"a\" | has(\"a\")",
+   "ok": false,
+   "error": "Cannot check whether string has a string key"
+  },
+  {
+   "input": "main",
+   "expr": "1 | has(0)",
+   "ok": false,
+   "error": "Cannot check whether number has a number key"
+  },
+  {
+   "input": "main",
+   "expr": ".data[] | select(.amount > 50) | .id | tostring | length",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    5,
+    5
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "[.data[].id | ascii_upcase]",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    [
+     "INV_1",
+     "INV_2",
+     "INV_3"
+    ]
+   ]
+  },
+  {
+   "input": "main",
+   "expr": ".data | map(.id | ltrimstr(\"inv_\"))",
+   "ok": false,
+   "error": "ltrimstr/1 is not defined"
+  },
+  {
+   "input": "main",
+   "expr": "$",
+   "ok": true,
+   "syntax": "jsonpath",
+   "values": [
+    {
+     "store": {
+      "name": "Corner",
+      "open": true,
+      "tags": [
+       "a",
+       "b"
+      ]
+     },
+     "data": [
+      {
+       "id": "inv_1",
+       "amount": 100,
+       "status": "paid",
+       "tags": [
+        "a",
+        "b"
+       ],
+       "price": 9.5
+      },
+      {
+       "id": "inv_2",
+       "amount": 250,
+       "status": "open",
+       "tags": [],
+       "price": 20
+      },
+      {
+       "id": "inv_3",
+       "amount": 40,
+       "status": "paid",
+       "tags": [
+        "c"
+       ],
+       "price": 5.25
+      }
+     ],
+     "total": 3,
+     "nothing": null,
+     "text": "Hello, World",
+     "nested": {
+      "a": {
+       "b": {
+        "c": [
+         1,
+         2,
+         {
+          "d": "deep"
+         }
+        ]
+       }
+      }
+     },
+     "mixed": [
+      3,
+      "a",
+      null,
+      true,
+      [
+       1
+      ],
+      {
+       "k": 1
+      },
+      2.5
+     ]
+    }
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "$.store.name",
+   "ok": true,
+   "syntax": "jsonpath",
+   "values": [
+    "Corner"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "$.data[0].id",
+   "ok": true,
+   "syntax": "jsonpath",
+   "values": [
+    "inv_1"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "$.data[-1].id",
+   "ok": true,
+   "syntax": "jsonpath",
+   "values": [
+    "inv_3"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "$.data[*].id",
+   "ok": true,
+   "syntax": "jsonpath",
+   "values": [
+    "inv_1",
+    "inv_2",
+    "inv_3"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "$..id",
+   "ok": true,
+   "syntax": "jsonpath",
+   "values": [
+    "inv_1",
+    "inv_2",
+    "inv_3"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "$.data[0:2].id",
+   "ok": true,
+   "syntax": "jsonpath",
+   "values": [
+    "inv_1",
+    "inv_2"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "$.data[1:].id",
+   "ok": true,
+   "syntax": "jsonpath",
+   "values": [
+    "inv_2",
+    "inv_3"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "$.data[:1].id",
+   "ok": true,
+   "syntax": "jsonpath",
+   "values": [
+    "inv_1"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "$.data[0,2].id",
+   "ok": true,
+   "syntax": "jsonpath",
+   "values": [
+    "inv_1",
+    "inv_3"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "$['store']['name']",
+   "ok": true,
+   "syntax": "jsonpath",
+   "values": [
+    "Corner"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "$[\"store\"][\"name\"]",
+   "ok": true,
+   "syntax": "jsonpath",
+   "values": [
+    "Corner"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "$.store['name','open']",
+   "ok": true,
+   "syntax": "jsonpath",
+   "values": [
+    "Corner",
+    true
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "$.nope",
+   "ok": true,
+   "syntax": "jsonpath",
+   "values": []
+  },
+  {
+   "input": "main",
+   "expr": "$.nope.deeper",
+   "ok": true,
+   "syntax": "jsonpath",
+   "values": []
+  },
+  {
+   "input": "main",
+   "expr": "$.total",
+   "ok": true,
+   "syntax": "jsonpath",
+   "values": [
+    3
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "$.data[?(@.amount > 90)].id",
+   "ok": true,
+   "syntax": "jsonpath",
+   "values": [
+    "inv_1",
+    "inv_2"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "$.data[?(@.status == 'paid' && @.amount < 50)].id",
+   "ok": true,
+   "syntax": "jsonpath",
+   "values": [
+    "inv_3"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "$.data[?(@.status == 'open' || @.amount == 40)].id",
+   "ok": true,
+   "syntax": "jsonpath",
+   "values": [
+    "inv_2",
+    "inv_3"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "$.data[?(@.tags)].id",
+   "ok": true,
+   "syntax": "jsonpath",
+   "values": [
+    "inv_1",
+    "inv_2",
+    "inv_3"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "$.data[?(@.price < 10)].id",
+   "ok": true,
+   "syntax": "jsonpath",
+   "values": [
+    "inv_1",
+    "inv_3"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "$.data[?(@.tags[0] == 'a')].id",
+   "ok": true,
+   "syntax": "jsonpath",
+   "values": [
+    "inv_1"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "$.data[?(@.amount >)].id",
+   "ok": false,
+   "error": "Expected an expression"
+  },
+  {
+   "input": "main",
+   "expr": "$.data[",
+   "ok": false,
+   "error": "Missing \"]\""
+  },
+  {
+   "input": "main",
+   "expr": "$.data[?(@.x ===)]",
+   "ok": false,
+   "error": "Unexpected \"=\""
+  },
+  {
+   "input": "main",
+   "expr": "$.",
+   "ok": false,
+   "error": "Expected a name after \".\""
+  },
+  {
+   "input": "main",
+   "expr": "$..",
+   "ok": false,
+   "error": "Expected a name after \"..\""
+  },
+  {
+   "input": "main",
+   "expr": "$.data[0:2]",
+   "ok": true,
+   "syntax": "jsonpath",
+   "values": [
+    {
+     "id": "inv_1",
+     "amount": 100,
+     "status": "paid",
+     "tags": [
+      "a",
+      "b"
+     ],
+     "price": 9.5
+    },
+    {
+     "id": "inv_2",
+     "amount": 250,
+     "status": "open",
+     "tags": [],
+     "price": 20
+    }
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "$.nested..d",
+   "ok": true,
+   "syntax": "jsonpath",
+   "values": [
+    "deep"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "$.nested.a.b.c[2].d",
+   "ok": true,
+   "syntax": "jsonpath",
+   "values": [
+    "deep"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "$.nested.a.b.c[*]",
+   "ok": true,
+   "syntax": "jsonpath",
+   "values": [
+    1,
+    2,
+    {
+     "d": "deep"
+    }
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "$.store.tags[*]",
+   "ok": true,
+   "syntax": "jsonpath",
+   "values": [
+    "a",
+    "b"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "$.data[*].tags[*]",
+   "ok": true,
+   "syntax": "jsonpath",
+   "values": [
+    "a",
+    "b",
+    "c"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "$.mixed[*]",
+   "ok": true,
+   "syntax": "jsonpath",
+   "values": [
+    3,
+    "a",
+    null,
+    true,
+    [
+     1
+    ],
+    {
+     "k": 1
+    },
+    2.5
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "$.data['id']",
+   "ok": true,
+   "syntax": "jsonpath",
+   "values": []
+  },
+  {
+   "input": "main",
+   "expr": "$[0]",
+   "ok": true,
+   "syntax": "jsonpath",
+   "values": []
+  },
+  {
+   "input": "main",
+   "expr": "$.data.0.id",
+   "ok": true,
+   "syntax": "jsonpath",
+   "values": [
+    "inv_1"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "$.data[1]['id']",
+   "ok": true,
+   "syntax": "jsonpath",
+   "values": [
+    "inv_2"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "$.data[?(@.id == 'inv_2')]",
+   "ok": true,
+   "syntax": "jsonpath",
+   "values": [
+    {
+     "id": "inv_2",
+     "amount": 250,
+     "status": "open",
+     "tags": [],
+     "price": 20
+    }
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "$.data[?(@.amount != 100)].id",
+   "ok": true,
+   "syntax": "jsonpath",
+   "values": [
+    "inv_2",
+    "inv_3"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "$.data[?(@.amount >= 100 && @.price > 10)].id",
+   "ok": true,
+   "syntax": "jsonpath",
+   "values": [
+    "inv_2"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "$.data[?(!@.tags)].id",
+   "ok": false,
+   "error": "Unexpected \"!\""
+  },
+  {
+   "input": "main",
+   "expr": "$.data[ 0 ].id",
+   "ok": true,
+   "syntax": "jsonpath",
+   "values": [
+    "inv_1"
+   ]
+  },
+  {
+   "input": "main",
+   "expr": "$.store[ 'name' ]",
+   "ok": true,
+   "syntax": "jsonpath",
+   "values": [
+    "Corner"
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": ".n",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    -4.5
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": ".n | abs",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    4.5
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": ".n | floor",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    -5
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": ".n | ceil",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    -4
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": ".n | round",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    -4
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": ".n * 2",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    -9
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": ".n + .n",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    -9
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": ".n - 0.5",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    -5
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": ".big * 1000000",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    12345678000000
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": ".big / 7",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    1763668.2857142857
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": ".big % 1000",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    678
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": ".s * 0",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    null
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": ".s * -1",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    null
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": ".s * 2.9",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    "xx"
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": ".t and .f",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    false
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": ".t or .f",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    true
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": ".f or .z",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    false
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": ".z and .t",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    false
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": ".t | not",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    false
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": ".z // .f // 1",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    1
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": ".f // empty",
+   "ok": true,
+   "syntax": "jq",
+   "values": []
+  },
+  {
+   "input": "scalars",
+   "expr": "[.list[] | select(. > 2)]",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    [
+     3,
+     4,
+     5
+    ]
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": ".list | add / length",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    3
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": ".list[1:3]",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    [
+     2,
+     3
+    ]
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": ".list[-2:]",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    [
+     4,
+     5
+    ]
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": ".list[:-2]",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    [
+     1,
+     2,
+     3
+    ]
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": ".list[10:]",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    []
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": ".list[2:1]",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    []
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": ".list | .[1.5]",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    null
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": ".list | .[-1]",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    5
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": ".list | .[-9]",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    null
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": ".words | unique",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    [
+     "a",
+     "b",
+     "c"
+    ]
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": ".words | sort",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    [
+     "a",
+     "a",
+     "b",
+     "c"
+    ]
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": ".words | group_by(.)",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    [
+     [
+      "a",
+      "a"
+     ],
+     [
+      "b"
+     ],
+     [
+      "c"
+     ]
+    ]
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": ".words | map(ascii_upcase) | join(\"\")",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    "BACA"
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": ".words | index(\"a\")",
+   "ok": false,
+   "error": "index/1 is not defined"
+  },
+  {
+   "input": "scalars",
+   "expr": ".words | min",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    "a"
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": ".words | max",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    "c"
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": ".list | map(. * .) | add",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    55
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": ".list | map(select(. % 2 == 0))",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    [
+     2,
+     4
+    ]
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": ".list | any(. > 4)",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    true
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": ".list | all(. > 0)",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    true
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": ".list | flatten",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    [
+     1,
+     2,
+     3,
+     4,
+     5
+    ]
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": ".list | length",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    5
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": "[.list[] | tostring]",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    [
+     "1",
+     "2",
+     "3",
+     "4",
+     "5"
+    ]
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": ".list | map(tostring) | join(\"+\")",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    "1+2+3+4+5"
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": ".t == true",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    true
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": ".f == false",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    true
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": ".z == null",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    true
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": ".s == \"x\"",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    true
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": ".n < 0",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    true
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": ".n >= -4.5",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    true
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": ".list == [1,2,3,4,5]",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    true
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": ".list != [1]",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    true
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": "[] == []",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    true
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": "{} == {}",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    true
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": "{a:1} == {a:1}",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    true
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": "[1,2] < [1,3]",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    true
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": "[1] < [1,0]",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    true
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": "\"a\" < \"b\"",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    true
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": "null < false",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    true
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": "false < true",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    true
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": "true < 0",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    true
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": "0 < \"a\"",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    true
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": "\"a\" < []",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    true
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": "[] < {}",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    true
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": "{b: 2, a: 1} | keys",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    [
+     "a",
+     "b"
+    ]
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": "{b: 2, a: 1} | to_entries | map(.key)",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    [
+     "b",
+     "a"
+    ]
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": "[{a:1,b:2},{a:1,b:1}] | sort_by(.a, .b) | map(.b)",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    [
+     1,
+     2
+    ]
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": "[{a:1,b:2},{a:1,b:1}] | sort",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    [
+     {
+      "a": 1,
+      "b": 1
+     },
+     {
+      "a": 1,
+      "b": 2
+     }
+    ]
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": "[3,1,2] | sort | reverse",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    [
+     3,
+     2,
+     1
+    ]
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": "[[2,1],[1,2],[1]] | sort",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    [
+     [
+      1
+     ],
+     [
+      1,
+      2
+     ],
+     [
+      2,
+      1
+     ]
+    ]
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": "[1,[1],\"1\",null,true,{}] | sort | map(type)",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    [
+     "null",
+     "boolean",
+     "number",
+     "string",
+     "array",
+     "object"
+    ]
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": "[1,1,2,2,3] | unique | length",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    3
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": "1e3",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    1000
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": "1.5e-2 * 100",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    1.5
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": ".5 + .5",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    1
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": "1 + 2 * 3",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    7
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": "(1 + 2) * 3",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    9
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": "10 / 4",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    2.5
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": "10 % 4",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    2
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": "-10 % 4",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    -2
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": "1 - 2 - 3",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    -4
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": "2 * 3 % 4",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    2
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": "[1,2,3] | .[1]",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    2
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": "\"héllo wörld\" | length",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    11
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": "\"héllo\" | .[1:3]",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    "él"
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": "\"héllo\" | reverse",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    "olléh"
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": "\"héllo\" | ascii_upcase",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    "HÉLLO"
+   ]
+  },
+  {
+   "input": "scalars",
+   "expr": "\"a\\nb\" | length",
+   "ok": true,
+   "syntax": "jq",
+   "values": [
+    3
+   ]
+  }
+ ]
+}

@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { bodyLines, bodyPrepare, bodySearch, type Found, type Prepared } from "./lib/bigbody";
+import { bodyFilter, bodyLines, bodyPrepare, bodySearch, type FilterOut, type Found, type Prepared } from "./lib/bigbody";
+import { CodeEditor } from "./CodeEditor";
 
 /**
  * Viewer for responses too big to hand to the page (the body stays in Rust). Only the visible lines
@@ -74,6 +75,10 @@ export function BigBodyView({ id, json, onPrepared }: { id: number; json: boolea
   const [at, setAt] = useState(0);
   const ticket = useRef(0);
   const searchTicket = useRef(0);
+  const filterTicket = useRef(0);
+  const [filterText, setFilterText] = useState("");
+  const [filtered, setFiltered] = useState<FilterOut | null>(null);
+  const [filtering, setFiltering] = useState(false);
 
   useEffect(() => {
     let live = true;
@@ -82,6 +87,8 @@ export function BigBodyView({ id, json, onPrepared }: { id: number; json: boolea
     setPage({ start: 0, lines: [] });
     setFound(null);
     setQuery("");
+    setFilterText("");
+    setFiltered(null);
     bodyPrepare(id)
       .then((p) => {
         if (!live) return;
@@ -163,6 +170,29 @@ export function BigBodyView({ id, json, onPrepared }: { id: number; json: boolea
     [lines, visible, scaled, lastFirst, maxScroll],
   );
 
+  // the list is hidden while filter results show; when it comes back its scroll position starts over, so measure again
+  const showingResults = !!(filtered?.ok && filterText.trim());
+  useEffect(() => {
+    if (!showingResults) requestAnimationFrame(measure);
+  }, [showingResults, measure]);
+
+  // run the filter (debounced) where the body lives; the page only receives the (capped) result
+  useEffect(() => {
+    const mine = ++filterTicket.current;
+    if (!filterText.trim()) {
+      setFiltered(null);
+      setFiltering(false);
+      return;
+    }
+    setFiltering(true);
+    const t = setTimeout(() => {
+      bodyFilter(id, filterText)
+        .then((r) => mine === filterTicket.current && (setFiltered(r), setFiltering(false)))
+        .catch((e) => mine === filterTicket.current && (setFiltered({ ok: false, error: String(e), syntax: "", total: 0, shown: 0, truncated: false, text: "", ms: 0 }), setFiltering(false)));
+    }, 350);
+    return () => clearTimeout(t);
+  }, [filterText, id]);
+
   // run the search (debounced) when the text or case option changes
   useEffect(() => {
     if (!query) {
@@ -221,7 +251,30 @@ export function BigBodyView({ id, json, onPrepared }: { id: number; json: boolea
         <button className="btn small" onClick={() => step(-1)} disabled={!found?.total} aria-label="Previous match">↑</button>
         <button className="btn small" onClick={() => step(1)} disabled={!found?.total} aria-label="Next match">↓</button>
       </div>
-      <div className="big-scroll" ref={box} role="region" aria-label="Response body" tabIndex={0}>
+      {(json || info?.pretty) && (
+        <div className="big-filter">
+          <input
+            className="big-fq"
+            type="search"
+            placeholder="Filter: $.data[*].id   or   .data | map(.id)"
+            aria-label="Filter response"
+            spellCheck={false}
+            value={filterText}
+            onChange={(e) => setFilterText(e.target.value)}
+          />
+          <span className={`big-fstatus small ${filtered && !filtered.ok ? "bad-text" : "muted"}`} role="status" aria-live="polite">
+            {filtering ? "Filtering…" : filtered ? (filtered.ok ? `${filtered.total.toLocaleString()} ${filtered.total === 1 ? "result" : "results"} (${filtered.syntax === "jq" ? "jq" : "JSONPath"}) · ${filtered.ms < 1000 ? `${filtered.ms} ms` : `${(filtered.ms / 1000).toFixed(1)} s`}` : filtered.error) : ""}
+          </span>
+          {filterText && <button className="btn small" onClick={() => setFilterText("")}>Clear</button>}
+        </div>
+      )}
+      {showingResults && (
+        <div className="big-filter-out">
+          {filtered.truncated && <p className="muted small">Showing the first {filtered.shown.toLocaleString()} of {filtered.total.toLocaleString()} results: narrow the filter to see the rest.</p>}
+          <div className="editor-slot"><CodeEditor readOnly lang="json" value={filtered.text} label="Filter results" className="fill" /></div>
+        </div>
+      )}
+      <div className="big-scroll" hidden={showingResults} ref={box} role="region" aria-label="Response body" tabIndex={0}>
         <div className="big-spacer" style={{ height: spacer }}>
           <div className="big-stick" style={{ height: view.h }}>
             <div style={{ transform: `translateY(${offset * LINE_HEIGHT}px)` }}>

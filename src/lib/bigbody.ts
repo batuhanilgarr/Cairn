@@ -8,6 +8,8 @@ export type Found = { total: number; capped: boolean; lines: number[] };
 export const bodyPrepare = (id: number) => invoke<Prepared>("body_prepare", { id });
 export const bodyLines = (id: number, start: number, count: number) => invoke<string[]>("body_lines", { id, start, count });
 export const bodySearch = (id: number, query: string, caseSensitive: boolean) => invoke<Found>("body_search", { id, query, caseSensitive });
+export type FilterOut = { ok: boolean; error: string | null; syntax: string; total: number; shown: number; truncated: boolean; text: string; ms: number };
+export const bodyFilter = (id: number, expr: string) => invoke<FilterOut>("body_filter", { id, expr });
 export const bodySave = (id: number, path: string) => invoke<void>("body_save", { id, path });
 export const bodyText = (id: number) => invoke<string>("body_text", { id });
 

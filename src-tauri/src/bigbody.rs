@@ -30,6 +30,8 @@ struct View {
 pub struct Entry {
     raw: Vec<u8>,
     view: OnceLock<View>,
+    /// The body parsed as JSON, once, for filters. Kept as long as the body is.
+    json: OnceLock<Result<serde_json::Value, String>>,
 }
 
 static NEXT_ID: AtomicU64 = AtomicU64::new(1);
@@ -44,7 +46,7 @@ impl Store {
     fn put(&self, raw: Vec<u8>, keep: usize) -> u64 {
         let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
         let mut all = self.items.lock().unwrap();
-        all.push((id, Arc::new(Entry { raw, view: OnceLock::new() })));
+        all.push((id, Arc::new(Entry { raw, view: OnceLock::new(), json: OnceLock::new() })));
         while all.len() > keep {
             all.remove(0);
         }
@@ -75,6 +77,13 @@ fn get(id: u64) -> Result<Arc<Entry>, String> {
 }
 
 impl Entry {
+    fn parsed(&self) -> &Result<serde_json::Value, String> {
+        self.json.get_or_init(|| {
+            let bytes = self.raw.strip_prefix(&[0xEF, 0xBB, 0xBF]).unwrap_or(&self.raw);
+            serde_json::from_slice(bytes).map_err(|e| format!("The response isn't valid JSON: {e}"))
+        })
+    }
+
     fn view(&self) -> &View {
         self.view.get_or_init(|| {
             let (text, json) = match pretty_json(&self.raw) {
@@ -263,6 +272,68 @@ async fn blocking<T: Send + 'static>(f: impl FnOnce() -> Result<T, String> + Sen
 }
 
 /// Index (and, for JSON, indent) the body. The first call does the work; later calls are instant.
+/// Most characters of filter output sent to the page; the rest is counted but not sent.
+const FILTER_OUT_CAP: usize = 2_000_000;
+/// A big body may produce this many intermediate values (a row-by-row pipeline over millions of rows needs a few per row)
+/// and may run this long. 25M values is on the order of a gigabyte in the worst case.
+const FILTER_MAX_STEPS: usize = 25_000_000;
+const FILTER_MAX_SECS: u64 = 25;
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FilterOut {
+    pub ok: bool,
+    pub error: Option<String>,
+    /// "jq" or "jsonpath".
+    pub syntax: String,
+    /// How many values the filter produced.
+    pub total: usize,
+    /// How many of them are in `text`.
+    pub shown: usize,
+    pub truncated: bool,
+    /// One value per line, strings quoted, other values indented (like jq).
+    pub text: String,
+    pub ms: u64,
+}
+
+fn filter_entry(e: &Entry, expr: &str) -> FilterOut {
+    let t = std::time::Instant::now();
+    let fail = |msg: String| FilterOut { ok: false, error: Some(msg), syntax: String::new(), total: 0, shown: 0, truncated: false, text: String::new(), ms: t.elapsed().as_millis() as u64 };
+    let doc = match e.parsed() {
+        Ok(v) => v,
+        Err(m) => return fail(m.clone()),
+    };
+    match crate::filter::run_filter_within(doc, expr, FILTER_MAX_STEPS, Some(t + std::time::Duration::from_secs(FILTER_MAX_SECS))) {
+        Err(m) => fail(m),
+        Ok(r) => {
+            let mut text = String::new();
+            let mut shown = 0;
+            for v in &r.values {
+                let line = crate::filter::format_value(v);
+                if shown > 0 && text.len() + line.len() + 1 > FILTER_OUT_CAP {
+                    break;
+                }
+                if shown > 0 {
+                    text.push('\n');
+                }
+                text.push_str(&line);
+                shown += 1;
+            }
+            FilterOut { ok: true, error: None, syntax: r.syntax.to_string(), total: r.values.len(), shown, truncated: shown < r.values.len(), text, ms: t.elapsed().as_millis() as u64 }
+        }
+    }
+}
+
+/// Filter a big JSON body (jq subset or JSONPath) where it lives, without sending it to the page.
+#[tauri::command]
+pub async fn body_filter(id: u64, expr: String) -> Result<FilterOut, String> {
+    blocking(move || {
+        let e = get(id)?;
+        Ok::<_, String>(filter_entry(&e, &expr))
+    })
+    .await
+}
+
 #[tauri::command]
 pub async fn body_prepare(id: u64) -> Result<Prepared, String> {
     blocking(move || {
@@ -433,5 +504,68 @@ mod tests {
         // budgets: far above what release builds need, far below what an accidental O(n^2) would take
         assert!(opened.as_millis() < 1500, "opening 50 MB took {opened:?}");
         assert!(searched.as_millis() < 500, "searching 50 MB took {searched:?}");
+    }
+
+    #[test]
+    fn filters_run_on_the_body_where_it_lives() {
+        let st = Store::default();
+        let rows: Vec<String> = (0..1000).map(|i| format!(r#"{{"id":"inv_{i}","amount":{i},"tag":"{}"}}"#, if i % 2 == 0 { "even" } else { "odd" })).collect();
+        let e = st.find(st.put(format!(r#"{{"data":[{}]}}"#, rows.join(",")).into_bytes(), 8)).unwrap();
+        let r = filter_entry(&e, r#".data | map(select(.tag == "odd")) | length"#);
+        assert!(r.ok, "{:?}", r.error);
+        assert_eq!((r.syntax.as_str(), r.total, r.text.as_str()), ("jq", 1, "500"));
+        let r = filter_entry(&e, "$.data[?(@.amount < 3)].id");
+        assert_eq!((r.syntax.as_str(), r.total, r.text.as_str()), ("jsonpath", 3, "\"inv_0\"\n\"inv_1\"\n\"inv_2\""));
+        let r = filter_entry(&e, ".data[0]");
+        assert_eq!(r.text, "{\n  \"id\": \"inv_0\",\n  \"amount\": 0,\n  \"tag\": \"even\"\n}", "key order of the document is kept");
+        let r = filter_entry(&e, ".data[");
+        assert!(!r.ok);
+        assert!(r.error.unwrap().contains("Expected"));
+    }
+
+    #[test]
+    fn a_huge_result_is_counted_but_only_partly_sent() {
+        let st = Store::default();
+        let e = st.find(st.put(format!("[{}]", vec![format!("\"{}\"", "x".repeat(1000)); 5000].join(",")).into_bytes(), 8)).unwrap();
+        let r = filter_entry(&e, ".[]");
+        assert!(r.ok);
+        assert_eq!(r.total, 5000);
+        assert!(r.truncated && r.shown < 5000 && r.text.len() <= FILTER_OUT_CAP);
+    }
+
+    #[test]
+    fn a_body_that_isnt_json_says_so_and_a_bom_is_ignored() {
+        let st = Store::default();
+        let e = st.find(st.put(b"just text".to_vec(), 8)).unwrap();
+        let r = filter_entry(&e, ".a");
+        assert!(!r.ok && r.error.unwrap().starts_with("The response isn't valid JSON"));
+        let e = st.find(st.put(b"\xEF\xBB\xBF{\"a\": 1}".to_vec(), 8)).unwrap();
+        assert_eq!(filter_entry(&e, ".a").text, "1");
+    }
+
+    /// `cargo test --release --lib -- --ignored --nocapture timing_of_filtering`: filtering a 50 MB body.
+    #[test]
+    #[ignore]
+    fn timing_of_filtering_a_50_mb_body() {
+        let row = r#"{"id":"inv_00001","customer":{"name":"Ada Lovelace","tags":["a","b"]},"amount":12900,"note":"hello world"}"#;
+        let n = 50_000_000 / (row.len() + 1);
+        let st = Store::default();
+        let e = st.find(st.put(format!("[{}]", vec![row; n].join(",")).into_bytes(), 8)).unwrap();
+        let t = std::time::Instant::now();
+        let first = filter_entry(&e, "length");
+        let parse = t.elapsed();
+        let t = std::time::Instant::now();
+        let select = filter_entry(&e, r#"[.[] | select(.amount > 12000) | .customer.name] | length"#);
+        let sel = t.elapsed();
+        let t = std::time::Instant::now();
+        let path = filter_entry(&e, "$[?(@.amount > 12000)].id");
+        let jp = t.elapsed();
+        println!("{n} rows: first filter (parse) {parse:?}, select over all rows {sel:?} (-> {}), JSONPath filter {jp:?} ({} results, {} shown)", select.text, path.total, path.shown);
+        assert!(first.ok, "{:?}", first.error);
+        assert!(select.ok, "{:?}", select.error);
+        assert!(path.ok, "{:?}", path.error);
+        assert_eq!(select.text, n.to_string());
+        assert!(parse.as_secs() < 6, "parsing 50 MB took {parse:?}");
+        assert!(sel.as_secs() < 4, "filtering 50 MB took {sel:?}");
     }
 }

@@ -75,6 +75,12 @@ const stubSource = ({ sidebar, aside, bigTree = 0, bigBody = 0, withLink = false
       if (BODY_LINES > 0) {
         const lineOf = (n) => n === 0 ? '[' : n === BODY_LINES - 1 ? ']' : ['  {', '    "id": "inv_' + Math.floor((n - 1) / 4) + '",', '    "tag": "Alpha"', '  },'][(n - 1) % 4];
         if (cmd === 'send_request') return { status: 200, statusText: 'OK', headers: [['content-type', 'application/json']], body: '', bodyBase64: null, bodyId: 7, contentType: 'application/json', sizeBytes: BODY_LINES * 22, timeMs: 640, ttfbMs: 80, httpVersion: 'HTTP/1.1' };
+        if (cmd === 'body_filter') {
+          const e = a.expr;
+          if (e.includes('(') && !e.includes(')')) return { ok: false, error: 'Expected ")" at the end', syntax: '', total: 0, shown: 0, truncated: false, text: '', ms: 3 };
+          if (e.includes('many')) return { ok: true, error: null, syntax: 'jq', total: 466000, shown: 3, truncated: true, text: '"inv_1"\\n"inv_2"\\n"inv_3"', ms: 1530 };
+          return { ok: true, error: null, syntax: 'jq', total: 2, shown: 2, truncated: false, text: '"inv_1"\\n"inv_2"', ms: 12 };
+        }
         if (cmd === 'body_prepare') return { lines: BODY_LINES, bytes: BODY_LINES * 22, pretty: true };
         if (cmd === 'body_lines') return Array.from({ length: Math.max(0, Math.min(a.count, BODY_LINES - a.start)) }, (_, i) => lineOf(a.start + i));
         if (cmd === 'body_search') {
@@ -1127,6 +1133,57 @@ for (const keychain of [false, true]) {
         assert.match(note, keychain ? /Switching moves/ : /only available on macOS/);
         assert.deepEqual(v.map((x) => `${x.id}: ${x.where.join(" | ")}`), [], "accessibility violations");
         if (keychain) assert.equal(saved, "keychain", "choosing the Keychain is remembered");
+      });
+    } finally {
+      await context.close();
+    }
+  });
+}
+
+for (const width of [760, 1360]) {
+  test(`big response filter: runs where the body lives, shows its result, errors keep the body, clearing restores the list: ${width}px`, async () => {
+    const { page, context, errors, check } = await open({ width, bigBody: 3_000_000 }, `${width}px big filter`);
+    try {
+      await page.click(".url-cell");
+      await page.keyboard.type("https://api.example.com/v1/huge");
+      await page.click(".urlbar > .btn.primary");
+      await page.waitForSelector(".big-line");
+      await page.evaluate(() => { document.querySelector(".big-scroll").scrollTop = 123456; });
+      await page.waitForTimeout(300);
+      const before = await page.evaluate(() => ({ first: document.querySelector(".big-line .big-ln")?.textContent, top: document.querySelector(".big-scroll").scrollTop }));
+      const input = page.locator('.big-filter input[aria-label="Filter response"]');
+      const status = () => page.locator(".big-fstatus").textContent();
+      await input.fill(".data[] | alpha");
+      await page.waitForFunction(() => /results/.test(document.querySelector(".big-fstatus")?.textContent ?? ""));
+      const ok = { status: await status(), shown: await page.evaluate(() => ({ results: !!document.querySelector(".big-filter-out .cm-content"), text: document.querySelector(".big-filter-out .cm-content")?.textContent ?? "", list: getComputedStyle(document.querySelector(".big-scroll")).display })) };
+      const v = await axeViolations(page);
+      await input.fill(".data[] | broken(");
+      await page.waitForFunction(() => /Expected/.test(document.querySelector(".big-fstatus")?.textContent ?? ""));
+      const bad = { status: await status(), list: await page.evaluate(() => getComputedStyle(document.querySelector(".big-scroll")).display), results: await page.locator(".big-filter-out").count() };
+      await input.fill(".data[] | many");
+      await page.waitForFunction(() => /466,000/.test(document.querySelector(".big-fstatus")?.textContent ?? ""));
+      const many = { status: await status(), note: await page.locator(".big-filter-out > p").textContent() };
+      const fit = await page.evaluate(() => { const r = document.querySelector(".big-filter").getBoundingClientRect(); const p = document.querySelector(".panel.res").getBoundingClientRect(); return { inside: r.left >= p.left - 1 && r.right <= p.right + 1, over: document.documentElement.scrollWidth - innerWidth }; });
+      await page.getByRole("button", { name: "Clear", exact: true }).click();
+      await page.waitForSelector(".big-line");
+      await page.waitForTimeout(300);
+      const cleared = await page.evaluate(() => ({ first: document.querySelector(".big-line .big-ln")?.textContent, results: !!document.querySelector(".big-filter-out"), top: document.querySelector(".big-scroll").scrollTop }));
+      await check(async () => {
+        assert.deepEqual(errors, []);
+        assert.match(ok.status, /^2 results \(jq\) · 12 ms/);
+        assert.ok(ok.shown.results && ok.shown.text.includes("inv_1"), `the result is shown: ${JSON.stringify(ok.shown)}`);
+        assert.equal(ok.shown.list, "none", "the list gives way to the result");
+        assert.match(bad.status, /Expected/);
+        assert.notEqual(bad.list, "none", "an invalid filter keeps showing the body");
+        assert.equal(bad.results, 0);
+        assert.match(many.status, /^466,000 results \(jq\) · 1\.5 s/);
+        assert.match(many.note, /Showing the first 3 of 466,000/);
+        assert.ok(fit.inside && fit.over <= 0, `the filter row does not fit: ${JSON.stringify(fit)}`);
+        assert.deepEqual(v.map((x) => `${x.id}: ${x.where.join(" | ")}`), [], "accessibility violations");
+        assert.ok(before.top > 0 && before.first !== "1", `the test should have scrolled: ${JSON.stringify(before)}`);
+        assert.equal(cleared.first, before.first, "clearing the filter brings the list back where it was");
+        assert.ok(!cleared.results);
+        assert.equal(cleared.top, before.top);
       });
     } finally {
       await context.close();

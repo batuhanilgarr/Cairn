@@ -128,3 +128,24 @@ test("a runaway filter stops instead of hanging", () => {
   // and a normal-sized one still works afterwards (the budget resets per run)
   assert.deepEqual(F.runFilter(null, "[range(10)] | length").values, [10]);
 });
+
+test("the shared vectors: this engine answers exactly as recorded (the Rust engine is tested against the same file)", () => {
+  const doc = JSON.parse(fs.readFileSync(path.join(ROOT, "tests/fixtures/filter-cases.json"), "utf8"));
+  assert.ok(doc.cases.length > 300);
+  const bad = [];
+  for (const c of doc.cases) {
+    const r = F.runFilter(doc.inputs[c.input], c.expr);
+    if (c.ok) {
+      if (!r.ok || JSON.stringify(r.values) !== JSON.stringify(c.values) || r.syntax !== c.syntax) bad.push(`${c.expr}: ${r.ok ? JSON.stringify(r.values) : r.error}`);
+    } else if (r.ok || r.error !== c.error) bad.push(`${c.expr}: expected the error "${c.error}", got ${r.ok ? JSON.stringify(r.values) : r.error}`);
+  }
+  assert.deepEqual(bad, [], "the TypeScript engine no longer matches the shared vectors: if the change is on purpose run `node scripts/gen-filter-cases.mjs` and make the Rust engine do the same");
+});
+
+test("a function called with the wrong number of arguments is a clean error, not a crash", () => {
+  for (const e of [".data | map", ".data | limit(1)", ".data | sort_by", "length(1)", ".[] | range(1; 2)"]) {
+    const r = F.runFilter({ data: [1] }, e);
+    assert.equal(r.ok, false, e);
+    assert.match(r.error, /is not defined/, e);
+  }
+});

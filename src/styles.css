@@ -845,3 +845,9 @@ pre.block { white-space: pre-wrap; word-break: break-word; margin: 0; background
 /* the status and timing stay visible when the tabs of a narrow pane scroll underneath them */
 .subtabs > .meta { position: sticky; right: 0; z-index: 1; margin-left: auto; padding-left: 14px; background: var(--bg); box-shadow: -12px 0 10px -6px var(--bg); }
 @container pane (max-width: 520px) { .meta .size { display: none; } }
+
+.big-filter { display: flex; align-items: center; gap: 6px; padding: 0 0 6px; min-width: 0; }
+.big-fq { flex: 1; min-width: 0; font-family: var(--mono); font-size: 12px; }
+.big-filter .big-fstatus { flex: 0 1 auto; white-space: nowrap; max-width: 55%; overflow: hidden; text-overflow: ellipsis; text-align: right; }
+.big-filter-out { flex: 1; min-height: 0; display: flex; flex-direction: column; border-top: 1px solid var(--border); }
+.big-filter-out > p { margin: 6px 0 2px; }
