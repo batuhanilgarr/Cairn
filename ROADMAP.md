@@ -106,7 +106,7 @@ Mock server, response history + diff, CLI/CI runner (JUnit/HTML), OpenAPI re-syn
 | Özellik | Fikir |
 |---|---|
 | **Monitors** (zamanlanmış çalıştırma) | Ücretli çekirdek özellik. Çözüm: CLI zaten var; GitHub Action cron örneği + isteğe bağlı yerel zamanlayıcı |
-| **Yük / performans testi** | **CLI'da yapıldı:** `cairn bench` (N kullanıcı, süre veya istek sayısı, p50/p90/p95/p99, hata oranı, CI için `--max-p95` gibi sınırlar). Uygulama içi arayüz ve Rust çekirdeğiyle ölçüm yok; ölçüm Node'dan yapıldığı için çok yüksek hızlarda istemci sınırlayıcı olur |
+| **Yük / performans testi** | **CLI'da yapıldı:** `cairn bench` (N kullanıcı, süre veya istek sayısı, p50/p90/p95/p99, hata oranı, CI için `--max-p95` gibi sınırlar). Uygulama içi arayüz ve Rust çekirdeğiyle ölçüm yok; ölçüm Node'dan yapıldığı için istemci ~16.000 istek/sn'de tavan yapıyor (aynı makinedeki basit bir sunucuya karşı ölçüldü) |
 | **Görsel akışlar (Flows)** | Capture + runner zaten zincirleme yapıyor; görsel editör sonra |
 | **Takım senkronizasyonu** | Önerilen model: git zaten çalışıyor. Ücretli katman olarak self-host sync sunucusu (README'de planlı) |
 | **Gizli bilgi taraması** | Commit öncesi koleksiyonda token/anahtar yakalama; secrets zaten ayrı dosyada |
