@@ -39,7 +39,7 @@
   --bg: #1b1d23; --bg-side: #16181d; --bg-rail: #111317; --bg-panel: #181a20; --bg-input: #23262e; --border: #2c2f39; --border-strong: #3b3f4d;
   --text: #e8eaf0; --muted: #9ba1af; --accent: var(--accent-dark, #8b74ff); --hover: rgba(255, 255, 255, 0.07);
   --ok-ink: #4cc38a; --warn-ink: #f0a63a; --bad-ink: #f2777d;
-  --ok: #4cc38a; --warn: #f0a63a; --bad: #f2777d; --j-str: #6ee7b7; --j-num: #fdba74; --j-bool: #f0abfc;
+  --ok: #4cc38a; --warn: #f0a63a; --bad: #f2777d; --on-bad: #1a0b0c; --j-str: #6ee7b7; --j-num: #fdba74; --j-bool: #f0abfc;
   --accent-text: #0e0e12; --pop: 0 24px 80px rgba(0, 0, 0, .55);
 }
 @media (prefers-color-scheme: dark) {
@@ -47,7 +47,7 @@
     --bg: #1b1d23; --bg-side: #16181d; --bg-rail: #111317; --bg-panel: #181a20; --bg-input: #23262e; --border: #2c2f39; --border-strong: #3b3f4d;
     --text: #e8eaf0; --muted: #9ba1af; --accent: var(--accent-dark, #8b74ff); --hover: rgba(255, 255, 255, 0.07);
   --ok-ink: #4cc38a; --warn-ink: #f0a63a; --bad-ink: #f2777d;
-    --ok: #4cc38a; --warn: #f0a63a; --bad: #f2777d; --j-str: #6ee7b7; --j-num: #fdba74; --j-bool: #f0abfc;
+    --ok: #4cc38a; --warn: #f0a63a; --bad: #f2777d; --on-bad: #1a0b0c; --j-str: #6ee7b7; --j-num: #fdba74; --j-bool: #f0abfc;
     --accent-text: #0e0e12; --pop: 0 24px 80px rgba(0, 0, 0, .55);
   }
 }
@@ -181,7 +181,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
 /* collections, dialogs, toast */
 .empty p { color: var(--muted); margin: 4px 0 12px; }
 .btn.block { display: block; width: 100%; margin-bottom: 8px; }
-.btn.danger { background: var(--bad); border-color: var(--bad); color: #fff; font-weight: 600; }
+.btn.danger { background: var(--bad); border-color: var(--bad); color: var(--on-bad, #fff); font-weight: 600; }
 .coll-head { display: flex; align-items: center; padding: 4px 8px 6px 14px; }
 .coll-name { flex: 1; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tree-row { display: flex; align-items: center; gap: 4px; padding: 5px 8px 5px 10px; cursor: pointer; border-radius: 6px; margin: 0 6px; }
@@ -210,7 +210,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
 .field { display: flex; flex-direction: column; gap: 4px; }
 .field > span { font-size: 11px; color: var(--muted); }
 .small { font-size: 12px; }
-.ok-text { color: var(--ok); }
+.ok-text { color: var(--ok-ink); }
 .token-box { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; background: var(--bg-panel); }
 .token { font-size: 11px; word-break: break-all; }
 h4 { margin: 4px 0; font-size: 12.5px; font-weight: 600; color: var(--muted); }

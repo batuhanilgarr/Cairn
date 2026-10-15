@@ -610,6 +610,36 @@ for (const theme of THEMES) {
   }
 }
 
+/** The dialogs that need a collection (or a history) before they can be opened. */
+const A11Y_DIALOGS = [
+  { name: "mock server", selector: ".mock", go: async (page) => { await page.keyboard.press("Control+k"); await page.waitForSelector(".palette"); await page.keyboard.type("mock server"); await page.waitForTimeout(250); await page.keyboard.press("Enter"); } },
+  { name: "run results", selector: ".dialog.runner", go: async (page) => { await page.keyboard.press("Control+k"); await page.waitForSelector(".palette"); await page.keyboard.type("run collection"); await page.waitForTimeout(250); await page.keyboard.press("Enter"); await page.waitForTimeout(1500); } },
+  { name: "folder defaults", selector: ".dialog.defaults", go: async (page) => { const row = page.locator(".tree-row", { hasText: "f0" }).first(); await row.hover(); await row.locator('button[aria-label^="More actions for"]').click(); await page.getByRole("menuitem", { name: /Folder settings/ }).click(); } },
+  { name: "compare responses", selector: ".diff", go: async (page) => { await page.click(".url-cell"); await page.keyboard.type("https://api.example.com/v1/x"); for (let i = 0; i < 2; i++) { await page.click(".urlbar > .btn.primary"); await page.waitForSelector(".panel.res .pill"); await page.waitForTimeout(300); } await page.getByRole("button", { name: "Compare", exact: true }).click(); } },
+  { name: "confirm dialog", selector: ".dialog", go: async (page) => { await page.click('.rail button[aria-label="Settings"]'); await page.waitForSelector(".settings"); await page.locator(".settings-nav button", { hasText: "Data" }).click(); await page.getByRole("button", { name: "Reset…" }).click(); await page.waitForFunction(() => [...document.querySelectorAll('[role="dialog"]')].some((d) => d.textContent.includes("Reset app state") && d.querySelector(".dialog-actions"))); } },
+];
+
+for (const theme of THEMES) {
+  for (const d of A11Y_DIALOGS) {
+    test(`accessibility (axe, WCAG A/AA): ${d.name} dialog, ${theme}`, async () => {
+      const { page, context, errors, check } = await open({ width: 1360, theme, bigTree: 40 }, `axe dialog ${d.name} ${theme}`);
+      try {
+        await page.waitForSelector(".tree-row");
+        await d.go(page);
+        await page.waitForSelector(d.selector);
+        await page.waitForTimeout(300);
+        const v = await axeViolations(page);
+        await check(async () => {
+          assert.deepEqual(errors, []);
+          assert.deepEqual(v.map((x) => `${x.id} [${x.impact}] ${x.help}: ${x.where.join(" | ")}`), [], "accessibility violations");
+        });
+      } finally {
+        await context.close();
+      }
+    });
+  }
+}
+
 const REQUEST_TABS = ["Params", "Headers", "Body", "Auth", "Scripts", "Tests", "Examples", "Settings"];
 for (const theme of THEMES) {
   for (const width of [760, 1360]) {

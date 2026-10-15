@@ -25,7 +25,7 @@ export function RunnerModal({ run, onStop, onClose }: { run: RunState; onStop: (
     <div className="scrim" onMouseDown={run.done ? onClose : undefined}>
       <div className="dialog runner" ref={focusScope} tabIndex={-1} onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-label="Run results">
         <h3>{run.title}</h3>
-        <div className="run-progress" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}><i style={{ width: `${pct}%` }} /></div>
+        <div className="run-progress" role="progressbar" aria-label="Run progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}><i style={{ width: `${pct}%` }} /></div>
         <p className="run-summary">
           <b>{done.length}/{run.items.length}</b> requests
           <span className={failedReq ? "bad-text" : "ok-text"}>{failedReq ? `${failedReq} failed` : run.done ? "none failed" : ""}</span>
@@ -33,7 +33,7 @@ export function RunnerModal({ run, onStop, onClose }: { run: RunState; onStop: (
           {tests > 0 && <span className={failedTests ? "bad-text" : "ok-text"}>{tests - failedTests}/{tests} tests passed</span>}
           {!run.done && <span className="muted">running…</span>}
         </p>
-        <div className="runner-list">
+        <div className="runner-list" role="region" aria-label="Request results" tabIndex={0}>
           {run.items.map((i, k) => {
             const hardFail = !!i.error || i.failed > 0;
             const warn = i.state === "done" && !hardFail && (i.status ?? 0) >= 400;

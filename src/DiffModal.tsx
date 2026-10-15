@@ -33,8 +33,8 @@ export function DiffModal({ items, onClose }: { items: HistEntry[]; onClose: () 
     const ext = [theme, syntaxHighlighting(highlight), EditorView.editable.of(false), EditorState.readOnly.of(true), EditorView.lineWrapping, ...(what === "body" ? [json()] : [])];
     const mv = new MergeView({
       parent: host.current,
-      a: { doc: docs[0], extensions: ext },
-      b: { doc: docs[1], extensions: ext },
+      a: { doc: docs[0], extensions: [...ext, EditorView.contentAttributes.of({ "aria-label": "First response" })] },
+      b: { doc: docs[1], extensions: [...ext, EditorView.contentAttributes.of({ "aria-label": "Second response" })] },
       highlightChanges: true,
       gutter: true,
       collapseUnchanged: { margin: 3, minSize: 8 },
@@ -62,11 +62,11 @@ export function DiffModal({ items, onClose }: { items: HistEntry[]; onClose: () 
           <button className="icon-btn" onClick={onClose} aria-label="Close">×</button>
         </div>
         <div className="diff-pick">
-          <select value={a} onChange={(e) => setA(Number(e.target.value))}>
+          <select aria-label="First response" value={a} onChange={(e) => setA(Number(e.target.value))}>
             {items.map((h, i) => <option key={h.n} value={i}>{label(h)}</option>)}
           </select>
           <span className="muted">→</span>
-          <select value={b} onChange={(e) => setB(Number(e.target.value))}>
+          <select aria-label="Second response" value={b} onChange={(e) => setB(Number(e.target.value))}>
             {items.map((h, i) => <option key={h.n} value={i}>{label(h)}</option>)}
           </select>
           {same && <span className="ok-text small">Identical</span>}
