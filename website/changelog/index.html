@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Cairn changelog: release notes for v0.3.1 and v0.3.0</title>
-<meta name="description" content="What changed in Cairn v0.3.1 and v0.3.0: split view, Keychain secrets, big-response filtering, WSDL and HAR import, secret scanner. Known limits included.">
+<title>Cairn changelog: release notes for v0.3.2 and v0.3.1</title>
+<meta name="description" content="What changed in Cairn v0.3.2 and v0.3.1: global secrets in the Keychain, cairn import har, accessibility fixes, split view, WSDL import. Known limits included.">
 <link rel="canonical" href="https://batuhanilgarr.github.io/Cairn/changelog/">
 <meta name="robots" content="index, follow, max-image-preview:large">
 <meta name="color-scheme" content="light dark">
@@ -17,16 +17,16 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Cairn">
 <meta property="og:locale" content="en_US">
-<meta property="og:title" content="Cairn changelog: release notes for v0.3.1 and v0.3.0">
-<meta property="og:description" content="What changed in Cairn v0.3.1 and v0.3.0: split view, Keychain secrets, big-response filtering, WSDL and HAR import, secret scanner. Known limits included.">
+<meta property="og:title" content="Cairn changelog: release notes for v0.3.2 and v0.3.1">
+<meta property="og:description" content="What changed in Cairn v0.3.2 and v0.3.1: global secrets in the Keychain, cairn import har, accessibility fixes, split view, WSDL import. Known limits included.">
 <meta property="og:url" content="https://batuhanilgarr.github.io/Cairn/changelog/">
 <meta property="og:image" content="https://batuhanilgarr.github.io/Cairn/assets/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="Cairn: the API client that lives in your repo. A stack of balanced stones above topographic lines.">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Cairn changelog: release notes for v0.3.1 and v0.3.0">
-<meta name="twitter:description" content="What changed in Cairn v0.3.1 and v0.3.0: split view, Keychain secrets, big-response filtering, WSDL and HAR import, secret scanner. Known limits included.">
+<meta name="twitter:title" content="Cairn changelog: release notes for v0.3.2 and v0.3.1">
+<meta name="twitter:description" content="What changed in Cairn v0.3.2 and v0.3.1: global secrets in the Keychain, cairn import har, accessibility fixes, split view, WSDL import. Known limits included.">
 <meta name="twitter:image" content="https://batuhanilgarr.github.io/Cairn/assets/og.png">
 <meta name="twitter:image:alt" content="Cairn: the API client that lives in your repo.">
 <script>document.documentElement.className+=" js"</script>
@@ -60,10 +60,25 @@
     </div>
   </section>
   <div class="wrap article">
-    <nav class="toc" aria-label="On this page"><b>On this page</b><ol><li><a href="#v0-3-1">v0.3.1</a></li><li><a href="#v0-3-0">v0.3.0</a></li><li><a href="#earlier">Earlier releases</a></li></ol></nav>
+    <nav class="toc" aria-label="On this page"><b>On this page</b><ol><li><a href="#v0-3-2">v0.3.2</a></li><li><a href="#v0-3-1">v0.3.1</a></li><li><a href="#v0-3-0">v0.3.0</a></li><li><a href="#earlier">Earlier releases</a></li></ol></nav>
     <div class="doc">
 <article>
-<h2 id="v0-3-1">v0.3.1<span class="tag">Latest</span></h2>
+<h2 id="v0-3-2">v0.3.2<span class="tag">Latest</span></h2>
+<p><time datetime="2026-10-15">Oct 15, 2026</time> &middot; <a href="https://github.com/batuhanilgarr/Cairn/releases/tag/v0.3.2" rel="noopener">Release on GitHub</a></p>
+<ul>
+<li><strong>Global secret variables in the Keychain:</strong> in Settings, mark a global variable as secret. With &#8220;Keep secret values in&#8221; set to the macOS Keychain, its value is stored there and not in the app&#8217;s settings. A secret that could not be saved to the Keychain stays where it was, so nothing is lost.</li>
+<li><strong>Imported Postman credentials are secret globals:</strong> credentials the Postman import moves out of your files are flagged secret and masked.</li>
+<li><strong><code>cairn import har</code>:</strong> import a browser recording from the command line. Credentials are kept out of the written files.</li>
+<li><strong>Accessibility:</strong> the run progress bar, the run results list (now reachable with the keyboard) and the response pickers in Compare have names, and two colour contrasts now meet WCAG AA (success text in the light theme, the danger button in the dark theme).</li>
+</ul>
+<h3>Known limits</h3>
+<ul>
+<li>Global secrets in the Keychain apply to the app only: the CLI does not read the app&#8217;s global variables.</li>
+<li>Still not exercised end to end in the packaged app: the UI tests run the interface against a stand-in for the native side.</li>
+<li>Windows and Linux keychains, HashiCorp and 1Password are not done.</li>
+</ul>
+</article><article>
+<h2 id="v0-3-1">v0.3.1</h2>
 <p><time datetime="2026-10-15">Oct 15, 2026</time> &middot; <a href="https://github.com/batuhanilgarr/Cairn/releases/tag/v0.3.1" rel="noopener">Release on GitHub</a></p>
 <ul>
 <li><strong>Split view:</strong> open two requests side by side (<kbd>&#8984;\</kbd> or Open to the right in a tab&#8217;s menu). Each pane has its own URL bar, request and response; the pane you click takes focus. In a narrow window only the focused pane shows.</li>
