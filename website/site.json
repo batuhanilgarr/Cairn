@@ -1,0 +1,4 @@
+{
+  "url": "https://batuhanilgarr.github.io/Cairn/",
+  "note": "The one place the site's absolute base URL is recorded. Change it with: node scripts/set-site-url.mjs <new-url>"
+}

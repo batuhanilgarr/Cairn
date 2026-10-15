@@ -56,6 +56,9 @@ npm run tauri dev      # run the app
 npm run tauri build    # produce a .app / .dmg (the .app is about 10 MB)
 npm run build --prefix cli   # the CI runner: see cli/README.md
 npm run test:ui        # layout checks in real Chrome: many sizes, light/dark, panels open/closed (also runs in CI)
+npm run test:site      # website checks in real Chrome: SEO tags, JSON-LD, links, headings, overflow at 320-1280 px, axe (WCAG A/AA) in light and dark, 404 behaviour; writes screenshots to test-results/site
+npm run site:serve     # preview website/ on http://127.0.0.1:4350 the way GitHub Pages serves it (unknown paths give 404.html)
+node scripts/set-site-url.mjs https://your.domain/   # move the site to a new address (see the header of that script)
 npm run test:openapi   # exports a fixture collection and validates the result with Redocly (needs network; runs in CI)
 npm run bench:ui       # rendering benchmark: 10,000-request collection, 5 and 50 MB responses
 ```

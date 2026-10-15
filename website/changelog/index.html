@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cairn changelog: release notes for v0.3.1 and v0.3.0</title>
+<meta name="description" content="What changed in Cairn v0.3.1 and v0.3.0: split view, Keychain secrets, big-response filtering, WSDL and HAR import, secret scanner. Known limits included.">
+<link rel="canonical" href="https://batuhanilgarr.github.io/Cairn/changelog/">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f4f5f2" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#101517" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="../assets/logo.svg" type="image/svg+xml">
+<link rel="icon" href="../assets/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="../assets/apple-touch-icon.png">
+<link rel="manifest" href="../site.webmanifest">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cairn">
+<meta property="og:locale" content="en_US">
+<meta property="og:title" content="Cairn changelog: release notes for v0.3.1 and v0.3.0">
+<meta property="og:description" content="What changed in Cairn v0.3.1 and v0.3.0: split view, Keychain secrets, big-response filtering, WSDL and HAR import, secret scanner. Known limits included.">
+<meta property="og:url" content="https://batuhanilgarr.github.io/Cairn/changelog/">
+<meta property="og:image" content="https://batuhanilgarr.github.io/Cairn/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Cairn: the API client that lives in your repo. A stack of balanced stones above topographic lines.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Cairn changelog: release notes for v0.3.1 and v0.3.0">
+<meta name="twitter:description" content="What changed in Cairn v0.3.1 and v0.3.0: split view, Keychain secrets, big-response filtering, WSDL and HAR import, secret scanner. Known limits included.">
+<meta name="twitter:image" content="https://batuhanilgarr.github.io/Cairn/assets/og.png">
+<meta name="twitter:image:alt" content="Cairn: the API client that lives in your repo.">
+<script>document.documentElement.className+=" js"</script>
+<link rel="stylesheet" href="../styles.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Cairn","item":"https://batuhanilgarr.github.io/Cairn/"},{"@type":"ListItem","position":2,"name":"Changelog","item":"https://batuhanilgarr.github.io/Cairn/changelog/"}]}</script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="nav">
+  <div class="wrap navin">
+    <a class="brand" href="../" aria-label="Cairn, home"><img src="../assets/logo.svg" alt="" width="28" height="28"><span>Cairn</span></a>
+    <button class="menu-btn" id="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav"><i aria-hidden="true"></i>Menu</button>
+    <nav class="nav-links" id="site-nav" aria-label="Main">
+      <a href="../#features">Features</a>
+      <a href="../#cli">CLI &amp; CI</a>
+      <a href="../migrate-from-postman/">Migrate</a>
+      <a href="../changelog/" aria-current="page">Changelog</a>
+      <a href="../docs/">Docs</a>
+      <a href="../#faq">FAQ</a>
+      <a href="https://github.com/batuhanilgarr/Cairn" rel="noopener">GitHub</a>
+      <a class="btn" href="../#download">Download</a>
+    </nav>
+  </div>
+</header>
+<main id="main">
+  <section class="pagehero">
+    <div class="wrap">
+      <nav class="crumbs" aria-label="Breadcrumb"><ol><li><a href="../">Cairn</a></li><li aria-current="page">Changelog</li></ol></nav>
+      <h1>Changelog</h1>
+      <p class="lead">Release notes for Cairn, with the known limits of each version stated plainly.</p>
+    </div>
+  </section>
+  <div class="wrap article">
+    <nav class="toc" aria-label="On this page"><b>On this page</b><ol><li><a href="#v0-3-1">v0.3.1</a></li><li><a href="#v0-3-0">v0.3.0</a></li><li><a href="#earlier">Earlier releases</a></li></ol></nav>
+    <div class="doc">
+<article>
+<h2 id="v0-3-1">v0.3.1<span class="tag">Latest</span></h2>
+<p><time datetime="2026-10-15">Oct 15, 2026</time> &middot; <a href="https://github.com/batuhanilgarr/Cairn/releases/tag/v0.3.1" rel="noopener">Release on GitHub</a></p>
+<ul>
+<li><strong>Split view:</strong> open two requests side by side (<kbd>&#8984;\</kbd> or Open to the right in a tab&#8217;s menu). Each pane has its own URL bar, request and response; the pane you click takes focus. In a narrow window only the focused pane shows.</li>
+<li><strong>Secrets in the macOS Keychain:</strong> Settings, Secrets, &#8220;Keep secret values in&#8221;. Secret variable values can live in the Keychain instead of <code>.cairn/secrets.yaml</code>. Switching moves the open collection&#8217;s secrets, and the CLI can read them on the same Mac.</li>
+<li><strong>Filter big responses:</strong> the jq (subset) and JSONPath filter now also works on responses of 8 MB and more, where the body stays on the Rust side. On a 50 MB body with 467,000 rows a filter takes about 0.4 s in our benchmark. The Rust engine answers exactly like the one used for smaller responses (342 shared test vectors).</li>
+<li><strong>SOAP and WSDL import:</strong> every operation of a WSDL 1.1 service becomes a POST with a ready-to-edit SOAP envelope built from the schema (SOAP 1.1 and 1.2, document/literal and rpc/literal).</li>
+<li><strong>Import OpenAPI from the clipboard:</strong> paste a spec, a WSDL or a link, with a preview before anything is written.</li>
+<li><strong>Fixes:</strong> the last line of a large response could be cut off at the end of the scroll; the response status and timing now stay visible in narrow panes.</li>
+</ul>
+<h3>Known limits</h3>
+<ul>
+<li>Still not exercised end to end in the packaged app: the UI tests run the interface against a stand-in for the native side, and the WSDL import was tried only against WSDL files written for the tests, not against live SOAP services.</li>
+<li>WSDL 2.0, <code>rpc/encoded</code> (approximated), WS-Security and MTOM are not supported.</li>
+<li>Split view: the request/response sub-tab choice is shared between the two panes, and the split is not remembered between sessions.</li>
+<li>Windows and Linux keychains, HashiCorp and 1Password are not done.</li>
+</ul>
+</article><article>
+<h2 id="v0-3-0">v0.3.0</h2>
+<p><time datetime="2026-10-15">Oct 15, 2026</time> &middot; <a href="https://github.com/batuhanilgarr/Cairn/releases/tag/v0.3.0" rel="noopener">Release on GitHub</a></p>
+<ul>
+<li><strong>Reqnest is now Cairn:</strong> new name, logo and app icon. The bundle identifier changed (<code>com.cairnhq.app</code>), so this installs as a separate app and its settings start fresh; your collections are untouched. Collections made before the rename (<code>reqnest.yaml</code>, <code>.reqnest/</code>) are still read.</li>
+<li><strong>Large responses:</strong> bodies of 8 MB and more stay in the Rust side and are drawn as a virtual list, so 50 and 100 MB responses open without freezing the window; search works on any size. The 10,000-request collection tree is virtualized too.</li>
+<li><strong>Response filter:</strong> jq (a practical subset) and JSONPath over JSON responses.</li>
+<li><strong>Environments:</strong> <code>extends:</code> inheritance, Import .env, and layered <code>--env base,staging</code> in the CLI.</li>
+<li><strong>Shared requests:</strong> one request file can be linked from many folders and collections (<code>use:</code>).</li>
+<li><strong>Tabs:</strong> preview tab, drag to reorder, tab menu, reopen closed tab.</li>
+<li><strong>Secret scanner:</strong> Scan for secrets finds credentials in committed files and moves them into secret variables; <code>cairn scan</code> does the same in CI.</li>
+<li><strong>OpenAPI:</strong> export a collection as OpenAPI 3.0.3 (<code>cairn export openapi</code>), import from the clipboard with a preview, and import HAR recordings with credentials kept out of the files.</li>
+<li><strong>File format:</strong> published JSON Schemas (v1), a format document, and <code>cairn validate</code>.</li>
+<li><strong>Accessibility:</strong> axe-clean screens, modal focus handling, labels and contrast.</li>
+</ul>
+<h3>Known limits</h3>
+<ul>
+<li>Not exercised end to end in the packaged app: the UI tests run the interface against a stand-in for the native side.</li>
+<li>The jq filter is a subset, and it did not apply to the largest (Rust-held) responses yet. That was fixed in v0.3.1.</li>
+</ul>
+</article><h2 id="earlier">Earlier releases</h2>
+<p>Versions before 0.3.0 were published under the name Reqnest. They are listed on the <a href="https://github.com/batuhanilgarr/Cairn/releases" rel="noopener">GitHub releases page</a>.</p>
+<p>Every release is a universal macOS build. Download the latest from the <a href="../#download">download section</a>.</p>
+    </div>
+  </div>
+</main>
+<footer>
+  <div class="wrap">
+    <div class="foot">
+      <div>
+        <a class="brand" href="../"><img src="../assets/logo.svg" alt="" width="24" height="24"><span>Cairn</span></a>
+        <p>The API client that lives in your repo. Local-first, for macOS.</p>
+      </div>
+      <nav aria-label="Product">
+        <h2>Product</h2>
+        <ul>
+          <li><a href="../#features">Features</a></li>
+          <li><a href="../#cli">CLI and CI</a></li>
+          <li><a href="../changelog/">Changelog</a></li>
+          <li><a href="../#download">Download</a></li>
+        </ul>
+      </nav>
+      <nav aria-label="Guides">
+        <h2>Guides</h2>
+        <ul>
+          <li><a href="../migrate-from-postman/">Migrate from Postman</a></li>
+          <li><a href="../import-openapi-har-wsdl/">Import OpenAPI, HAR and WSDL</a></li>
+          <li><a href="../docs/">Docs and file format</a></li>
+          <li><a href="../schema/v1/request.schema.json">JSON Schemas</a></li>
+        </ul>
+      </nav>
+      <nav aria-label="Project">
+        <h2>Project</h2>
+        <ul>
+          <li><a href="https://github.com/batuhanilgarr/Cairn" rel="noopener">GitHub repository</a></li>
+          <li><a href="https://github.com/batuhanilgarr/Cairn/releases" rel="noopener">All releases</a></li>
+          <li><a href="https://github.com/batuhanilgarr/Cairn/issues" rel="noopener">Report an issue</a></li>
+          <li><a href="https://github.com/batuhanilgarr/Cairn/blob/main/cli/README.md" rel="noopener">CLI reference</a></li>
+        </ul>
+      </nav>
+    </div>
+    <p class="legal">Cairn is early software (v0.3.1). Postman, Bruno, Insomnia and other product names belong to their owners; Cairn is not affiliated with them.</p>
+  </div>
+</footer>
+<script src="../main.js" defer></script>
+</body>
+</html>

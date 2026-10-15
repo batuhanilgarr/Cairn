@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cairn docs: file format, CLI and JSON Schemas</title>
+<meta name="description" content="The Cairn collection layout, published JSON Schemas for VS Code, and the CLI reference: run, scan, validate, export openapi and import har.">
+<link rel="canonical" href="https://batuhanilgarr.github.io/Cairn/docs/">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f4f5f2" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#101517" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="../assets/logo.svg" type="image/svg+xml">
+<link rel="icon" href="../assets/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="../assets/apple-touch-icon.png">
+<link rel="manifest" href="../site.webmanifest">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cairn">
+<meta property="og:locale" content="en_US">
+<meta property="og:title" content="Cairn docs: file format, CLI and JSON Schemas">
+<meta property="og:description" content="The Cairn collection layout, published JSON Schemas for VS Code, and the CLI reference: run, scan, validate, export openapi and import har.">
+<meta property="og:url" content="https://batuhanilgarr.github.io/Cairn/docs/">
+<meta property="og:image" content="https://batuhanilgarr.github.io/Cairn/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Cairn: the API client that lives in your repo. A stack of balanced stones above topographic lines.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Cairn docs: file format, CLI and JSON Schemas">
+<meta name="twitter:description" content="The Cairn collection layout, published JSON Schemas for VS Code, and the CLI reference: run, scan, validate, export openapi and import har.">
+<meta name="twitter:image" content="https://batuhanilgarr.github.io/Cairn/assets/og.png">
+<meta name="twitter:image:alt" content="Cairn: the API client that lives in your repo.">
+<script>document.documentElement.className+=" js"</script>
+<link rel="stylesheet" href="../styles.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Cairn","item":"https://batuhanilgarr.github.io/Cairn/"},{"@type":"ListItem","position":2,"name":"Docs","item":"https://batuhanilgarr.github.io/Cairn/docs/"}]}</script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="nav">
+  <div class="wrap navin">
+    <a class="brand" href="../" aria-label="Cairn, home"><img src="../assets/logo.svg" alt="" width="28" height="28"><span>Cairn</span></a>
+    <button class="menu-btn" id="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav"><i aria-hidden="true"></i>Menu</button>
+    <nav class="nav-links" id="site-nav" aria-label="Main">
+      <a href="../#features">Features</a>
+      <a href="../#cli">CLI &amp; CI</a>
+      <a href="../migrate-from-postman/">Migrate</a>
+      <a href="../changelog/">Changelog</a>
+      <a href="../docs/" aria-current="page">Docs</a>
+      <a href="../#faq">FAQ</a>
+      <a href="https://github.com/batuhanilgarr/Cairn" rel="noopener">GitHub</a>
+      <a class="btn" href="../#download">Download</a>
+    </nav>
+  </div>
+</header>
+<main id="main">
+  <section class="pagehero">
+    <div class="wrap">
+      <nav class="crumbs" aria-label="Breadcrumb"><ol><li><a href="../">Cairn</a></li><li aria-current="page">Docs</li></ol></nav>
+      <h1>Docs</h1>
+      <p class="lead">The short version of how a Cairn collection is laid out, how to validate it, and how to run it in CI. The long version lives next to the code on GitHub.</p>
+    </div>
+  </section>
+  <div class="wrap article">
+    <nav class="toc" aria-label="On this page"><b>On this page</b><ol><li><a href="#layout">Collection layout</a></li><li><a href="#schemas">JSON Schemas</a></li><li><a href="#cli">CLI reference</a></li><li><a href="#more">More documentation</a></li></ol></nav>
+    <div class="doc">
+<h2 id="layout">A collection is a folder</h2>
+<p>Nothing is generated and nothing hides in a database. Keys are always written in the same order, values that equal the default are left out, and bodies and scripts are YAML literal blocks, so a change in the app is a small change in <code>git diff</code>. Order comes from file names, never from file contents.</p>
+<div class="term"><pre>my-collection/
+  cairn.yaml                 marks the collection root
+  folder.yaml                defaults for the root: headers, auth, scripts
+  environments/
+    staging.env.yaml         a set of variables
+  invoices/
+    folder.yaml              defaults for this folder
+    create-invoice.req.yaml  one request
+  .cairn/
+    secrets.yaml             secret values, git-ignored</pre></div>
+<p>Collections made before the rename to Cairn have <code>reqnest.yaml</code> and <code>.reqnest/</code>. Both are still read. The full contract is in the <a href="https://github.com/batuhanilgarr/Cairn/blob/main/docs/file-format.md" rel="noopener">file format document</a>.</p>
+
+<h2 id="schemas">JSON Schemas for editors and CI</h2>
+<p>The format has published JSON Schemas (draft 2020-12), versioned in the URL. Within v1 keys are only added, never removed or renamed, so a file that is valid today stays valid. A breaking change would ship as <code>/schema/v2/</code> with a migration.</p>
+<div class="tablewrap" tabindex="0" role="region" aria-label="Table, scrolls sideways on small screens"><table>
+<thead><tr><th scope="col">File</th><th scope="col">Schema</th></tr></thead>
+<tbody>
+<tr><th scope="row"><code>*.req.yaml</code></th><td><a href="../schema/v1/request.schema.json">request.schema.json</a></td></tr>
+<tr><th scope="row"><code>folder.yaml</code></th><td><a href="../schema/v1/folder.schema.json">folder.schema.json</a></td></tr>
+<tr><th scope="row"><code>cairn.yaml</code></th><td><a href="../schema/v1/collection.schema.json">collection.schema.json</a></td></tr>
+<tr><th scope="row"><code>environments/*.env.yaml</code></th><td><a href="../schema/v1/environment.schema.json">environment.schema.json</a></td></tr>
+</tbody></table></div>
+<h3 id="editor">Editor completion in VS Code</h3>
+<p>With the YAML extension (Red Hat), add this to <code>.vscode/settings.json</code> in the collection for completion, hover docs and red squiggles on typos:</p>
+<div class="term"><button class="copy" type="button" data-copy="{
+  &quot;yaml.schemas&quot;: {
+    &quot;https://batuhanilgarr.github.io/Cairn/schema/v1/request.schema.json&quot;: &quot;**/*.req.yaml&quot;,
+    &quot;https://batuhanilgarr.github.io/Cairn/schema/v1/folder.schema.json&quot;: &quot;**/folder.yaml&quot;,
+    &quot;https://batuhanilgarr.github.io/Cairn/schema/v1/collection.schema.json&quot;: &quot;/cairn.yaml&quot;,
+    &quot;https://batuhanilgarr.github.io/Cairn/schema/v1/environment.schema.json&quot;: &quot;environments/*.env.yaml&quot;
+  }
+}" aria-label="Copy the VS Code settings">Copy</button><pre>{
+  "yaml.schemas": {
+    "https://batuhanilgarr.github.io/Cairn/schema/v1/request.schema.json": "**/*.req.yaml",
+    "https://batuhanilgarr.github.io/Cairn/schema/v1/folder.schema.json": "**/folder.yaml",
+    "https://batuhanilgarr.github.io/Cairn/schema/v1/collection.schema.json": "/cairn.yaml",
+    "https://batuhanilgarr.github.io/Cairn/schema/v1/environment.schema.json": "environments/*.env.yaml"
+  }
+}</pre></div>
+<p>Check files from the command line, or in CI and as a pre-commit hook, with <code>cairn validate ./my-collection</code>.</p>
+
+<h2 id="cli">CLI reference</h2>
+<p>The CLI is the app&#8217;s engine without the window. It is not on npm yet: build it once with <code>cd cli &amp;&amp; npm ci &amp;&amp; npm run build</code>, then run <code>node cli/dist/cairn.mjs</code> wherever this page says <code>cairn</code>. It needs Node 20.</p>
+<div class="tablewrap" tabindex="0" role="region" aria-label="Table, scrolls sideways on small screens"><table>
+<thead><tr><th scope="col">Command</th><th scope="col">What it does</th></tr></thead>
+<tbody>
+<tr><th scope="row"><code>cairn run &lt;path&gt;</code></th><td>Runs a collection, folder or single request file with folder defaults, captures, scripts, assertions, OAuth client credentials and cookies. Options include <code>--env</code> (a comma list layers environments), <code>--var key=value</code>, <code>--data</code>, <code>--iterations</code>, <code>--bail</code>, and <code>--junit</code>, <code>--json</code>, <code>--html</code> reports.</td></tr>
+<tr><th scope="row"><code>cairn scan &lt;path&gt;</code></th><td>Finds credentials written into committed YAML. <code>--fail-on high</code> narrows it to known token formats; <code>--format json</code> for machines. Silence a line with <code># cairn-ignore</code>.</td></tr>
+<tr><th scope="row"><code>cairn validate &lt;path&gt;</code></th><td>Checks files against the v1 JSON Schemas and prints <code>file:line  path  message</code>.</td></tr>
+<tr><th scope="row"><code>cairn export openapi &lt;path&gt;</code></th><td>Writes OpenAPI 3.0.3 from a collection (<code>-o api.yaml</code> or <code>.json</code>, <code>--env</code> for the server). Credentials are never written.</td></tr>
+<tr><th scope="row"><code>cairn import har &lt;file&gt; &lt;dir&gt;</code></th><td>Imports a browser recording. API calls only by default, <code>--all</code> for everything, <code>--dry-run</code> to see the result first.</td></tr>
+</tbody></table></div>
+<p>Exit code 0 means everything passed, 1 means a test or request failed or a check found something, 2 means bad usage or configuration. Secret variables are empty on CI: supply them as <code>CAIRN_VAR_&lt;name&gt;</code> environment variables or with <code>--var</code>.</p>
+<h3 id="action">GitHub Action</h3>
+<div class="term"><button class="copy" type="button" data-copy="- uses: batuhanilgarr/Cairn@main
+  with:
+    path: api-tests
+    env: Staging
+    junit: results.xml
+  env:
+    CAIRN_VAR_clientSecret: ${{ secrets.CLIENT_SECRET }}" aria-label="Copy the GitHub Action example">Copy</button><pre>- uses: batuhanilgarr/Cairn@main
+  with:
+    path: api-tests
+    env: Staging
+    junit: results.xml
+  env:
+    CAIRN_VAR_clientSecret: ${{ secrets.CLIENT_SECRET }}</pre></div>
+<p>Not in the CLI: browser sign-in for OAuth authorization code, and WebSocket, SSE and gRPC requests are skipped. Scripts run in a Node worker thread and are not sandboxed like in the app.</p>
+
+<h2 id="more">More documentation</h2>
+<ul class="linkcards">
+<li><a href="https://github.com/batuhanilgarr/Cairn/blob/main/docs/file-format.md" rel="noopener"><b>File format</b><span>Every key of the request, folder and environment files.</span></a></li>
+<li><a href="https://github.com/batuhanilgarr/Cairn/blob/main/cli/README.md" rel="noopener"><b>CLI README</b><span>All options, secrets on CI, scanning, export and import.</span></a></li>
+<li><a href="../migrate-from-postman/"><b>Migrate from Postman</b><span>Export, import, what carries over and what does not.</span></a></li>
+<li><a href="../import-openapi-har-wsdl/"><b>Import OpenAPI, HAR and WSDL</b><span>From specs, recordings and SOAP services to files.</span></a></li>
+</ul>
+    </div>
+  </div>
+</main>
+<footer>
+  <div class="wrap">
+    <div class="foot">
+      <div>
+        <a class="brand" href="../"><img src="../assets/logo.svg" alt="" width="24" height="24"><span>Cairn</span></a>
+        <p>The API client that lives in your repo. Local-first, for macOS.</p>
+      </div>
+      <nav aria-label="Product">
+        <h2>Product</h2>
+        <ul>
+          <li><a href="../#features">Features</a></li>
+          <li><a href="../#cli">CLI and CI</a></li>
+          <li><a href="../changelog/">Changelog</a></li>
+          <li><a href="../#download">Download</a></li>
+        </ul>
+      </nav>
+      <nav aria-label="Guides">
+        <h2>Guides</h2>
+        <ul>
+          <li><a href="../migrate-from-postman/">Migrate from Postman</a></li>
+          <li><a href="../import-openapi-har-wsdl/">Import OpenAPI, HAR and WSDL</a></li>
+          <li><a href="../docs/">Docs and file format</a></li>
+          <li><a href="../schema/v1/request.schema.json">JSON Schemas</a></li>
+        </ul>
+      </nav>
+      <nav aria-label="Project">
+        <h2>Project</h2>
+        <ul>
+          <li><a href="https://github.com/batuhanilgarr/Cairn" rel="noopener">GitHub repository</a></li>
+          <li><a href="https://github.com/batuhanilgarr/Cairn/releases" rel="noopener">All releases</a></li>
+          <li><a href="https://github.com/batuhanilgarr/Cairn/issues" rel="noopener">Report an issue</a></li>
+          <li><a href="https://github.com/batuhanilgarr/Cairn/blob/main/cli/README.md" rel="noopener">CLI reference</a></li>
+        </ul>
+      </nav>
+    </div>
+    <p class="legal">Cairn is early software (v0.3.1). Postman, Bruno, Insomnia and other product names belong to their owners; Cairn is not affiliated with them.</p>
+  </div>
+</footer>
+<script src="../main.js" defer></script>
+</body>
+</html>
