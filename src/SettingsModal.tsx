@@ -31,6 +31,7 @@ export const SHORTCUTS: [string, string][] = [
   ["Command palette", "⌘ K"],
   ["Focus URL bar", "⌘ L"],
   ["Duplicate tab", "⌘ D"],
+  ["Reopen closed tab", "⇧ ⌘ T"],
   ["Generate code", "⇧ ⌘ G"],
   ["Ask AI about the request", "⇧ ⌘ A"],
   ["Next / previous tab", "⌃ ⇥  /  ⌃ ⇧ ⇥"],

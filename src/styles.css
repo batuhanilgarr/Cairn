@@ -807,3 +807,7 @@ pre.block { white-space: pre-wrap; word-break: break-word; margin: 0; background
 .tree-link { margin-left: 6px; font-size: 11px; color: var(--muted); }
 .link-note { display: flex; align-items: center; gap: 10px; padding: 6px 12px; font-size: 12.5px; color: var(--muted); border-bottom: 1px solid var(--border); min-width: 0; }
 .link-note > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.tab.preview .tab-title { font-style: italic; }
+.tab.drop { box-shadow: inset 2px 0 0 var(--accent); }
+.popmenu.ctx { z-index: 60; min-width: 200px; }

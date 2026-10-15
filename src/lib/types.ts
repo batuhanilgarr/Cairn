@@ -57,6 +57,8 @@ export type GrpcConfig = {
 export type RequestTab = {
   /** Set when this file is a link (`use:`) to a shared request: the absolute path of the file that holds the real content. */
   linkTo?: string;
+  /** A tab opened by a single click in the tree: the next single click replaces it, unless you edit or keep it. */
+  preview?: boolean;
   kind: RequestKind;
   examples: ResponseExample[];
   gql: GraphQLConfig;

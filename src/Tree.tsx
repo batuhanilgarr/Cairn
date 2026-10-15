@@ -16,7 +16,7 @@ type Props = {
   labels: Record<string, string>;
   /** Called with the request files in (or near) the viewport, so their labels can be read. */
   onVisible: (paths: string[]) => void;
-  onOpen: (path: string) => void;
+  onOpen: (path: string, pin?: boolean) => void;
   onSelectDir: (path: string) => void;
   onRun: (dir: string) => void;
   onDefaults: (dir: string) => void;
@@ -141,6 +141,7 @@ const Row = memo(function Row({ node, depth, open, onToggle, ...p }: RowProps) {
           p.onSelectDir(node.path);
         } else p.onOpen(node.path);
       }}
+      onDoubleClick={() => !node.isDir && p.onOpen(node.path, true)}
     >
       {node.isDir ? (
         <>

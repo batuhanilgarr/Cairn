@@ -792,3 +792,65 @@ for (const width of [760, 1360]) {
     }
   });
 }
+
+test("tabs: preview tab, keep open, reorder by drag, context menu, reopen closed", async () => {
+  const { page, context, errors, check } = await open({ width: 1360 }, "tab behaviour");
+  try {
+    const tabs = () => page.evaluate(() => [...document.querySelectorAll(".tabstrip .tab")].map((t) => ({ title: t.querySelector(".tab-title").textContent, preview: t.classList.contains("preview") })));
+    const label = (name) => page.locator(".tree-row", { hasText: name }).first().locator(".tree-label");
+    await label("login").click();
+    await page.waitForTimeout(300);
+    const a = await tabs();
+    await label("list-invoices").click();
+    await page.waitForTimeout(300);
+    const b = await tabs();
+    await label("create-invoice").dblclick();
+    await page.waitForTimeout(300);
+    const c = await tabs();
+    await label("login").click();
+    await page.waitForTimeout(300);
+    const d = await tabs();
+    // editing the preview tab keeps it
+    await page.click(".url-cell");
+    await page.keyboard.type("/x");
+    await page.waitForTimeout(400);
+    const e = await tabs();
+    // drag the last tab onto the first
+    const before = (await tabs()).map((t) => t.title);
+    await page.locator(".tabstrip .tab").nth(before.length - 1).dragTo(page.locator(".tabstrip .tab").first());
+    await page.waitForTimeout(250);
+    const moved = (await tabs()).map((t) => t.title);
+    // context menu
+    await page.locator(".tabstrip .tab").nth(1).click({ button: "right" });
+    await page.waitForSelector('[role="menu"][aria-label="Tab actions"]');
+    const menu = await page.locator('[role="menu"][aria-label="Tab actions"] [role="menuitem"]').allTextContents();
+    const focusInMenu = await page.evaluate(() => !!document.activeElement?.closest('[role="menu"]'));
+    const v = await axeViolations(page);
+    await page.locator('[role="menuitem"]', { hasText: "Close others" }).click();
+    await page.waitForTimeout(250);
+    const afterOthers = await tabs();
+    // close then reopen with the keyboard
+    await page.keyboard.press("Control+w");
+    await page.waitForTimeout(250);
+    await page.keyboard.press("Control+Shift+t");
+    await page.waitForTimeout(250);
+    const reopened = await tabs();
+    await check(async () => {
+      assert.deepEqual(errors, []);
+      assert.deepEqual(a.map((t) => [t.title, t.preview]), [["New request", false], ["login", true]], "a single click opens a preview tab");
+      assert.deepEqual(b.map((t) => [t.title, t.preview]), [["New request", false], ["list-invoices", true]], "the next single click replaces the preview tab");
+      assert.deepEqual(c.map((t) => [t.title, t.preview]), [["New request", false], ["create-invoice", false]], "a double click keeps the tab open");
+      assert.deepEqual(d.map((t) => [t.title, t.preview]), [["New request", false], ["create-invoice", false], ["login", true]], "a new preview opens next to the kept tab");
+      assert.equal(e[2].preview, false, "editing a preview tab keeps it open");
+      assert.equal(moved[0], before[before.length - 1], `dragging a tab onto another should move it there: ${before} -> ${moved}`);
+      assert.ok(["Close", "Close others", "Close tabs to the right", "Duplicate", "Move left", "Move right"].every((t) => menu.some((m) => m.startsWith(t))), `tab menu: ${menu.join(" | ")}`);
+      assert.ok(focusInMenu, "the tab menu should take keyboard focus");
+      assert.deepEqual(v.map((x) => `${x.id}: ${x.where.join(" | ")}`), [], "accessibility violations with the menu open");
+      assert.equal(afterOthers.length, 1, "Close others should leave one tab");
+      assert.equal(reopened.length, 2, "closing the last tab leaves a fresh one, and reopening brings the closed one back next to it");
+      assert.ok(reopened.some((t) => t.title === afterOthers[0].title), `the closed tab should come back: ${JSON.stringify(reopened)}`);
+    });
+  } finally {
+    await context.close();
+  }
+});

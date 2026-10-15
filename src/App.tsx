@@ -23,7 +23,7 @@ import { StreamLog } from "./StreamLog";
 import { CodePanel } from "./CodePanel";
 import { rowsFromUrl, syncParams, urlFromRows } from "./lib/query";
 import { IconAlert, IconChevronDown, IconCode, IconCollections, IconEnvironments, IconFolderPlus, IconHistory, IconInbox, IconMore, IconPlay, IconPlus, IconSidebar, IconSearch, IconSettings, IconSpark } from "./Icons";
-import { Menu } from "./Menu";
+import { ContextMenu, Menu, type MenuItem } from "./Menu";
 import { useRequestLabels } from "./lib/useRequestLabels";
 import { AiPanel } from "./AiPanel";
 import { SettingRow, Switch } from "./SettingRow";
@@ -194,6 +194,9 @@ export default function App() {
   const urlView = useRef<EditorView | null>(null);
   const tabStrip = useRef<HTMLDivElement>(null);
   const resView = useRef<EditorView | null>(null);
+  const closedTabs = useRef<RequestTab[]>([]);
+  const [tabMenu, setTabMenu] = useState<{ id: string; x: number; y: number } | null>(null);
+  const [dragTab, setDragTab] = useState<{ id: string; over: string | null } | null>(null);
 
   const active = tabs.find((t) => t.id === activeId) ?? tabs[0];
   const envRaw = envs.find((e) => e.id === envId);
@@ -306,11 +309,27 @@ export default function App() {
     setEnvId("env-local");
   };
 
-  const openFile = (path: string) =>
+  /** Open a request file. `preview` (single click in the tree) reuses the one preview tab instead of piling up tabs. */
+  const openFile = (path: string, preview = false) =>
     guard(async () => {
       const existing = tabs.find((t) => t.file === path);
-      if (existing) return setActiveId(existing.id);
-      addTab(await readRequest(path));
+      if (existing) {
+        setActiveId(existing.id);
+        if (!preview && existing.preview) setTabs((ts) => ts.map((t) => (t.id === existing.id ? { ...t, preview: false } : t)));
+        return;
+      }
+      const tab = await readRequest(path);
+      if (!preview) return addTab(tab);
+      const old = tabs.find((t) => t.preview);
+      if (old) dropStreams(old.id);
+      setTabs((ts) => {
+        const i = ts.findIndex((t) => t.preview);
+        if (i < 0) return [...ts, { ...tab, preview: true }];
+        const next = [...ts];
+        next[i] = { ...tab, preview: true };
+        return next;
+      });
+      setActiveId(tab.id);
     });
 
   const writeTab = async (tab: RequestTab, file: string) => {
@@ -679,16 +698,21 @@ export default function App() {
     setActiveId(tab.id);
   };
 
+  const dropStreams = (id: string) => {
+    if (!streams[id]) return;
+    streamStop(id).catch(() => {});
+    mcpClose(id).catch(() => {});
+    unsubscribe(id);
+    setStreams((m) => {
+      const { [id]: _drop, ...rest } = m;
+      return rest;
+    });
+  };
+
   const closeTab = (id: string) => {
-    if (streams[id]) {
-      streamStop(id).catch(() => {});
-      mcpClose(id).catch(() => {});
-      unsubscribe(id);
-      setStreams((m) => {
-        const { [id]: _drop, ...rest } = m;
-        return rest;
-      });
-    }
+    dropStreams(id);
+    const gone = tabs.find((t) => t.id === id);
+    if (gone && (gone.file || !isBlank(gone))) closedTabs.current = [gone, ...closedTabs.current].slice(0, 10);
     setTabs((ts) => {
       const next = ts.filter((t) => t.id !== id);
       if (!next.length) {
@@ -1092,6 +1116,40 @@ export default function App() {
     for (const t of tabs) if (t.file) setLabel(t.file, pillOf(t) + (t.linkTo ? "|link" : ""));
   }, [tabs]);
 
+  const closeMany = (ids: string[]) => ids.forEach(closeTab);
+  const reopenTab = () => {
+    const t = closedTabs.current.shift();
+    if (!t) return flash("No closed tab to reopen");
+    addTab({ ...t, id: tabs.some((x) => x.id === t.id) ? uid() : t.id, preview: false });
+  };
+  const moveTab = (id: string, to: number) =>
+    setTabs((ts) => {
+      const from = ts.findIndex((t) => t.id === id);
+      if (from < 0) return ts;
+      const next = [...ts];
+      const [t] = next.splice(from, 1);
+      next.splice(Math.max(0, Math.min(next.length, to)), 0, t);
+      return next;
+    });
+  const nudgeTab = (d: number) => {
+    const i = tabs.findIndex((t) => t.id === active.id);
+    if (i + d >= 0 && i + d < tabs.length) moveTab(active.id, i + d);
+  };
+  const tabItems = (id: string) => {
+    const i = tabs.findIndex((t) => t.id === id);
+    const t = tabs[i];
+    return [
+      ...(t?.preview ? [{ label: "Keep open", hint: "double-click", onClick: () => setTabs((ts) => ts.map((x) => (x.id === id ? { ...x, preview: false } : x))) }] : []),
+      { label: "Close", hint: id === active.id ? "⌘W" : undefined, onClick: () => closeTab(id) },
+      { label: "Close others", disabled: tabs.length < 2, onClick: () => closeMany(tabs.filter((x) => x.id !== id).map((x) => x.id)) },
+      { label: "Close tabs to the right", disabled: i >= tabs.length - 1, onClick: () => closeMany(tabs.slice(i + 1).map((x) => x.id)) },
+      "sep" as const,
+      { label: "Duplicate", onClick: () => t && addTab({ ...t, id: uid(), file: null, saved: null, preview: false, linkTo: undefined, name: "New request" }) },
+      { label: "Move left", disabled: i <= 0, onClick: () => moveTab(id, i - 1) },
+      { label: "Move right", disabled: i >= tabs.length - 1, onClick: () => moveTab(id, i + 1) },
+    ] satisfies MenuItem[];
+  };
+
   const nextTab = (d: number) => {
     const i = tabs.findIndex((t) => t.id === active.id);
     setActiveId(tabs[(i + d + tabs.length) % tabs.length].id);
@@ -1119,6 +1177,10 @@ export default function App() {
       v.focus();
       openSearchPanel(v);
     },
+    "reopen-tab": reopenTab,
+    "close-others": () => closeMany(tabs.filter((x) => x.id !== active.id).map((x) => x.id)),
+    "tab-left": () => nudgeTab(-1),
+    "tab-right": () => nudgeTab(1),
     "duplicate-tab": () => addTab({ ...active, id: uid(), file: null, saved: null, name: "New request" }),
     "next-tab": () => nextTab(1),
     "prev-tab": () => nextTab(-1),
@@ -1159,6 +1221,10 @@ export default function App() {
         e.preventDefault();
         return fire("codegen");
       }
+      if (e.shiftKey && e.key.toLowerCase() === "t") {
+        e.preventDefault();
+        return fire("reopen-tab");
+      }
       if (e.shiftKey && e.key.toLowerCase() === "a") {
         e.preventDefault();
         return fire("ai");
@@ -1188,6 +1254,13 @@ export default function App() {
 
   const isDirty = (t: RequestTab) => !!t.file && t.saved != null && serializeRequest(t) !== t.saved;
   const dirtyFiles = useMemo(() => new Set(tabs.filter(isDirty).map((t) => t.file!)), [tabs]);
+  // A preview tab becomes a normal tab as soon as you change it or send it.
+  useEffect(() => {
+    const keep = tabs.filter((t) => t.preview && (isDirty(t) || responses[t.id] !== undefined)).map((t) => t.id);
+    if (keep.length) setTabs((ts) => ts.map((t) => (keep.includes(t.id) ? { ...t, preview: false } : t)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tabs, responses]);
+
   const tabTitle = (t: RequestTab) => t.name !== "New request" ? t.name : t.url.replace(/^https?:\/\//, "") || "New request";
 
   const flatRequests = useMemo(() => {
@@ -1207,6 +1280,10 @@ export default function App() {
     { id: "a:new", group: "Action", title: "New request", hint: "⌘T", run: () => fire("new-request") },
     { id: "a:save", group: "Action", title: "Save request", hint: "⌘S", run: () => fire("save") },
     { id: "a:dup", group: "Action", title: "Duplicate tab", hint: "⌘D", run: () => fire("duplicate-tab") },
+    { id: "a:reopen", group: "Action", title: "Reopen closed tab", hint: "⇧⌘T", run: () => fire("reopen-tab") },
+    { id: "a:others", group: "Action", title: "Close other tabs", run: () => fire("close-others") },
+    { id: "a:left", group: "Action", title: "Move tab left", run: () => fire("tab-left") },
+    { id: "a:right", group: "Action", title: "Move tab right", run: () => fire("tab-right") },
     { id: "a:open", group: "Action", title: "Open collection…", hint: "⌘O", run: () => fire("open-collection") },
     { id: "a:newc", group: "Action", title: "New collection…", run: () => fire("new-collection") },
     { id: "a:import", group: "Action", title: "Import OpenAPI, Postman, Bruno…", run: () => fire("import") },
@@ -1334,7 +1411,7 @@ export default function App() {
                     dirty={dirtyFiles}
                     labels={labels}
                     onVisible={ensureLabels}
-                    onOpen={openFile}
+                    onOpen={(p, pin) => openFile(p, !pin)}
                     onSelectDir={setSelectedDir}
                     onRun={(dir) => runFolder(dir, `Run ${basename(dir)}`)}
                     onDefaults={(dir) => openDefaults(dir, `Defaults for “${basename(dir)}”`)}
@@ -1496,10 +1573,48 @@ export default function App() {
           {!sidebarOpen && <button className="icon-btn show-side" onClick={() => fire("toggle-sidebar")} title="Show sidebar (⌘B)" aria-label="Show sidebar"><IconSidebar /></button>}
           <div className="tabstrip" role="group" aria-label="Open requests" ref={tabStrip} onWheel={(e) => { if (Math.abs(e.deltaY) > Math.abs(e.deltaX) && tabStrip.current) tabStrip.current.scrollLeft += e.deltaY; }}>
           {tabs.map((t) => (
-            <div key={t.id} className={`tab ${t.id === active.id ? "on" : ""}`}>
-              <button className="tab-main" aria-current={t.id === active.id ? "true" : undefined} onClick={() => setActiveId(t.id)}>
+            <div
+              key={t.id}
+              className={`tab ${t.id === active.id ? "on" : ""} ${t.preview ? "preview" : ""} ${dragTab?.over === t.id && dragTab.id !== t.id ? "drop" : ""}`}
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.effectAllowed = "move";
+                e.dataTransfer.setData("text/plain", t.id);
+                setDragTab({ id: t.id, over: null });
+              }}
+              onDragOver={(e) => {
+                if (!dragTab) return;
+                e.preventDefault();
+                if (dragTab.over !== t.id) setDragTab({ ...dragTab, over: t.id });
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                if (dragTab && dragTab.id !== t.id) moveTab(dragTab.id, tabs.findIndex((x) => x.id === t.id));
+                setDragTab(null);
+              }}
+              onDragEnd={() => setDragTab(null)}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                setTabMenu({ id: t.id, x: e.clientX, y: e.clientY });
+              }}
+            >
+              <button
+                className="tab-main"
+                aria-current={t.id === active.id ? "true" : undefined}
+                title={t.preview ? "Preview: double-click to keep this tab open" : undefined}
+                onClick={() => setActiveId(t.id)}
+                onDoubleClick={() => t.preview && setTabs((ts) => ts.map((x) => (x.id === t.id ? { ...x, preview: false } : x)))}
+                onKeyDown={(e) => {
+                  if (e.key === "ContextMenu" || (e.shiftKey && e.key === "F10")) {
+                    e.preventDefault();
+                    const r = e.currentTarget.getBoundingClientRect();
+                    setTabMenu({ id: t.id, x: r.left, y: r.bottom });
+                  }
+                }}
+              >
                 <span className={`m m-${pillOf(t)}`}>{pillOf(t)}</span>
                 <span className="tab-title">{tabTitle(t)}</span>
+                {t.preview && <span className="vh"> (preview)</span>}
               </button>
               {isDirty(t) && <b className="unsaved">●</b>}
               <button
@@ -1515,6 +1630,7 @@ export default function App() {
             </div>
           ))}
           </div>
+          {tabMenu && tabs.some((t) => t.id === tabMenu.id) && <ContextMenu x={tabMenu.x} y={tabMenu.y} label="Tab actions" items={tabItems(tabMenu.id)} onClose={() => setTabMenu(null)} />}
           <button className="icon-btn plus" onClick={() => addTab()} aria-label="New tab">
             +
           </button>
