@@ -162,8 +162,8 @@ export function SettingsModal({ settings: s, onChange, section, onSection, onClo
           {section === "variables" && (
             <>
               <h2>Global variables</h2>
-              <p className="muted small">Available in every collection, kept on this Mac and never written into a collection. They are the lowest level: collection and folder variables, then the environment, then values set by scripts all override them. The CLI doesn't see these: pass <code>--var name=value</code> there.</p>
-              <KVEditor rows={s.globals.length ? s.globals : [emptyKV()]} onChange={(globals) => onChange({ globals })} keyPlaceholder="Variable" />
+              <p className="muted small">Available in every collection, kept on this Mac and never written into a collection. Mark a variable secret (🔒) to hide its value; with the Keychain chosen under Requests, Secrets, secret globals are kept there instead of in this app's settings. They are the lowest level: collection and folder variables, then the environment, then values set by scripts all override them. The CLI doesn't see these: pass <code>--var name=value</code> there.</p>
+              <KVEditor secrets rows={s.globals.length ? s.globals : [emptyKV()]} onChange={(globals) => onChange({ globals })} keyPlaceholder="Variable" />
             </>
           )}
 

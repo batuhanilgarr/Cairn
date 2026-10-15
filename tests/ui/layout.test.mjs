@@ -94,6 +94,9 @@ const stubSource = ({ sidebar, aside, bigTree = 0, bigBody = 0, withLink = false
       }
       if (cmd === 'list_tree') return tree;
       if (cmd === 'secret_available') return ${keychain};
+      if (cmd === 'secret_set') { const m = JSON.parse(localStorage.getItem('__kc') || '{}'); m[a.account] = a.value; localStorage.setItem('__kc', JSON.stringify(m)); return null; }
+      if (cmd === 'secret_get') return JSON.parse(localStorage.getItem('__kc') || '{}')[a.account] ?? null;
+      if (cmd === 'secret_delete') { const m = JSON.parse(localStorage.getItem('__kc') || '{}'); delete m[a.account]; localStorage.setItem('__kc', JSON.stringify(m)); return null; }
       if (cmd === 'read_text') return files[a.path] ?? null;
       if (cmd === 'write_text') { files[a.path] = a.text; return null; }
       if (cmd === 'list_files') return [];
@@ -1227,6 +1230,62 @@ test("import from clipboard: a WSDL is recognised, previewed and imported as SOA
       assert.ok(enabled, "a WSDL can be imported");
       assert.deepEqual(v.map((x) => `${x.id}: ${x.where.join(" | ")}`), [], "accessibility violations");
       assert.match(done, /Created 2/);
+    });
+  } finally {
+    await context.close();
+  }
+});
+
+test("secret global variables: kept in the Keychain when it is the store, hydrated after a restart, moved back to settings when the store changes", async () => {
+  const SECRET = "s3cr3t-global-" + "q7".repeat(6);
+  const { page, context, errors, check } = await open({ width: 1360, keychain: true }, "global secrets");
+  try {
+    const stored = () => page.evaluate(() => ({ settings: JSON.parse(localStorage.getItem("rq.settings") ?? "{}"), kc: JSON.parse(localStorage.getItem("__kc") ?? "{}"), raw: localStorage.getItem("rq.settings") ?? "" }));
+    const openVariables = async () => {
+      await page.click('.rail button[aria-label="Settings"]');
+      await page.waitForSelector(".settings");
+      await page.locator(".settings-nav button", { hasText: "Variables" }).click();
+      await page.waitForTimeout(300);
+    };
+    await page.click('.rail button[aria-label="Settings"]');
+    await page.waitForSelector(".settings");
+    await page.waitForTimeout(400);
+    await page.selectOption('select[aria-label="Keep secret values in"]', "keychain");
+    await page.waitForTimeout(500);
+    await page.locator(".settings-nav button", { hasText: "Variables" }).click();
+    await page.getByPlaceholder("Variable").first().fill("API_TOKEN");
+    await page.getByPlaceholder("Value").first().fill(SECRET);
+    await page.locator(".settings-body button.lock").first().click();
+    await page.waitForTimeout(700);
+    const v = await axeViolations(page);
+    const kept = await stored();
+    await page.keyboard.press("Escape");
+    // a restart: the page loads again from what is on disk
+    await page.reload();
+    await page.waitForSelector(".urlbar");
+    await page.waitForTimeout(600);
+    await openVariables();
+    const hydrated = await page.locator(".settings-body input[type=password]").first().inputValue();
+    const afterReload = await stored();
+    // back to the file: the value returns to the settings and the Keychain entry goes
+    await page.locator(".settings-nav button", { hasText: "Requests" }).click();
+    await page.waitForTimeout(300);
+    await page.selectOption('select[aria-label="Keep secret values in"]', "file");
+    await page.waitForTimeout(800);
+    const back = await stored();
+    await check(async () => {
+      assert.deepEqual(errors, []);
+      const g = kept.settings.globals.find((x) => x.key === "API_TOKEN");
+      assert.equal(g?.value, "keychain:", "only a marker is stored in the settings");
+      assert.equal(g?.secret, true);
+      assert.ok(!kept.raw.includes(SECRET), "the value must not be in the settings on disk");
+      assert.equal(kept.kc["globals|API_TOKEN"], SECRET, "the value is in the Keychain");
+      assert.deepEqual(v.map((x) => `${x.id}: ${x.where.join(" | ")}`), [], "accessibility violations");
+      assert.equal(hydrated, SECRET, "after a restart the value is read back from the Keychain");
+      assert.ok(!afterReload.raw.includes(SECRET), "a restart must not write the value into the settings");
+      assert.equal(afterReload.settings.globals.find((x) => x.key === "API_TOKEN")?.value, "keychain:");
+      assert.equal(back.settings.globals.find((x) => x.key === "API_TOKEN")?.value, SECRET, "back in the settings when the Keychain is no longer the store");
+      assert.deepEqual(back.kc, {}, "and gone from the Keychain");
     });
   } finally {
     await context.close();

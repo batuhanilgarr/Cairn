@@ -98,7 +98,7 @@ export type PostmanImport = {
   collections: { title: string; requests: number }[];
   environments: { name: string; vars: number; secrets: number }[];
   /** Postman globals: app-wide, so the caller puts them in Settings > Variables. */
-  globals: { key: string; value: string }[];
+  globals: { key: string; value: string; secret?: boolean }[];
   /** How many credentials were moved out of the files into global variables. */
   protectedCredentials: number;
   folders: number;
@@ -124,7 +124,7 @@ export async function importPostmanFiles(root: string, files: string[]): Promise
         await writeImport(root, parsed.requests, false);
         out.folders += await writeFolderDefaults(root, parsed.folders ?? []);
         const secrets = Object.entries(parsed.secrets ?? {});
-        out.globals.push(...secrets.map(([key, value]) => ({ key, value })));
+        out.globals.push(...secrets.map(([key, value]) => ({ key, value, secret: true })));
         out.protectedCredentials += secrets.length;
         out.collections.push({ title: parsed.title, requests: parsed.requests.length });
         out.notes.push(...parsed.notes.map((n) => `${parsed.title}: ${n}`));

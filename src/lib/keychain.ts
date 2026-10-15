@@ -16,6 +16,9 @@ export const keychainEvents: { onError: ((message: string) => void) | null } = {
 
 export const secretAccount = (root: string, envFile: string, key: string) => `${root}|${envFile.split("/").pop()}|${key}`;
 
+/** Global variables (Settings > Variables) that are marked secret live under this account when the Keychain is the store. */
+export const globalAccount = (key: string) => `globals|${key}`;
+
 export const keychainAvailable = () => invoke<boolean>("secret_available").catch(() => false);
 export const keychainGet = (account: string) => invoke<string | null>("secret_get", { account });
 export const keychainSet = (account: string, value: string) => invoke<void>("secret_set", { account, value });

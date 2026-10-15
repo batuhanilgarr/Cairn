@@ -5,7 +5,7 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { SettingsModal, type SettingsSection } from "./SettingsModal";
 import { CommandPalette, type Command } from "./CommandPalette";
-import { applyAppearance, loadSettings, networkOf, saveSettings, type Settings } from "./lib/settings";
+import { applyAppearance, loadSettings, networkOf, saveSettings, pendingGlobalSecretKeys, type Settings } from "./lib/settings";
 import { setNetwork } from "./lib/net";
 import { KVEditor } from "./KVEditor";
 import { CodeEditor, type Lang, type VarMap } from "./CodeEditor";
@@ -41,7 +41,7 @@ import { SecretScanModal, type ScanState } from "./SecretScanModal";
 import { buildOpenApi, collectExportItems, toJson, toYaml } from "./lib/openapiExport";
 import { isHar, parseHar } from "./lib/har";
 import { isWsdl, parseWsdl } from "./lib/wsdl";
-import { keychainAvailable, keychainEvents, secretStore, type SecretStore } from "./lib/keychain";
+import { globalAccount, keychainAvailable, keychainDelete, keychainEvents, keychainGet, keychainSet, secretStore, type SecretStore } from "./lib/keychain";
 import { PasteImportModal } from "./PasteImportModal";
 import { applyFix, checkGitignore, scanText, type Finding } from "./lib/secrets";
 import { dotenvName, parseDotenv } from "./lib/dotenv";
@@ -581,7 +581,7 @@ export default function App() {
         }
         const r = await importPostmanFiles(collection.root, files);
         if (r.globals.length)
-          setSettings((s) => ({ ...s, globals: [...s.globals.filter((g) => g.key), ...r.globals.filter((g) => !s.globals.some((x) => x.key === g.key)).map((g) => ({ ...emptyKV(), key: g.key, value: g.value })), emptyKV()] }));
+          setSettings((s) => ({ ...s, globals: [...s.globals.filter((g) => g.key), ...r.globals.filter((g) => !s.globals.some((x) => x.key === g.key)).map((g) => ({ ...emptyKV(), key: g.key, value: g.value, secret: g.secret === true })), emptyKV()] }));
         await reloadEnvs(r.lastEnvId);
         await refreshTree();
         const reqs = r.collections.reduce((n, c) => n + c.requests, 0);
@@ -1267,8 +1267,62 @@ export default function App() {
       if (collection) await reloadEnvs();
       flash(moved ? `Moved ${moved} secret value${moved === 1 ? "" : "s"} ${mode === "keychain" ? "into the Keychain" : "back to the secrets file"}` : mode === "keychain" ? "Secrets will be kept in the Keychain" : "Secrets will be kept in the file");
     });
+
+  /* ---- secret global variables in the Keychain ----
+     With the Keychain as the store, a global variable marked secret keeps its value there; localStorage only holds a marker.
+     `inKeychain` is what is known to be saved, so the marker is only written for values that really are in the Keychain. */
+  const inKeychain = useRef(new Map<string, string>());
+  const hydrating = useRef(true);
+  const [persistTick, setPersistTick] = useState(0);
+  // Safe to run twice (React's development mode does): reading a value and applying it again changes nothing.
   useEffect(() => {
-    saveSettings(settings);
+    (async () => {
+      for (const key of pendingGlobalSecretKeys()) {
+        try {
+          const v = (await keychainGet(globalAccount(key))) ?? "";
+          if (!v) throw new Error("not found");
+          inKeychain.current.set(key, v);
+          setSettings((s) => ({ ...s, globals: s.globals.map((g) => (g.key === key && g.secret && !g.value ? { ...g, value: v } : g)) }));
+        } catch {
+          inKeychain.current.set(key, "");
+          flash(`Couldn't read the global secret “${key}” from the Keychain: enter it again.`, 6000);
+        }
+      }
+      hydrating.current = false;
+      setPersistTick((t) => t + 1);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    if (hydrating.current) return;
+    let live = true;
+    (async () => {
+      const want = settings.secretStore === "keychain" ? settings.globals.filter((g) => g.secret && g.key && g.value) : [];
+      for (const g of want) {
+        if (inKeychain.current.get(g.key) === g.value) continue;
+        try {
+          await keychainSet(globalAccount(g.key), g.value);
+          inKeychain.current.set(g.key, g.value);
+        } catch (e) {
+          flash(`${String((e as Error).message ?? e)} “${g.key}” stays in this app's settings instead.`, 6000);
+        }
+      }
+      for (const key of [...inKeychain.current.keys()]) {
+        if (!want.some((g) => g.key === key)) {
+          await keychainDelete(globalAccount(key)).catch(() => {});
+          inKeychain.current.delete(key);
+        }
+      }
+      if (live) setPersistTick((t) => t + 1);
+    })();
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings.globals, settings.secretStore, persistTick === 0]);
+
+  useEffect(() => {
+    if (!hydrating.current) saveSettings(settings, new Set(settings.globals.filter((g) => g.secret && g.key && inKeychain.current.get(g.key) === g.value).map((g) => g.key)));
     applyAppearance(settings);
     setNetwork(networkOf(settings));
     setTabDefaults({ timeoutMs: settings.timeoutMs, followRedirects: settings.followRedirects, insecure: !settings.verifyTls });
@@ -1277,7 +1331,7 @@ export default function App() {
     } catch {
       /* not running inside Tauri (browser preview) */
     }
-  }, [settings]);
+  }, [settings, persistTick]);
   useEffect(() => save("rq.sidebar", sidebarOpen), [sidebarOpen]);
   useEffect(() => save("rq.aside", aside), [aside]);
   useEffect(() => {
@@ -1610,7 +1664,7 @@ export default function App() {
   /** What {{variables}} resolve to right now (secrets masked), for highlighting and hover. */
   const varMap = useMemo<VarMap>(() => {
     const m: VarMap = { ...DYNAMIC_DESCRIPTIONS };
-    for (const v of baseVars) m[v.key] = v.value;
+    for (const v of baseVars) m[v.key] = v.secret ? "•••••• (secret)" : v.value;
     for (const v of env?.vars ?? []) if (v.enabled && v.key) m[v.key] = v.secret ? "•••••• (secret)" : v.value;
     for (const [k, v] of Object.entries(sessionRef.current)) m[k] = v;
     return m;

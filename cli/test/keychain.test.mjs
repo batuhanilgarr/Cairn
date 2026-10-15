@@ -165,3 +165,41 @@ test("CLI: a secret kept in the Keychain is read through `security`; when it can
     server.close();
   }
 });
+
+test("settings: only globals that really are in the Keychain become a marker; loading never returns the marker as a value", async () => {
+  const store = new Map();
+  globalThis.localStorage = { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)), removeItem: (k) => store.delete(k) };
+  const out = path.join(TMP, "settings.mjs");
+  await build({ stdin: { contents: `export * from "./src/lib/settings.ts";`, resolveDir: ROOT }, outfile: out, bundle: true, platform: "node", format: "esm", logLevel: "silent", alias: { "@tauri-apps/api/core": fakeCore, "@tauri-apps/plugin-dialog": path.join(ROOT, "cli/shims/plugin-dialog.ts"), "@tauri-apps/plugin-opener": path.join(ROOT, "cli/shims/plugin-opener.ts") }, banner: { js: "import { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);" } });
+  const S = await import(out);
+  const g = (key, value, secret) => ({ id: key, key, value, enabled: true, secret });
+  const s = { ...S.DEFAULT_SETTINGS, globals: [g("TOKEN", "tok-1234567890", true), g("OTHER", "other-secret-99", true), g("PLAIN", "keychain:", false), g("NAME", "ada", false)] };
+  S.saveSettings(s, new Set(["TOKEN"]));
+  const raw = store.get("rq.settings");
+  assert.ok(!raw.includes("tok-1234567890"), "a value in the Keychain is not stored in the settings");
+  assert.ok(raw.includes("other-secret-99"), "a secret that is NOT confirmed in the Keychain stays in the settings: nothing is lost");
+  const loaded = S.loadSettings();
+  assert.deepEqual(loaded.globals.map((x) => [x.key, x.value]), [["TOKEN", ""], ["OTHER", "other-secret-99"], ["PLAIN", "keychain:"], ["NAME", "ada"]], "the marker never becomes a value; a non-secret that happens to say keychain: is untouched");
+  assert.deepEqual(S.pendingGlobalSecretKeys(), ["TOKEN"]);
+  assert.deepEqual(S.pendingGlobalSecretKeys(), ["TOKEN"], "asking again gives the same answer (fetching can safely be repeated)");
+  S.saveSettings(s);
+  assert.ok(store.get("rq.settings").includes("tok-1234567890"), "with nothing in the Keychain everything is stored as before");
+});
+
+test("Postman import flags the credentials it moves out of the files as secret globals", async () => {
+  const dir = fs.mkdtempSync(path.join(TMP, "pm-"));
+  const root = dir.split(path.sep).join("/");
+  fs.mkdirSync(path.join(dir, "exp"));
+  const col = { info: { name: "C", schema: "https://schema.getpostman.com/json/collection/v2.1.0/collection.json" }, item: [{ name: "r", request: { method: "GET", url: "https://x.io/a", auth: { type: "bearer", bearer: [{ key: "token", value: "literal-token-1234567890" }] } } }] };
+  fs.writeFileSync(path.join(dir, "exp/c.json"), JSON.stringify(col));
+  fs.writeFileSync(path.join(dir, "exp/g.json"), JSON.stringify({ name: "G", values: [{ key: "region", value: "eu", enabled: true }], _postman_variable_scope: "globals" }));
+  fs.writeFileSync(path.join(dir, "cairn.yaml"), "name: T\n");
+  const out = path.join(TMP, "imp.mjs");
+  await build({ stdin: { contents: `export { importPostmanFiles } from "./src/lib/importer.ts";`, resolveDir: ROOT }, outfile: out, bundle: true, platform: "node", format: "esm", logLevel: "silent", alias: { "@tauri-apps/api/core": fakeCore, "@tauri-apps/plugin-dialog": path.join(ROOT, "cli/shims/plugin-dialog.ts"), "@tauri-apps/plugin-opener": path.join(ROOT, "cli/shims/plugin-opener.ts") }, banner: { js: "import { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);" } });
+  const { importPostmanFiles } = await import(out);
+  const r = await importPostmanFiles(root, [`${root}/exp/c.json`, `${root}/exp/g.json`]);
+  const cred = r.globals.find((x) => x.value === "literal-token-1234567890");
+  assert.ok(cred, JSON.stringify(r.globals));
+  assert.equal(cred.secret, true, "a credential moved out of the files is a secret global");
+  assert.equal(r.globals.find((x) => x.key === "region")?.secret, undefined, "a plain Postman global is not");
+});

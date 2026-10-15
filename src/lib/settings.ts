@@ -1,7 +1,7 @@
 import type { KV } from "./types";
 import { DEFAULT_AI, type AiConfig } from "./ai";
 import { load, save } from "./util";
-import type { SecretStore } from "./keychain";
+import { KEYCHAIN_MARKER, type SecretStore } from "./keychain";
 
 export type Settings = {
   theme: "system" | "light" | "dark";
@@ -63,11 +63,32 @@ export const DEFAULT_SETTINGS: Settings = {
   secretStore: "file",
 };
 
+let pendingGlobalSecrets: string[] = [];
+
+/**
+ * Settings from disk. A secret global variable whose value lives in the Keychain is stored as a marker; here it
+ * comes back empty (never the marker itself, so it can't be sent by accident) and `takePendingGlobalSecrets` lists
+ * the keys the app must fetch from the Keychain (`pendingGlobalSecretKeys`).
+ */
 export const loadSettings = (): Settings => {
   const saved = load<Partial<Settings>>("rq.settings", {});
-  return { ...DEFAULT_SETTINGS, ...saved, ai: { ...DEFAULT_AI, ...(saved.ai ?? {}) } };
+  pendingGlobalSecrets = [];
+  const globals = (saved.globals ?? DEFAULT_SETTINGS.globals).map((g) => {
+    if (g.secret && g.value === KEYCHAIN_MARKER) {
+      pendingGlobalSecrets.push(g.key);
+      return { ...g, value: "" };
+    }
+    return g;
+  });
+  return { ...DEFAULT_SETTINGS, ...saved, globals, ai: { ...DEFAULT_AI, ...(saved.ai ?? {}) } };
 };
-export const saveSettings = (s: Settings) => save("rq.settings", s);
+
+/** The secret globals whose value must be fetched from the Keychain (a copy: fetching may be repeated safely). */
+export const pendingGlobalSecretKeys = (): string[] => [...pendingGlobalSecrets];
+
+/** `keychained` are the secret globals whose value is safely in the Keychain: only those are written as the marker. */
+export const saveSettings = (s: Settings, keychained: ReadonlySet<string> = new Set()) =>
+  save("rq.settings", { ...s, globals: s.globals.map((g) => (g.secret && g.key && keychained.has(g.key) ? { ...g, value: KEYCHAIN_MARKER } : g)) });
 
 /** Theme + accent are applied through CSS variables on <html>, so every component follows without props. */
 export function applyAppearance(s: Settings) {
