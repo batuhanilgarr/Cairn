@@ -37,6 +37,8 @@ import { buildRoutes, mockStart, mockStop, type MockHit } from "./lib/mock";
 import { BinaryView, suggestFileName } from "./BinaryView";
 import { BigBodyView, bigFind } from "./BigBodyView";
 import { bodyText } from "./lib/bigbody";
+import { SecretScanModal, type ScanState } from "./SecretScanModal";
+import { applyFix, checkGitignore, scanText, type Finding } from "./lib/secrets";
 import { dotenvName, parseDotenv } from "./lib/dotenv";
 import { formatFilterValues, runFilter } from "./lib/filter";
 import { parseJsonSafe } from "./lib/assert";
@@ -60,6 +62,7 @@ import {
   listTree,
   makeDir,
   pickAnyFile,
+  pathExists,
   pickFile,
   pickFolder,
   saveResponse,
@@ -195,6 +198,7 @@ export default function App() {
   const tabStrip = useRef<HTMLDivElement>(null);
   const resView = useRef<EditorView | null>(null);
   const closedTabs = useRef<RequestTab[]>([]);
+  const [scan, setScan] = useState<ScanState | null>(null);
   const [tabMenu, setTabMenu] = useState<{ id: string; x: number; y: number } | null>(null);
   const [dragTab, setDragTab] = useState<{ id: string; over: string | null } | null>(null);
 
@@ -1116,6 +1120,77 @@ export default function App() {
     for (const t of tabs) if (t.file) setLabel(t.file, pillOf(t) + (t.linkTo ? "|link" : ""));
   }, [tabs]);
 
+  /* ------------------------------ secret scan ------------------------------ */
+
+  const runScan = async (keepNote?: string) => {
+    if (!collection) return;
+    const root = collection.root;
+    setScan((s) => ({ root, scanning: true, findings: s?.findings ?? [], fixing: false, note: keepNote }));
+    try {
+      const files = (await listFilesRecursive(root, ".yaml")).filter((f) => !/\/\.(cairn|reqnest|git)\//.test(f) && !f.includes("/node_modules/"));
+      const findings: Finding[] = [];
+      for (const f of files) findings.push(...scanText(f, (await readText(f)) ?? ""));
+      const hasGit = await pathExists(`${root}/.git`);
+      const g = checkGitignore(root, hasGit, hasGit ? await readText(`${root}/.gitignore`) : null, (await pathExists(`${root}/.cairn`)) || (await pathExists(`${root}/.reqnest`)));
+      if (g) findings.push(g);
+      setScan({ root, scanning: false, findings, fixing: false, note: keepNote });
+    } catch (e) {
+      setScan({ root, scanning: false, findings: [], fixing: false, note: `The scan failed: ${String(e)}` });
+    }
+  };
+
+  /** Move one finding's value into a secret variable (or mark an environment variable as secret). */
+  const fixOne = async (f: Finding, envList: Environment[]): Promise<Environment[]> => {
+    const text = (await readText(f.file)) ?? "";
+    const value = text.split(/\r?\n/)[f.line - 1]?.slice(f.start, f.end) ?? "";
+    if (!value) throw new Error("That line has changed since the scan: scan again.");
+    const inEnvFile = /\.env\.ya?ml$/.test(f.file);
+    if (inEnvFile) {
+      const target = envList.find((e) => e.file === f.file);
+      const keyName = f.where.replace(/ \(value\)$/, "");
+      if (!target || !target.vars.some((v) => v.key === keyName)) throw new Error("Couldn't find that variable: scan again.");
+      return envList.map((e) => (e.id === target.id ? { ...e, vars: e.vars.map((v) => (v.key === keyName ? { ...v, secret: true } : v)) } : e));
+    }
+    let list = envList;
+    let target = list.find((e) => e.id === envId);
+    if (!target) {
+      target = { id: uid(), name: "Local", vars: [emptyKV()] };
+      list = [...list, target];
+      setEnvId(target.id);
+    }
+    let name = f.suggest || "secret";
+    const taken = new Map(target.vars.filter((v) => v.key).map((v) => [v.key, v.value]));
+    for (let n = 2; taken.has(name) && taken.get(name) !== value; n++) name = `${f.suggest}${n}`;
+    const fixed = applyFix(text, f, name);
+    if (fixed === null) throw new Error("That line has changed since the scan: scan again.");
+    await writeText(f.file, fixed);
+    const tid = target.id;
+    return list.map((e) =>
+      e.id === tid && !taken.has(name) ? { ...e, vars: [...e.vars.filter((v) => v.key), { ...emptyKV(), key: name, value, secret: true }, emptyKV()] } : e,
+    );
+  };
+
+  const fixFindings = (items: Finding[]) =>
+    guard(async () => {
+      if (!scan) return;
+      setScan({ ...scan, fixing: true });
+      let list = envs;
+      let done = 0;
+      // fix later lines first so earlier columns stay valid when one line holds several findings
+      for (const f of [...items].sort((a, b) => a.file.localeCompare(b.file) || b.line - a.line || b.start - a.start)) {
+        try {
+          list = await fixOne(f, list);
+          done++;
+        } catch (e) {
+          setScan((s) => (s ? { ...s, note: String((e as Error).message ?? e) } : s));
+        }
+      }
+      setEnvs(list);
+      await runScan(`Moved ${done} value${done === 1 ? "" : "s"} into secret variables. Rotate any that were already committed.`);
+      setChainVer((v) => v + 1);
+      await refreshTree();
+    });
+
   const closeMany = (ids: string[]) => ids.forEach(closeTab);
   const reopenTab = () => {
     const t = closedTabs.current.shift();
@@ -1184,6 +1259,7 @@ export default function App() {
     "duplicate-tab": () => addTab({ ...active, id: uid(), file: null, saved: null, name: "New request" }),
     "next-tab": () => nextTab(1),
     "prev-tab": () => nextTab(-1),
+    "scan-secrets": () => (collection ? void runScan() : void info("No collection open", "Open a collection to scan its files for secrets.")),
     "run-collection": () => (collection ? void runFolder(collection.root, `Run ${collection.name}`) : void info("No collection open", "Open a collection to run its requests.")),
     palette: () => setPaletteOpen(true),
     mock: () => (collection ? setMockOpen(true) : void info("Open a collection first", "The mock server serves the saved examples of a collection's requests.")),
@@ -1288,6 +1364,7 @@ export default function App() {
     { id: "a:newc", group: "Action", title: "New collection…", run: () => fire("new-collection") },
     { id: "a:import", group: "Action", title: "Import OpenAPI, Postman, Bruno…", run: () => fire("import") },
     { id: "a:run", group: "Action", title: "Run collection", run: () => fire("run-collection") },
+    { id: "a:scan", group: "Action", title: "Scan for secrets", run: () => fire("scan-secrets") },
     { id: "a:mock", group: "Action", title: mockPort ? `Mock server (running on :${mockPort})` : "Mock server…", run: () => fire("mock") },
     { id: "a:diff", group: "Action", title: "Compare responses of this request", run: () => (hist.length > 1 ? setDiffOpen(true) : flash("Send the request at least twice to compare responses")) },
     { id: "a:code", group: "Action", title: "Show or hide the code snippet panel", hint: "⇧⌘G", run: () => fire("codegen") },
@@ -1395,6 +1472,7 @@ export default function App() {
                         items={[
                           { label: "Import…", hint: "OpenAPI, Postman, Bruno", onClick: importMenu },
                           { label: "Collection settings…", hint: "variables, headers, auth, scripts", onClick: () => openDefaults(collection.root, `Defaults for “${collection.name}”`) },
+                          { label: "Scan for secrets…", hint: "before you commit", onClick: () => fire("scan-secrets") },
                           { label: mockPort ? `Mock server (running on :${mockPort})` : "Mock server…", onClick: () => fire("mock") },
                           "sep",
                           { label: "Open another collection…", onClick: openCollection },
@@ -2134,6 +2212,16 @@ export default function App() {
       )}
       {diffOpen && hist.length > 1 && <DiffModal items={hist} onClose={() => setDiffOpen(false)} />}
       {paletteOpen && <CommandPalette commands={commands} onClose={() => setPaletteOpen(false)} />}
+      {scan && (
+        <SecretScanModal
+          state={scan}
+          envName={envRaw?.name ?? "Local"}
+          onFix={(f) => void fixFindings([f])}
+          onFixAll={() => void fixFindings(scan.findings.filter((f) => f.fixable))}
+          onRescan={() => void runScan()}
+          onClose={() => setScan(null)}
+        />
+      )}
       {settingsOpen && (
         <SettingsModal
           settings={settings}

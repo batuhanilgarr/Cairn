@@ -3,6 +3,7 @@ import path from "node:path";
 import { parseArgs } from "node:util";
 import { executeRequest } from "../../src/lib/pipeline";
 import { setNetwork } from "../../src/lib/net";
+import { atLeast, formatFindings, scanDirectory, SEVERITIES } from "./scan";
 import { effectiveEnv, linkTarget, loadChain, loadEnvironments, parseRequest, readCollectionName } from "../../src/lib/collection";
 import { listFilesRecursive } from "../../src/lib/fs";
 import type { Environment, RequestTab, TestResult } from "../../src/lib/types";
@@ -15,6 +16,10 @@ const HELP = `cairn ${VERSION}: run Cairn collections from the command line
 
 Usage
   cairn run <collection | folder | request.req.yaml> [options]
+  cairn scan [folder] [--fail-on high|medium|low|never] [--format text|json]
+      Look for credentials that would be committed (tokens, passwords, keys in request files, folder defaults and
+      environments). Prints masked previews only. Exit code 1 when something at or above --fail-on (default medium)
+      is found, so it works as a pre-commit hook or a CI step.
 
 Options
   -e, --env <name[,name]>  Environment to use (by name or file name); a comma list layers them, later ones win.
@@ -238,13 +243,24 @@ async function main(argv: string[]): Promise<number> {
       iterations: { type: "string", short: "n" }, bail: { type: "boolean" }, delay: { type: "string" }, timeout: { type: "string" },
       insecure: { type: "boolean", short: "k" }, "no-cookies": { type: "boolean" }, proxy: { type: "string" }, ca: { type: "string" },
       junit: { type: "string" }, json: { type: "string" }, html: { type: "string" }, "no-color": { type: "boolean" },
+      "fail-on": { type: "string" }, format: { type: "string" },
       help: { type: "boolean", short: "h" }, version: { type: "boolean", short: "v" },
     },
   });
   if (values.version) return console.log(VERSION), 0;
   const [cmd, target] = positionals;
   if (values.help || !cmd) return console.log(HELP), cmd || values.help ? 0 : 2;
-  if (cmd !== "run") throw new UsageError(`Unknown command "${cmd}". Try: cairn run <collection>`);
+  if (cmd === "scan") {
+    const failOn = (values["fail-on"] ?? "medium") as string;
+    if (failOn !== "never" && !SEVERITIES.includes(failOn as never)) throw new UsageError(`--fail-on expects high, medium, low or never, got "${failOn}"`);
+    const dir = target ?? ".";
+    if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) throw new UsageError(`Not a folder: ${dir}`);
+    const findings = scanDirectory(dir);
+    if (values.format === "json") console.log(JSON.stringify({ findings, failOn }, null, 2));
+    else console.log(formatFindings(findings, { red, yellow, dim, bold, green }));
+    return failOn !== "never" && findings.some((f) => atLeast(f, failOn as "high")) ? 1 : 0;
+  }
+  if (cmd !== "run") throw new UsageError(`Unknown command "${cmd}". Try: cairn run <collection> or cairn scan <collection>`);
   if (!target) throw new UsageError("Tell me what to run: cairn run <collection | folder | request.req.yaml>");
 
   const vars: Record<string, string> = {};

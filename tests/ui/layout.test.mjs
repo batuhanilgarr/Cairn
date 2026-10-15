@@ -36,7 +36,7 @@ const STATES = [
 ];
 
 /** What the app would get from Tauri: a small collection and canned responses. The response is deliberately a worst case (120 headers, 12 cookies, 1 GB, two minutes) so that wide numbers can't break the header. Runs before the app loads. */
-const stubSource = ({ sidebar, aside, bigTree = 0, bigBody = 0, withLink = false }) => `
+const stubSource = ({ sidebar, aside, bigTree = 0, bigBody = 0, withLink = false, leakyToken = '' }) => `
 (() => {
   const req = (n, m) => 'name: ' + n + '\\nmethod: ' + m + '\\nurl: https://api.example.com/' + n + '\\n';
   let files = {
@@ -45,6 +45,7 @@ const stubSource = ({ sidebar, aside, bigTree = 0, bigBody = 0, withLink = false
     '/demo/invoices/create-invoice.req.yaml': req('create-invoice', 'POST'),
     '/demo/invoices/void-invoice.req.yaml': req('void-invoice', 'DELETE'),
   };
+  if (${JSON.stringify(leakyToken)}) files['/demo/auth/leaky.req.yaml'] = 'name: leaky\\nmethod: GET\\nurl: https://api.example.com/x\\nauth:\\n  mode: bearer\\n  token: ' + ${JSON.stringify(leakyToken)} + '\\n';
   if (${withLink}) files['/demo/invoices/login-link.req.yaml'] = 'use: ../auth/login.req.yaml\\n';
   const f = (p) => ({ name: p.split('/').pop(), path: p, isDir: false, children: [] });
   const d = (p, c) => ({ name: p.split('/').pop(), path: p, isDir: true, children: c });
@@ -87,6 +88,7 @@ const stubSource = ({ sidebar, aside, bigTree = 0, bigBody = 0, withLink = false
       }
       if (cmd === 'list_tree') return tree;
       if (cmd === 'read_text') return files[a.path] ?? null;
+      if (cmd === 'write_text') { files[a.path] = a.text; return null; }
       if (cmd === 'list_files') return [];
       if (cmd === 'list_files_recursive') return Object.keys(files).filter((p) => p.startsWith(a.dir));
       return null;
@@ -119,9 +121,9 @@ after(async () => {
 });
 
 /** Open the app in a fresh browser context. `fail()` saves a screenshot next to the failing assertion. */
-async function open({ width, height = 800, theme = "dark", sidebar = true, aside = null, bigTree = 0, bigBody = 0, withLink = false }, label) {
+async function open({ width, height = 800, theme = "dark", sidebar = true, aside = null, bigTree = 0, bigBody = 0, withLink = false, leakyToken = "" }, label) {
   const context = await browser.newContext({ viewport: { width, height }, colorScheme: theme });
-  await context.addInitScript(stubSource({ sidebar, aside, bigTree, bigBody, withLink }));
+  await context.addInitScript(stubSource({ sidebar, aside, bigTree, bigBody, withLink, leakyToken }));
   const page = await context.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(String(e)));
@@ -854,3 +856,44 @@ test("tabs: preview tab, keep open, reorder by drag, context menu, reopen closed
     await context.close();
   }
 });
+
+for (const width of [760, 1360]) {
+  test(`secret scan: finds a leaked token, shows it masked, moves it into a secret variable: ${width}px`, async () => {
+    // built at run time so this file holds no token-shaped string
+    const token = "gh" + "p_" + "a1B2c3D4".repeat(5);
+    const { page, context, errors, check } = await open({ width, leakyToken: token }, `${width}px secret scan`);
+    try {
+      await page.hover(".side-title, .side-head, .side-body");
+      await page.locator('button[aria-label="More collection actions"]').first().click({ force: true });
+      await page.getByRole("menuitem", { name: /Scan for secrets/ }).click();
+      await page.waitForSelector(".dialog.scan .scan-row");
+      const first = await page.evaluate((t) => {
+        const d = document.querySelector(".dialog.scan");
+        const r = d.getBoundingClientRect();
+        return { text: d.textContent, leaks: d.textContent.includes(t) || document.body.innerHTML.includes(t), fits: r.left >= 0 && r.right <= innerWidth + 1 && r.top >= 0 && r.bottom <= innerHeight + 1, rows: d.querySelectorAll(".scan-row").length, kind: d.querySelector(".scan-kind").textContent };
+      }, token);
+      await page.waitForTimeout(500); // let the dialog finish fading in before measuring colours
+      const v = await axeViolations(page);
+      await page.getByRole("button", { name: "Move to secret" }).click();
+      await page.waitForFunction(() => document.querySelector(".dialog.scan .scan-ok"));
+      const after = await page.locator(".dialog.scan").textContent();
+      await page.keyboard.press("Escape");
+      await page.waitForSelector(".dialog.scan", { state: "detached" });
+      await page.click('.rail button[aria-label="Environments"]');
+      await page.waitForSelector(".side-body .row");
+      const envText = await page.evaluate(() => [...document.querySelectorAll(".side-body input, .side-body select")].map((e) => e.value).join(" | "));
+      await check(async () => {
+        assert.deepEqual(errors, []);
+        assert.equal(first.rows, 1, `one finding expected: ${first.text}`);
+        assert.match(first.kind, /GitHub token/);
+        assert.ok(!first.leaks, "the scan dialog (or the page) must never show the whole secret");
+        assert.ok(first.fits, "the scan dialog does not fit the window");
+        assert.deepEqual(v.map((x) => `${x.id}: ${x.where.join(" | ")}`), [], "accessibility violations");
+        assert.match(after, /No secrets found/);
+        assert.ok(envText.includes("Local") && envText.includes("token"), `the secret should now live in an environment: ${envText}`);
+      });
+    } finally {
+      await context.close();
+    }
+  });
+}

@@ -39,3 +39,13 @@ Node worker thread: unlike the app they are not sandboxed, so treat them like an
   env:
     CAIRN_VAR_clientSecret: ${{ secrets.CLIENT_SECRET }}
 ```
+
+## Scan for secrets
+
+```sh
+npx cairn scan ./my-collection            # exit code 1 if something at "medium" or above is found
+npx cairn scan . --fail-on high           # only fail on known token formats, private keys, passwords in URLs
+npx cairn scan . --format json
+```
+
+It reads the YAML files you commit (requests, folder defaults, environments) and reports credentials written into them: known token formats (GitHub, AWS, Stripe, Google, Slack, OpenAI/Anthropic-style keys, JWTs, private keys), literal values under names like `password`, `token`, `apiKey`, `Authorization`, secrets in a URL, and a repository whose `.gitignore` is missing `.cairn/`. Output shows a masked preview only. Silence a line with a `# cairn-ignore` comment. Use it as a pre-commit hook or a CI step. Values already committed in Git history are not searched: rotate them.

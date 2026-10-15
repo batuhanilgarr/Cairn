@@ -811,3 +811,16 @@ pre.block { white-space: pre-wrap; word-break: break-word; margin: 0; background
 .tab.preview .tab-title { font-style: italic; }
 .tab.drop { box-shadow: inset 2px 0 0 var(--accent); }
 .popmenu.ctx { z-index: 60; min-width: 200px; }
+
+/* secret scan */
+.dialog.scan { width: 620px; max-width: 94vw; }
+.scan-list { max-height: 42vh; overflow: auto; border: 1px solid var(--border); border-radius: 8px; margin: 10px 0; }
+.scan-list h4 { margin: 0; padding: 7px 10px; font: 600 12px var(--font); background: var(--bg-panel); border-bottom: 1px solid var(--border); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scan-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-bottom: 1px solid var(--border); min-width: 0; }
+.scan-row:last-child { border-bottom: 0; }
+.scan-main { flex: 1; min-width: 0; }
+.scan-kind { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sev { flex: none; width: 58px; text-align: center; font-size: 11px; font-weight: 700; padding: 2px 0; border-radius: 999px; background: var(--hover); }
+.sev.high { color: var(--bad-ink); background: color-mix(in srgb, var(--bad) 14%, transparent); }
+.sev.medium { color: var(--warn-ink); background: color-mix(in srgb, var(--warn) 16%, transparent); }
+.scan-ok { color: var(--ok-ink); font-weight: 600; }
