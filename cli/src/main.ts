@@ -14,7 +14,7 @@ import type { Environment, RequestTab, TestResult } from "../../src/lib/types";
 import type { Layer } from "../../src/lib/inherit";
 import { junitXml, htmlReport, type Report, type ReqResult } from "./reporters";
 
-export const VERSION = "0.3.2";
+export const VERSION = "0.3.3";
 
 const HELP = `cairn ${VERSION}: run Cairn collections from the command line
 
