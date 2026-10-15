@@ -1,6 +1,6 @@
 [package]
 name = "cairn"
-version = "0.3.0"
+version = "0.3.1"
 description = "Cairn - local-first API client"
 authors = ["Cairn"]
 edition = "2024"

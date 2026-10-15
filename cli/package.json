@@ -1,6 +1,6 @@
 {
   "name": "@cairnhq/cli",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Run Cairn collections in CI: assertions, scripts, OAuth, JUnit/JSON/HTML reports",
   "type": "module",
   "bin": {
