@@ -5,6 +5,7 @@ import { executeRequest } from "../../src/lib/pipeline";
 import { setNetwork } from "../../src/lib/net";
 import { atLeast, formatFindings, scanDirectory, SEVERITIES } from "./scan";
 import { validateDirectory } from "./validate";
+import { importHar } from "./importHar";
 import { buildOpenApi, collectExportItems, toJson, toYaml } from "../../src/lib/openapiExport";
 import { effectiveEnv, linkTarget, loadChain, loadDefaults, loadEnvironments, parseRequest, readCollectionName } from "../../src/lib/collection";
 import { listFilesRecursive } from "../../src/lib/fs";
@@ -21,6 +22,10 @@ Usage
   cairn export openapi [folder] [-o file] [--format yaml|json] [--env name]
       Write the collection as an OpenAPI 3.0.3 document: requests become operations, folders tags, saved examples
       responses, auth settings security schemes. Credentials are never written. The log goes to stderr when the spec goes to stdout.
+  cairn import har <file.har> [collection] [--all] [--name <title>] [--dry-run] [--format text|json]
+      Import a browser recording (DevTools > Network > Save all as HAR) into a collection folder: API calls only unless
+      --all, one folder per recording, tokens/passwords/keys moved into secret variables (never into the files),
+      cookies dropped. --dry-run lists what would be imported and writes nothing.
   cairn validate [folder] [--format text|json]
       Check request, folder, collection and environment files against the published format schema (v1).
       Prints file:line and what is wrong; exit code 1 when anything is. The same schemas give editors completion and hover docs.
@@ -253,6 +258,7 @@ async function main(argv: string[]): Promise<number> {
       insecure: { type: "boolean", short: "k" }, "no-cookies": { type: "boolean" }, proxy: { type: "string" }, ca: { type: "string" },
       junit: { type: "string" }, json: { type: "string" }, html: { type: "string" }, "no-color": { type: "boolean" },
       "fail-on": { type: "string" }, format: { type: "string" }, out: { type: "string", short: "o" },
+      all: { type: "boolean" }, name: { type: "string" }, "dry-run": { type: "boolean" },
       help: { type: "boolean", short: "h" }, version: { type: "boolean", short: "v" },
     },
   });
@@ -286,6 +292,28 @@ async function main(argv: string[]): Promise<number> {
     for (const n of notes) log(dim(`  ${n}`));
     return 0;
   }
+  if (cmd === "import") {
+    if (target !== "har") throw new UsageError("Try: cairn import har <file.har> [collection] [--all] [--name <title>] [--dry-run]");
+    const file = positionals[2];
+    if (!file) throw new UsageError("Tell me which recording to import: cairn import har <file.har> [collection]");
+    if (!fs.existsSync(file) || !fs.statSync(file).isFile()) throw new UsageError(`Not found: ${file}`);
+    const dir = positionals[3] ?? ".";
+    if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) throw new UsageError(`Not a folder: ${dir}`);
+    const root = findRoot(path.resolve(dir));
+    if (!fs.existsSync(path.join(root, "cairn.yaml")) && !fs.existsSync(path.join(root, "reqnest.yaml"))) {
+      throw new UsageError(`${dir} isn't a Cairn collection (no cairn.yaml here or in a parent folder). Create one in the app, or add a cairn.yaml containing "name: My API".`);
+    }
+    const r = await importHar({ file, collection: root, name: values.name, includeStatic: !!values.all, dryRun: !!values["dry-run"] });
+    if (values.format === "json") console.log(JSON.stringify({ ...r, collection: root }, null, 2));
+    else {
+      console.log(r.requests.length ? `${r.wrote ? "Imported" : "Would import"} ${r.requests.length} request${r.requests.length === 1 ? "" : "s"} into “${r.title}”${r.wrote ? "" : " (dry run: nothing written)"}` : "Nothing to import: the recording has no requests Cairn can import.");
+      for (const n of r.requests.slice(0, 12)) console.log(dim(`  ${n}`));
+      if (r.requests.length > 12) console.log(dim(`  …and ${r.requests.length - 12} more`));
+      if (r.wrote && r.environment) console.log(`Environment “${r.environment}” has {{baseUrl}}${r.secrets ? ` and ${r.secrets} secret variable${r.secrets === 1 ? "" : "s"} (kept out of the request files; see .cairn/secrets.yaml)` : ""}.`);
+      for (const n of r.notes) console.log(dim(`• ${n}`));
+    }
+    return r.requests.length ? 0 : 1;
+  }
   if (cmd === "validate") {
     const dir = target ?? ".";
     if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) throw new UsageError(`Not a folder: ${dir}`);
@@ -308,7 +336,7 @@ async function main(argv: string[]): Promise<number> {
     else console.log(formatFindings(findings, { red, yellow, dim, bold, green }));
     return failOn !== "never" && findings.some((f) => atLeast(f, failOn as "high")) ? 1 : 0;
   }
-  if (cmd !== "run") throw new UsageError(`Unknown command "${cmd}". Try: cairn run, cairn validate, cairn scan or cairn export openapi`);
+  if (cmd !== "run") throw new UsageError(`Unknown command "${cmd}". Try: cairn run, cairn import har, cairn validate, cairn scan or cairn export openapi`);
   if (!target) throw new UsageError("Tell me what to run: cairn run <collection | folder | request.req.yaml>");
 
   const vars: Record<string, string> = {};

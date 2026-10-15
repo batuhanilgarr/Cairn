@@ -67,3 +67,13 @@ npx cairn validate ./my-collection
 ```
 
 Checks requests, folder defaults, the collection file and environments against the published JSON Schemas (format v1) and prints `file:line  path  message`. Exit code 1 if anything is wrong, so it works as a pre-commit hook or a CI step. The same schemas give VS Code completion and hover docs: see [docs/file-format.md](../docs/file-format.md).
+
+## Import a browser recording (HAR)
+
+```sh
+npx cairn import har recording.har ./my-collection            # API calls only
+npx cairn import har recording.har ./my-collection --all       # pages, scripts, images too
+npx cairn import har recording.har . --name checkout --dry-run # see what would be imported, write nothing
+```
+
+Save the recording in your browser (DevTools > Network > Save all as HAR) and import it into a collection folder (or any folder inside one). Each recording gets its own folder and an environment with `{{baseUrl}}`. Tokens, passwords, API keys and `Authorization` headers are moved into secret variables (kept in the git-ignored `.cairn/secrets.yaml`) instead of the request files, cookies are dropped, and the command never prints a credential. Importing the same recording twice creates a second copy; use `--name` to keep them apart.

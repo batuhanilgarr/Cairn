@@ -162,3 +162,88 @@ test("names are 'METHOD /path', files can be written, and an empty recording is 
   assert.equal(r.requests[0].base, "GET /v1/items/42");
   assert.deepEqual(H.parseHar(har(), "x").requests, []);
 });
+
+import { execFile } from "node:child_process";
+const CLI_BIN = path.join(ROOT, "cli/dist/cairn.mjs");
+const cairn = (args) => new Promise((resolve) => execFile("node", [CLI_BIN, ...args], { env: { ...process.env, NO_COLOR: "1" } }, (err, stdout, stderr) => resolve({ code: err ? err.code : 0, stdout, stderr })));
+const readAll = (dir) => { const out = []; const walk = (d) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const p = path.join(d, e.name); e.isDirectory() ? walk(p) : out.push([p, fs.readFileSync(p, "utf8")]); } }; walk(dir); return out; };
+
+test("CLI: cairn import har writes requests and an environment, keeps credentials out of the files, and the result passes scan and validate", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cairn-har-cli-"));
+  fs.writeFileSync(path.join(dir, "cairn.yaml"), "name: Shop\n");
+  const PASS = "correct-horse-battery";
+  const file = path.join(dir, "recording.har");
+  fs.writeFileSync(file, har(
+    entry({ request: { url: "https://api.shop.example/v1/items?api_key=" + "k".repeat(24), headers: hdrs({ Authorization: "Bearer " + GH, Cookie: "sid=" + SESSION, "X-Trace": "t1" }) } }),
+    entry({ request: { method: "POST", url: "https://api.shop.example/v1/login", headers: hdrs({ "Content-Type": "application/json" }), postData: { mimeType: "application/json", text: JSON.stringify({ email: "ada@example.com", password: PASS }) } }, response: { status: 200, content: { mimeType: "application/json", text: JSON.stringify({ ok: true, access_token: "live-access-token-123" }) } } }),
+    entry({ request: { url: "https://app.shop.example/main.js" }, top: { _resourceType: "script" } }),
+  ));
+  const secrets = [GH, SESSION, PASS, "k".repeat(24), "live-access-token-123"];
+
+  const dry = await cairn(["import", "har", file, dir, "--dry-run"]);
+  assert.equal(dry.code, 0, dry.stdout + dry.stderr);
+  assert.match(dry.stdout, /Would import 2 requests into “recording” \(dry run: nothing written\)/);
+  assert.ok(!fs.existsSync(path.join(dir, "recording")) && !fs.existsSync(path.join(dir, "environments")), "a dry run writes nothing");
+
+  const r = await cairn(["import", "har", file, dir]);
+  assert.equal(r.code, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /Imported 2 requests into “recording”/);
+  assert.match(r.stdout, /Environment “recording” has \{\{baseUrl\}\} and \d+ secret variables? \(kept out of the request files/);
+  assert.match(r.stdout, /Skipped 1 page, script, style, image or font/);
+  for (const s of secrets) assert.ok(!r.stdout.includes(s) && !r.stderr.includes(s), "the command's output must never contain a credential");
+
+  const reqFiles = fs.readdirSync(path.join(dir, "recording")).filter((f) => f.endsWith(".req.yaml"));
+  assert.equal(reqFiles.length, 2);
+  const env = fs.readFileSync(path.join(dir, "environments/recording.env.yaml"), "utf8");
+  assert.match(env, /baseUrl/);
+  assert.match(env, /secret: true/);
+  // the secret values live in the git-ignored secrets file, and nowhere else on disk
+  const secretsFile = fs.readFileSync(path.join(dir, ".cairn/secrets.yaml"), "utf8");
+  assert.ok(secretsFile.includes(GH) && secretsFile.includes(PASS));
+  for (const [p, text] of readAll(dir)) {
+    if (p.includes(`${path.sep}.cairn${path.sep}`) || p.endsWith("recording.har")) continue;
+    for (const s of secrets) assert.ok(!text.includes(s), `a credential was written to ${path.relative(dir, p)}`);
+  }
+  const scan = await cairn(["scan", dir, "--fail-on", "low"]);
+  assert.equal(scan.code, 0, scan.stdout);
+  const valid = await cairn(["validate", dir]);
+  assert.equal(valid.code, 0, valid.stdout);
+
+  // --all keeps the script too, --name picks the folder, --format json is machine readable and still secret-free
+  const all = await cairn(["import", "har", file, dir, "--all", "--name", "everything", "--format", "json"]);
+  assert.equal(all.code, 0, all.stdout + all.stderr);
+  const j = JSON.parse(all.stdout);
+  assert.equal(j.title, "everything");
+  assert.equal(j.requests.length, 3);
+  assert.equal(j.wrote, true);
+  for (const s of secrets) assert.ok(!all.stdout.includes(s));
+  assert.ok(fs.existsSync(path.join(dir, "everything")));
+});
+
+test("CLI: cairn import har says what is wrong instead of writing anything", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cairn-har-bad-"));
+  const bad = path.join(dir, "bad.har");
+  fs.writeFileSync(bad, '{"not": "a har"}');
+  const good = path.join(dir, "good.har");
+  fs.writeFileSync(good, har(entry({})));
+  fs.writeFileSync(path.join(dir, "cairn.yaml"), "name: C\n");
+  const notHar = await cairn(["import", "har", bad, dir]);
+  assert.notEqual(notHar.code, 0);
+  assert.match(notHar.stdout + notHar.stderr, /isn't a HAR recording/);
+  const missing = await cairn(["import", "har", path.join(dir, "nope.har"), dir]);
+  assert.notEqual(missing.code, 0);
+  assert.match(missing.stdout + missing.stderr, /Not found/);
+  const noColl = fs.mkdtempSync(path.join(os.tmpdir(), "cairn-har-nocoll-"));
+  const notColl = await cairn(["import", "har", good, noColl]);
+  assert.notEqual(notColl.code, 0);
+  assert.match(notColl.stdout + notColl.stderr, /isn't a Cairn collection/);
+  assert.deepEqual(fs.readdirSync(noColl), [], "nothing is written outside a collection");
+  assert.notEqual((await cairn(["import", "wsdl", good, dir])).code, 0);
+  assert.notEqual((await cairn(["import", "har"])).code, 0);
+  // an empty recording is not an error to write, but it says so and exits 1
+  const empty = path.join(dir, "empty.har");
+  fs.writeFileSync(empty, har());
+  const e = await cairn(["import", "har", empty, dir]);
+  assert.equal(e.code, 1);
+  assert.match(e.stdout, /Nothing to import/);
+});
