@@ -34,6 +34,7 @@
           "graphql",
           "sse",
           "ws",
+          "socketio",
           "grpc",
           "mcp"
         ],
@@ -42,7 +43,7 @@
       "method": {
         "type": "string",
         "pattern": "^[A-Za-z]+$",
-        "description": "HTTP method, e.g. GET. Omitted for graphql, ws, grpc and mcp requests."
+        "description": "HTTP method, e.g. GET. Omitted for graphql, ws, socketio, grpc and mcp requests."
       },
       "url": {
         "type": "string",
@@ -144,6 +145,55 @@
               "type": "object",
               "properties": {
                 "name": {
+                  "type": "string"
+                },
+                "body": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "socketio": {
+        "type": "object",
+        "description": "Socket.IO (protocol v5, WebSocket transport). The address is `url`.",
+        "properties": {
+          "namespace": {
+            "type": "string",
+            "description": "For example /admin. Left out: a path in the URL, or the main namespace."
+          },
+          "path": {
+            "type": "string",
+            "description": "Where the Socket.IO engine lives. Left out: /socket.io/."
+          },
+          "auth": {
+            "type": "string",
+            "description": "The auth payload sent when connecting: a JSON object, as text. May contain {{variables}}."
+          },
+          "event": {
+            "type": "string",
+            "description": "The event name in the composer."
+          },
+          "message": {
+            "type": "string",
+            "description": "The arguments in the composer: a JSON array, each item one argument."
+          },
+          "ack": {
+            "type": "boolean",
+            "description": "Ask the server for an acknowledgement when emitting."
+          },
+          "saved": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "event": {
                   "type": "string"
                 },
                 "body": {

@@ -39,7 +39,7 @@
   --bg: #1b1d23; --bg-side: #16181d; --bg-rail: #111317; --bg-panel: #181a20; --bg-input: #23262e; --border: #2c2f39; --border-strong: #3b3f4d;
   --text: #e8eaf0; --muted: #9ba1af; --accent: var(--accent-dark, #8b74ff); --hover: rgba(255, 255, 255, 0.07);
   --ok-ink: #4cc38a; --warn-ink: #f0a63a; --bad-ink: #f2777d;
-  --ok: #4cc38a; --warn: #f0a63a; --bad: #f2777d; --on-bad: #1a0b0c; --j-str: #6ee7b7; --j-num: #fdba74; --j-bool: #f0abfc;
+  --ok: #4cc38a; --warn: #f0a63a; --bad: #f2777d; --on-bad: #1a0b0c; --j-key: #a99bff; --j-str: #6ee7b7; --j-num: #fdba74; --j-bool: #f0abfc;
   --accent-text: #0e0e12; --pop: 0 24px 80px rgba(0, 0, 0, .55);
 }
 @media (prefers-color-scheme: dark) {
@@ -47,7 +47,7 @@
     --bg: #1b1d23; --bg-side: #16181d; --bg-rail: #111317; --bg-panel: #181a20; --bg-input: #23262e; --border: #2c2f39; --border-strong: #3b3f4d;
     --text: #e8eaf0; --muted: #9ba1af; --accent: var(--accent-dark, #8b74ff); --hover: rgba(255, 255, 255, 0.07);
   --ok-ink: #4cc38a; --warn-ink: #f0a63a; --bad-ink: #f2777d;
-    --ok: #4cc38a; --warn: #f0a63a; --bad: #f2777d; --on-bad: #1a0b0c; --j-str: #6ee7b7; --j-num: #fdba74; --j-bool: #f0abfc;
+    --ok: #4cc38a; --warn: #f0a63a; --bad: #f2777d; --on-bad: #1a0b0c; --j-key: #a99bff; --j-str: #6ee7b7; --j-num: #fdba74; --j-bool: #f0abfc;
     --accent-text: #0e0e12; --pop: 0 24px 80px rgba(0, 0, 0, .55);
   }
 }
@@ -375,7 +375,7 @@ h4 { margin: 4px 0; font-size: 12.5px; font-weight: 600; color: var(--muted); }
 .saved-name:hover { background: var(--hover); }
 .stream-wrap { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .stream-wrap > .panel { flex: 1; }
-.btn.primary.stop { background: var(--bad); border-color: var(--bad); color: #fff; }
+.btn.primary.stop { background: var(--bad); border-color: var(--bad); color: var(--on-bad, #fff); }
 
 /* grpc */
 .grpc { display: flex; flex-direction: column; gap: 8px; height: 100%; min-height: 0; }
@@ -851,3 +851,4 @@ pre.block { white-space: pre-wrap; word-break: break-word; margin: 0; background
 .big-filter .big-fstatus { flex: 0 1 auto; white-space: nowrap; max-width: 55%; overflow: hidden; text-overflow: ellipsis; text-align: right; }
 .big-filter-out { flex: 1; min-height: 0; display: flex; flex-direction: column; border-top: 1px solid var(--border); }
 .big-filter-out > p { margin: 6px 0 2px; }
+.sio-event { flex: 0 1 260px; min-width: 120px; }

@@ -35,8 +35,8 @@ const partsIn = (v: unknown): FormPart[] => {
 
 export function serializeRequest(t: RequestTab): string {
   const doc: Record<string, unknown> = { name: t.name };
-  if (t.kind !== "http") doc.type = t.kind;
-  if (t.kind !== "graphql" && t.kind !== "ws" && t.kind !== "grpc" && t.kind !== "mcp") doc.method = t.method;
+  if (t.kind !== "http") doc.type = t.kind === "sio" ? "socketio" : t.kind;
+  if (t.kind !== "graphql" && t.kind !== "ws" && t.kind !== "sio" && t.kind !== "grpc" && t.kind !== "mcp") doc.method = t.method;
   doc.url = foldParamsIntoUrl(t.url, t.params);
   if (t.source) doc.source = t.source;
   const params = kvOut(t.params.filter((p) => !p.enabled)); // enabled ones are in the url
@@ -64,6 +64,18 @@ export function serializeRequest(t: RequestTab): string {
       ...(t.ws.protocols.trim() ? { protocols: t.ws.protocols } : {}),
       ...(t.ws.composer.trim() ? { message: t.ws.composer } : {}),
       ...(t.ws.messages.length ? { saved: t.ws.messages.map((m) => ({ name: m.name, body: m.body })) } : {}),
+    };
+  }
+  if (t.kind === "sio") {
+    const s = t.sio;
+    doc.socketio = {
+      ...(s.namespace.trim() ? { namespace: s.namespace } : {}),
+      ...(s.path.trim() ? { path: s.path } : {}),
+      ...(s.auth.trim() ? { auth: s.auth } : {}),
+      ...(s.event.trim() ? { event: s.event } : {}),
+      ...(s.composer.trim() ? { message: s.composer } : {}),
+      ...(s.ack ? { ack: true } : {}),
+      ...(s.messages.length ? { saved: s.messages.map((m) => ({ name: m.name, event: m.event, body: m.body })) } : {}),
     };
   }
   if (t.kind === "mcp") {
@@ -249,13 +261,22 @@ function parseRequestRaw(text: string, file: string): RequestTab {
   return {
     ...t,
     name: String(d.name ?? basename(file).replace(/\.req\.ya?ml$/, "")),
-    kind: (["graphql", "sse", "ws", "grpc", "mcp"].includes(d.type) ? d.type : "http") as RequestKind,
+    kind: (d.type === "socketio" ? "sio" : ["graphql", "sse", "ws", "grpc", "mcp"].includes(d.type) ? d.type : "http") as RequestKind,
     method: String(d.method ?? "GET").toUpperCase(),
     gql: { query: String(d.graphql?.query ?? ""), variables: String(d.graphql?.variables ?? ""), operation: String(d.graphql?.operation ?? "") },
     ws: {
       composer: String(d.websocket?.message ?? ""),
       protocols: String(d.websocket?.protocols ?? ""),
       messages: (Array.isArray(d.websocket?.saved) ? d.websocket.saved : []).map((m: any) => ({ id: uid(), name: String(m?.name ?? ""), body: String(m?.body ?? "") })),
+    },
+    sio: {
+      namespace: String(d.socketio?.namespace ?? ""),
+      path: String(d.socketio?.path ?? ""),
+      auth: String(d.socketio?.auth ?? ""),
+      event: String(d.socketio?.event ?? ""),
+      composer: String(d.socketio?.message ?? ""),
+      ack: d.socketio?.ack === true,
+      messages: (Array.isArray(d.socketio?.saved) ? d.socketio.saved : []).map((m: any) => ({ id: uid(), name: String(m?.name ?? ""), event: String(m?.event ?? ""), body: String(m?.body ?? "") })),
     },
     mcp: { transport: d.mcp?.transport === "stdio" ? "stdio" : "http", command: String(d.mcp?.command ?? ""), args: String(d.mcp?.args ?? ""), env: kvIn(d.mcp?.env) },
     grpc: {

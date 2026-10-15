@@ -36,13 +36,16 @@ export type RunOutput = { tests: TestResult[]; logs: string[]; scriptError?: str
 /** A saved response. Examples document the API and are what the mock server answers with. */
 export type ResponseExample = { id: string; name: string; status: number; headers: KV[]; body: string; delayMs: number };
 
-export type RequestKind = "http" | "graphql" | "sse" | "ws" | "grpc" | "mcp";
+export type RequestKind = "http" | "graphql" | "sse" | "ws" | "sio" | "grpc" | "mcp";
 
 export type McpConfig = { transport: "http" | "stdio"; command: string; args: string; env: KV[] };
 
 export type GraphQLConfig = { query: string; variables: string; operation: string };
 export type SavedMessage = { id: string; name: string; body: string };
 export type WsConfig = { composer: string; messages: SavedMessage[]; protocols: string };
+export type SioMessage = { id: string; name: string; event: string; body: string };
+/** Socket.IO: `body` and `composer` are a JSON array whose items are the event's arguments. */
+export type SioConfig = { namespace: string; path: string; auth: string; event: string; composer: string; ack: boolean; messages: SioMessage[] };
 export type GrpcConfig = {
   /** "reflection" asks the server for its schema; "proto" uses the .proto files below. */
   source: "reflection" | "proto";
@@ -63,6 +66,7 @@ export type RequestTab = {
   examples: ResponseExample[];
   gql: GraphQLConfig;
   ws: WsConfig;
+  sio: SioConfig;
   grpc: GrpcConfig;
   mcp: McpConfig;
   id: string;

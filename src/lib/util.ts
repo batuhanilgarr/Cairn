@@ -29,6 +29,7 @@ export const setTabDefaults = (d: typeof tabDefaults) => {
 
 export const defaultGql = () => ({ query: "", variables: "", operation: "" });
 export const defaultWs = () => ({ composer: "", messages: [], protocols: "" });
+export const defaultSio = (): RequestTab["sio"] => ({ namespace: "", path: "", auth: "", event: "", composer: "", ack: false, messages: [] });
 export const defaultGrpc = (): RequestTab["grpc"] => ({ source: "reflection", protoFiles: [], importPaths: [], method: "", message: "{}", tls: true });
 
 export const defaultMcp = (): RequestTab["mcp"] => ({ transport: "http", command: "", args: "", env: [emptyKV()] });
@@ -40,6 +41,7 @@ export const newTab = (): RequestTab => ({
   examples: [],
   gql: defaultGql(),
   ws: defaultWs(),
+  sio: defaultSio(),
   grpc: defaultGrpc(),
   mcp: defaultMcp(),
   id: uid(),
@@ -75,6 +77,7 @@ export const normalizeTab = (t: Partial<RequestTab>): RequestTab => {
     oauth: { ...base.oauth, ...(t.oauth ?? {}) },
     gql: { ...base.gql, ...(t.gql ?? {}) },
     ws: { ...base.ws, ...(t.ws ?? {}) },
+    sio: { ...base.sio, ...(t.sio ?? {}) },
     grpc: { ...base.grpc, ...(t.grpc ?? {}) },
     mcp: { ...base.mcp, ...(t.mcp ?? {}) },
   } as RequestTab;

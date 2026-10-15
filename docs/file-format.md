@@ -108,8 +108,8 @@ settings:
 
 | Key | Meaning |
 |---|---|
-| `type` | `graphql`, `sse`, `ws`, `grpc` or `mcp`. Left out for HTTP. |
-| `method` | HTTP method. Left out for `graphql`, `ws`, `grpc`, `mcp`. |
+| `type` | `graphql`, `sse`, `ws`, `socketio`, `grpc` or `mcp`. Left out for HTTP. |
+| `method` | HTTP method. Left out for `graphql`, `ws`, `socketio`, `grpc`, `mcp`. |
 | `url` | The full URL **including the query string**. The Params table in the app is a view of it. |
 | `params` | Only query parameters that are *switched off*; enabled ones are in `url`. |
 | `headers` | Rows of `key`, `value` and (only when off) `enabled: false`. |
@@ -147,6 +147,22 @@ websocket:
   saved:
     - name: Subscribe
       body: '{"subscribe": "BTC"}'
+```
+
+```yaml request
+name: Chat room
+type: socketio
+url: https://chat.example.com
+socketio:
+  namespace: /chat
+  auth: '{"token": "{{token}}"}'
+  event: message
+  message: '[{"room": "lobby", "text": "hello"}]'
+  ack: true
+  saved:
+    - name: Join lobby
+      event: join
+      body: '["lobby"]'
 ```
 
 ```yaml request

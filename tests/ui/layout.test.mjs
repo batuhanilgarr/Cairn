@@ -36,7 +36,7 @@ const STATES = [
 ];
 
 /** What the app would get from Tauri: a small collection and canned responses. The response is deliberately a worst case (120 headers, 12 cookies, 1 GB, two minutes) so that wide numbers can't break the header. Runs before the app loads. */
-const stubSource = ({ sidebar, aside, bigTree = 0, bigBody = 0, withLink = false, leakyToken = '', keychain = false }) => `
+const stubSource = ({ sidebar, aside, bigTree = 0, bigBody = 0, withLink = false, leakyToken = '', keychain = false, sio = false }) => `
 (() => {
   const req = (n, m) => 'name: ' + n + '\\nmethod: ' + m + '\\nurl: https://api.example.com/' + n + '\\n';
   let files = {
@@ -69,9 +69,37 @@ const stubSource = ({ sidebar, aside, bigTree = 0, bigBody = 0, withLink = false
   localStorage.setItem('rq.sidebar', ${JSON.stringify(JSON.stringify(sidebar))});
   localStorage.setItem('rq.aside', ${JSON.stringify(JSON.stringify(aside))});
   window.__TAURI_EVENT_PLUGIN_INTERNALS__ = { unregisterListener() {} };
+  const SIO = ${sio};
+  const CBS = {}; let cbN = 1; let STREAM_CB = 0;
+  const say = (id, payload) => setTimeout(() => CBS[STREAM_CB] && CBS[STREAM_CB]({ event: 'stream', id: 1, payload: { id, ...payload } }), 5);
   window.__TAURI_INTERNALS__ = {
-    transformCallback: () => 1,
+    transformCallback: (cb) => { if (!SIO) return 1; const n = cbN++; CBS[n] = cb; return n; },
     invoke: async (cmd, a) => {
+      if (SIO) {
+        // a Socket.IO server that answers the way the real one does: handshake, namespace connect, acks, an event of its own
+        if (cmd === 'plugin:event|listen') { STREAM_CB = a.handler; return 1; }
+        if (cmd === 'ws_connect') {
+          window.__sio = { url: a.url, sent: [] };
+          say(a.id, { type: 'open', status: 101, protocol: '' });
+          say(a.id, { type: 'message', text: '0{"sid":"eio1","pingInterval":25000,"pingTimeout":20000}' });
+          return null;
+        }
+        if (cmd === 'ws_send') {
+          const t = a.text; window.__sio.sent.push(t);
+          if (t.startsWith('40')) say(a.id, { type: 'message', text: '40' + (t.includes(',') ? t.slice(2, t.indexOf(',') + 1) : '') + '{"sid":"sock1"}' });
+          if (t.startsWith('42')) {
+            const ns = t[2] === '/' ? t.slice(2, t.indexOf(',') + 1) : '';
+            let i = 2 + ns.length; let id = '';
+            while (t[i] >= '0' && t[i] <= '9') id += t[i++];
+            const arr = JSON.parse(t.slice(i));
+            if (id) say(a.id, { type: 'message', text: '43' + ns + id + JSON.stringify([{ echo: arr[1] }]) });
+            say(a.id, { type: 'message', text: '42' + ns + '["server says","hello back"]' });
+          }
+          return null;
+        }
+        if (cmd === 'ws_close') { say(a.id, { type: 'close', code: 1000, reason: '' }); return null; }
+        if (cmd === 'stream_stop') return null;
+      }
       if (BODY_LINES > 0) {
         const lineOf = (n) => n === 0 ? '[' : n === BODY_LINES - 1 ? ']' : ['  {', '    "id": "inv_' + Math.floor((n - 1) / 4) + '",', '    "tag": "Alpha"', '  },'][(n - 1) % 4];
         if (cmd === 'send_request') return { status: 200, statusText: 'OK', headers: [['content-type', 'application/json']], body: '', bodyBase64: null, bodyId: 7, contentType: 'application/json', sizeBytes: BODY_LINES * 22, timeMs: 640, ttfbMs: 80, httpVersion: 'HTTP/1.1' };
@@ -131,9 +159,9 @@ after(async () => {
 });
 
 /** Open the app in a fresh browser context. `fail()` saves a screenshot next to the failing assertion. */
-async function open({ width, height = 800, theme = "dark", sidebar = true, aside = null, bigTree = 0, bigBody = 0, withLink = false, leakyToken = "", keychain = false }, label) {
+async function open({ width, height = 800, theme = "dark", sidebar = true, aside = null, bigTree = 0, bigBody = 0, withLink = false, leakyToken = "", keychain = false, sio = false }, label) {
   const context = await browser.newContext({ viewport: { width, height }, colorScheme: theme });
-  await context.addInitScript(stubSource({ sidebar, aside, bigTree, bigBody, withLink, leakyToken, keychain }));
+  await context.addInitScript(stubSource({ sidebar, aside, bigTree, bigBody, withLink, leakyToken, keychain, sio }));
   const page = await context.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(String(e)));
@@ -639,6 +667,54 @@ for (const theme of THEMES) {
     });
   }
 }
+
+test("Socket.IO: connect with auth and a namespace, emit with an acknowledgement, see the server's events, disconnect", async () => {
+  const { page, context, errors, check } = await open({ width: 1360, sio: true }, "socketio");
+  try {
+    await page.selectOption("select.kind", "sio");
+    await page.click(".url-cell");
+    await page.keyboard.type("https://chat.example.com/chat");
+    await page.locator(".panel.req .subtabs button", { hasText: /^Settings/ }).click();
+    await page.getByPlaceholder('{"token": "{{token}}"}').fill('{"token": "abc"}');
+    await page.locator(".panel.req .subtabs button", { hasText: /^Message/ }).click();
+    await page.click(".urlbar > .btn.primary");
+    await page.waitForFunction(() => document.querySelector(".log")?.textContent.includes("socket id sock1"));
+    await page.fill('input[aria-label="Event name"]', "echo");
+    await page.locator(".ws-compose .cm-content").click();
+    await page.keyboard.insertText('[{"n": 1}]');
+    await page.locator('label.switch[aria-label="Ask for an acknowledgement"]').click();
+    await page.getByRole("button", { name: /^Emit/ }).click();
+    await page.waitForFunction(() => document.querySelector(".log")?.textContent.includes("ack · echo") && document.querySelector(".log")?.textContent.includes("server says"));
+    const log = await page.locator(".log").textContent();
+    const state = await page.evaluate(() => window.__sio);
+    const v = await axeViolations(page);
+    // narrow window: the compose row must still fit
+    await page.setViewportSize({ width: 760, height: 800 });
+    await page.waitForTimeout(200);
+    const over = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
+    await page.setViewportSize({ width: 1360, height: 800 });
+    await page.getByRole("button", { name: "Disconnect" }).click();
+    await page.waitForFunction(() => document.querySelector(".log")?.textContent.includes("closed"));
+    const sentAfter = await page.evaluate(() => window.__sio.sent);
+    await check(async () => {
+      assert.deepEqual(errors, []);
+      assert.equal(state.url, "wss://chat.example.com/socket.io/?EIO=4&transport=websocket");
+      assert.equal(state.sent[0], '40/chat,{"token":"abc"}', "the namespace comes from the address, the auth from Settings");
+      assert.equal(state.sent[1], '42/chat,1["echo",{"n":1}]');
+      assert.match(log, /Namespace \/chat, socket id sock1/);
+      assert.match(log, /echo · wants ack/);
+      assert.match(log, /ack · echo/);
+      assert.match(log, /"echo"/);
+      assert.match(log, /server says/);
+      assert.match(log, /hello back/);
+      assert.deepEqual(v.map((x) => `${x.id}: ${x.where.join(" | ")}`), [], "accessibility violations");
+      assert.ok(over <= 0, `the page overflows sideways at 760px (${over}px)`);
+      assert.ok(sentAfter.includes("41/chat,"), "disconnecting says goodbye to the namespace");
+    });
+  } finally {
+    await context.close();
+  }
+});
 
 const REQUEST_TABS = ["Params", "Headers", "Body", "Auth", "Scripts", "Tests", "Examples", "Settings"];
 for (const theme of THEMES) {

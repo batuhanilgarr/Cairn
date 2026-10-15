@@ -27,6 +27,8 @@ import { ContextMenu, Menu, type MenuItem } from "./Menu";
 import { useRequestLabels } from "./lib/useRequestLabels";
 import { AiPanel } from "./AiPanel";
 import { SettingRow, Switch } from "./SettingRow";
+import { SioPanel } from "./SioPanel";
+import { SioClient, parseSioArgs, sioAuthError, sioTarget, type SioStep } from "./lib/socketio";
 import { AsideTabs, type AsideKind } from "./AsideTabs";
 import { DiffModal, type HistEntry } from "./DiffModal";
 import { ExamplesPanel } from "./ExamplesPanel";
@@ -130,10 +132,11 @@ const SECTIONS: Record<RequestKind, ReqSection[]> = {
   graphql: ["query", "headers", "auth", "scripts", "tests", "examples", "settings"],
   sse: ["params", "headers", "body", "auth", "scripts", "settings"],
   ws: ["message", "headers", "auth", "settings"],
+  sio: ["message", "headers", "auth", "settings"],
   grpc: ["message", "headers", "auth", "settings"],
   mcp: ["explore", "headers", "auth", "settings"],
 };
-const KIND_LABEL: Record<RequestKind, string> = { http: "HTTP", graphql: "GraphQL", sse: "SSE", ws: "WebSocket", grpc: "gRPC", mcp: "MCP" };
+const KIND_LABEL: Record<RequestKind, string> = { http: "HTTP", graphql: "GraphQL", sse: "SSE", ws: "WebSocket", sio: "Socket.IO", grpc: "gRPC", mcp: "MCP" };
 const pillOf = (t: RequestTab) => (t.kind === "http" ? t.method : t.kind === "graphql" ? "GQL" : t.kind === "grpc" ? "gRPC" : t.kind === "mcp" ? "MCP" : t.kind.toUpperCase());
 type ResSection = "body" | "headers" | "cookies" | "tests" | "console";
 type SideSection = "collections" | "history" | "environments";
@@ -221,6 +224,7 @@ export default function App() {
   const [toast, setToast] = useState<string | null>(null);
   const writtenEnvs = useRef<Map<string, string>>(new Map());
   const tabsRef = useRef<RequestTab[]>([]);
+  const sioClients = useRef<Map<string, SioClient>>(new Map());
   const sessionRef = useRef<Record<string, string>>({});
   const tokensRef = useRef<TokenCache>(new Map());
   const stopRef = useRef(false);
@@ -293,7 +297,7 @@ export default function App() {
       sections: kinds,
       section: kinds.includes(reqSection) ? reqSection : kinds[0],
       showWelcome: isBlank(t) && !responses[t.id] && !loading[t.id] && !streams[t.id],
-      isStreamKind: t.kind === "ws" || t.kind === "sse" || t.kind === "grpc" || t.kind === "mcp",
+      isStreamKind: t.kind === "ws" || t.kind === "sio" || t.kind === "sse" || t.kind === "grpc" || t.kind === "mcp",
       streamState: streams[t.id] || EMPTY_STREAM,
       streamStatus: (streams[t.id] || EMPTY_STREAM).status,
       hist,
@@ -915,7 +919,22 @@ export default function App() {
     }
   };
 
+  /** Run what a Socket.IO client decided: frames to send, entries to log, a status change. */
+  const applySio = (id: string, step: SioStep) => {
+    for (const f of step.send) wsSend(id, { text: f }).catch(() => {});
+    const patchState: Partial<StreamState> = {};
+    if (step.status) patchState.status = step.status;
+    if (step.info !== undefined) patchState.info = step.info;
+    if (step.status === "open") patchState.startedAt = Date.now();
+    pushStream(id, step.entries, patchState);
+  };
+
   const onStreamEvent = (id: string, e: StreamEvent) => {
+    const sio = sioClients.current.get(id);
+    if (sio && e.type === "open") return pushStream(id, [{ dir: "sys", label: "websocket", text: "Connected, waiting for the Socket.IO handshake" }], { info: "handshake…" });
+    if (sio && e.type === "message") return applySio(id, sio.onText(e.text));
+    if (sio && e.type === "binary") return applySio(id, sio.onBinary(e.size));
+    if (e.type === "close" || e.type === "error" || e.type === "end") sioClients.current.delete(id);
     switch (e.type) {
       case "open":
         if (e.headers !== undefined) {
@@ -1015,6 +1034,14 @@ export default function App() {
           messages: [msg],
           metadata: prep.spec.headers,
         });
+      } else if (tab.kind === "sio") {
+        const sub = (x: string) => interpolate(x, prep.eff());
+        const auth = sub(tab.sio.auth);
+        const bad = sioAuthError(auth);
+        if (bad) throw new Error(bad);
+        const target = sioTarget(prep.spec.url, sub(tab.sio.namespace), sub(tab.sio.path));
+        sioClients.current.set(tab.id, new SioClient({ namespace: target.namespace, auth }));
+        await wsConnect(tab.id, { url: target.url, headers: prep.spec.headers, protocols: [], insecure: tab.insecure });
       } else if (tab.kind === "sse") await sseConnect(tab.id, prep.spec);
       else
         await wsConnect(tab.id, {
@@ -1039,6 +1066,10 @@ export default function App() {
         unsubscribe(tab.id);
         pushStream(tab.id, [{ dir: "sys", label: "disconnected", text: "You disconnected" }], { status: "closed" });
       } else if (tab.kind === "ws") await wsClose(tab.id);
+      else if (tab.kind === "sio") {
+        for (const f of sioClients.current.get(tab.id)?.disconnect() ?? []) await wsSend(tab.id, { text: f }).catch(() => {});
+        await wsClose(tab.id);
+      }
       else {
         await streamStop(tab.id);
         unsubscribe(tab.id);
@@ -1046,6 +1077,21 @@ export default function App() {
       }
     } catch {
       pushStream(tab.id, [], { status: "closed" });
+    }
+  };
+
+  const emitSio = async (event: string, argsText: string, ack: boolean) => {
+    const tab = active;
+    const client = sioClients.current.get(tab.id);
+    if (!client) return flash("Connect first", 2500);
+    const parsed = parseSioArgs(interpolate(argsText, withSession(env, sessionRef.current, baseVars)));
+    if ("error" in parsed) return flash(parsed.error, 4000);
+    try {
+      const { frame, entry } = client.emit(interpolate(event, withSession(env, sessionRef.current, baseVars)), parsed.args, ack);
+      await wsSend(tab.id, { text: frame });
+      pushStream(tab.id, [entry]);
+    } catch (e) {
+      pushStream(tab.id, [{ dir: "sys", label: "error", text: String((e as Error).message ?? e), tone: "error" }]);
     }
   };
 
@@ -1117,8 +1163,9 @@ export default function App() {
   const send = useCallback(async () => {
     if (!active || (!active.url.trim() && !(active.kind === "grpc" && active.grpc.source === "proto") && !(active.kind === "mcp" && active.mcp.transport === "stdio"))) return;
     const tab = active;
-    if (tab.kind === "ws" || tab.kind === "sse" || tab.kind === "grpc" || tab.kind === "mcp") {
+    if (tab.kind === "ws" || tab.kind === "sio" || tab.kind === "sse" || tab.kind === "grpc" || tab.kind === "mcp") {
       const st = streams[tab.id]?.status;
+      if (tab.kind === "sio" && st === "open" && tab.sio.event.trim()) return void emitSio(tab.sio.event, tab.sio.composer, tab.sio.ack);
       if (tab.kind === "ws" && st === "open" && tab.ws.composer.trim()) {
         let isJson = true;
         try {
@@ -1683,7 +1730,7 @@ export default function App() {
         <div className="urlbar">
           <div className="reqbar">
           <select className="kind" value={active.kind} onChange={(e) => patch({ kind: e.target.value as RequestKind })} title="Request type">
-            {(["http", "graphql", "sse", "ws", "grpc", "mcp"] as RequestKind[]).map((k) => (
+            {(["http", "graphql", "sse", "ws", "sio", "grpc", "mcp"] as RequestKind[]).map((k) => (
               <option key={k} value={k}>{KIND_LABEL[k]}</option>
             ))}
           </select>
@@ -1706,7 +1753,7 @@ export default function App() {
             value={active.url}
             vars={varMap}
             editorRef={focused ? urlView : undefined}
-            placeholder={active.kind === "mcp" ? "https://example.com/mcp" : active.kind === "grpc" ? "localhost:50051  or  grpcs://api.example.com:443" : active.kind === "ws" ? "wss://example.com/socket" : "Enter URL, or paste a cURL command  (use {{variables}})"}
+            placeholder={active.kind === "mcp" ? "https://example.com/mcp" : active.kind === "grpc" ? "localhost:50051  or  grpcs://api.example.com:443" : active.kind === "ws" ? "wss://example.com/socket" : active.kind === "sio" ? "https://example.com  (a Socket.IO server)" : "Enter URL, or paste a cURL command  (use {{variables}})"}
             onSubmit={send}
             onPasteText={(text) => {
               if (!looksLikeCurl(text)) return false;
@@ -1726,7 +1773,7 @@ export default function App() {
             {isStreamKind ? (streamStatus === "open" || streamStatus === "connecting" ? (active.kind === "grpc" ? "Cancel" : "Disconnect") : active.kind === "grpc" ? "Invoke" : "Connect") : loading[active.id] ? "Sending…" : "Send"}
             <kbd>⌘↵</kbd>
           </button>
-          {active.kind !== "ws" && active.kind !== "grpc" && (
+          {active.kind !== "ws" && active.kind !== "sio" && active.kind !== "grpc" && (
             <button className={`btn code-btn ${aside === "code" ? "on" : ""}`} onClick={() => fire("codegen")} title="Code snippet (⇧⌘G)" aria-label="Toggle code snippet panel" aria-pressed={aside === "code"}>
               <IconCode />
             </button>
@@ -1880,6 +1927,9 @@ export default function App() {
                 onEndStream={() => void grpcEnd(active.id).then(() => pushStream(active.id, [{ dir: "sys", label: "half-close", text: "You ended the request stream" }])).catch(() => {})}
               />
             )}
+            {section === "message" && active.kind === "sio" && (
+              <SioPanel tab={active} patch={patch} vars={varMap} connected={streamStatus === "open"} onEmit={(ev, a, ack) => void emitSio(ev, a, ack)} onAskName={() => ask("Save message", "", "Save", "Give this message a short name.")} />
+            )}
             {section === "message" && active.kind === "ws" && (
               <WsPanel tab={active} patch={patch} vars={varMap} connected={streamStatus === "open"} onSend={(b, m) => void sendWsMessage(b, m)} onAskName={() => ask("Save message", "", "Save", "Give this message a short name.")} />
             )}
@@ -1906,12 +1956,25 @@ export default function App() {
                     <input className="cell" placeholder="graphql-transport-ws, chat" value={active.ws.protocols} spellCheck={false} onChange={(e) => patch({ ws: { ...active.ws, protocols: e.target.value } })} />
                   </SettingRow>
                 )}
+                {active.kind === "sio" && (
+                  <>
+                    <SettingRow label="Namespace" hint="Left empty: the path in the address, or the main namespace (/).">
+                      <input className="cell" placeholder="/chat" value={active.sio.namespace} spellCheck={false} onChange={(e) => patch({ sio: { ...active.sio, namespace: e.target.value } })} />
+                    </SettingRow>
+                    <SettingRow label="Socket.IO path" hint="Where the server mounts Socket.IO. Left empty: /socket.io/.">
+                      <input className="cell" placeholder="/socket.io/" value={active.sio.path} spellCheck={false} onChange={(e) => patch({ sio: { ...active.sio, path: e.target.value } })} />
+                    </SettingRow>
+                    <SettingRow label="Auth payload" hint="A JSON object sent when connecting (socket.auth). May use {{variables}}.">
+                      <input className="cell" placeholder='{"token": "{{token}}"}' value={active.sio.auth} spellCheck={false} onChange={(e) => patch({ sio: { ...active.sio, auth: e.target.value } })} />
+                    </SettingRow>
+                  </>
+                )}
                 {active.kind === "grpc" && (
                   <SettingRow label="Use TLS" hint="When the address has no grpc:// or grpcs:// prefix.">
                     <Switch label="Use TLS" checked={active.grpc.tls} onChange={(tls) => patch({ grpc: { ...active.grpc, tls } })} />
                   </SettingRow>
                 )}
-                {active.kind !== "ws" && active.kind !== "grpc" && (
+                {active.kind !== "ws" && active.kind !== "sio" && active.kind !== "grpc" && (
                   <SettingRow label="Follow redirects" hint="Follow 3xx responses automatically.">
                     <Switch label="Follow redirects" checked={active.followRedirects} onChange={(followRedirects) => patch({ followRedirects })} />
                   </SettingRow>
@@ -1934,7 +1997,7 @@ export default function App() {
             <StreamLog
               state={streamState}
               onClear={() => setStreams((m) => ({ ...m, [active.id]: { ...(m[active.id] ?? EMPTY_STREAM), entries: [], dropped: 0, sent: 0, received: 0 } }))}
-              emptyHint={active.kind === "ws" ? "Connect, then send a message. Everything in both directions shows up here." : active.kind === "mcp" ? "Connect to a server. Every JSON-RPC message in both directions is logged here, plus the server's stderr for local commands." : active.kind === "grpc" ? "Pick a method and hit Invoke. Requests, responses, headers and the final status appear here." : "Connect to start receiving events."}
+              emptyHint={active.kind === "sio" ? "Connect, then emit an event. Events from the server, acknowledgements and your own emits show up here." : active.kind === "ws" ? "Connect, then send a message. Everything in both directions shows up here." : active.kind === "mcp" ? "Connect to a server. Every JSON-RPC message in both directions is logged here, plus the server's stderr for local commands." : active.kind === "grpc" ? "Pick a method and hit Invoke. Requests, responses, headers and the final status appear here." : "Connect to start receiving events."}
             />
           </div>
         ) : (
@@ -2461,7 +2524,7 @@ export default function App() {
       {aside && (() => {
         const tabs = <AsideTabs active={aside} onSelect={setAside} onClose={() => setAside(null)} />;
         return aside === "code" ? (
-          <CodePanel build={buildSnippet} tabs={tabs} unsupported={active.kind === "ws" || active.kind === "grpc" ? "A snippet isn't available for this request type." : undefined} />
+          <CodePanel build={buildSnippet} tabs={tabs} unsupported={active.kind === "ws" || active.kind === "sio" || active.kind === "grpc" ? "A snippet isn't available for this request type." : undefined} />
         ) : (
           <AiPanel
             config={settings.ai}

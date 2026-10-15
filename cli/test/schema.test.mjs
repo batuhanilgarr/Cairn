@@ -56,6 +56,8 @@ const CORPUS = () => {
     "sse": tab({ kind: "sse", url: "https://x.io/events" }),
     "mcp http": tab({ kind: "mcp", url: "https://x.io/mcp", mcp: { transport: "http", command: "", args: "", env: [] } }),
     "mcp stdio": tab({ kind: "mcp", url: "", mcp: { transport: "stdio", command: "npx", args: "-y server", env: [kv("TOKEN", "{{t}}")] } }),
+    "socket.io": tab({ kind: "sio", url: "https://x.io", sio: { namespace: "/chat", path: "/rt/", auth: '{"token":"t"}', event: "message", composer: '[{"a":1}]', ack: true, messages: [{ id: "1", name: "Join", event: "join", body: '["lobby"]' }] } }),
+    "socket.io (minimal)": tab({ kind: "sio", url: "https://x.io", sio: { namespace: "", path: "", auth: "", event: "", composer: "", ack: false, messages: [] } }),
     "grpc reflection": tab({ kind: "grpc", url: "x.io:443", grpc: { source: "reflection", protoFiles: [], importPaths: [], method: "a.B/C", message: "{}", tls: false } }),
     "grpc proto": tab({ kind: "grpc", url: "x.io:443", grpc: { source: "proto", protoFiles: ["a.proto"], importPaths: ["."], method: "a.B/C", message: '{"x":1}', tls: true } }),
     "examples": tab({ url: "https://x.io", examples: [{ id: "1", name: "OK", status: 200, headers: [kv("Content-Type", "application/json")], body: '{"ok":true}', delayMs: 250 }, { id: "2", name: "Empty", status: 204, headers: [], body: "", delayMs: 0 }] }),
