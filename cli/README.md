@@ -49,3 +49,13 @@ npx cairn scan . --format json
 ```
 
 It reads the YAML files you commit (requests, folder defaults, environments) and reports credentials written into them: known token formats (GitHub, AWS, Stripe, Google, Slack, OpenAI/Anthropic-style keys, JWTs, private keys), literal values under names like `password`, `token`, `apiKey`, `Authorization`, secrets in a URL, and a repository whose `.gitignore` is missing `.cairn/`. Output shows a masked preview only. Silence a line with a `# cairn-ignore` comment. Use it as a pre-commit hook or a CI step. Values already committed in Git history are not searched: rotate them.
+
+## Export OpenAPI
+
+```sh
+npx cairn export openapi ./my-collection -o api.yaml      # or api.json
+npx cairn export openapi ./my-collection --env Prod        # use Prod's baseUrl as the server
+npx cairn export openapi ./my-collection/invoices          # just one folder
+```
+
+Requests become operations, folders become tags, saved examples become responses, and auth settings (including what folders inherit) become security schemes. `{{baseUrl}}` becomes the server (or a server variable when no value is known). gRPC, WebSocket, SSE and MCP requests can't be described in OpenAPI and are skipped with a note. Credentials are never written: auth values are left out and sensitive fields in examples are replaced by `<redacted>`.

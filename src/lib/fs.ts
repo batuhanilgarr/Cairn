@@ -27,6 +27,9 @@ export const join = (...parts: string[]) => parts.join("/").replace(/\/+/g, "/")
 export const dirname = (p: string) => p.slice(0, p.lastIndexOf("/"));
 export const basename = (p: string) => p.slice(p.lastIndexOf("/") + 1);
 
+/** Ask where to save a file. Returns the chosen path, or null if cancelled. */
+export const askSavePath = (title: string, defaultPath: string) => saveDialog({ title, defaultPath });
+
 /** Ask where to save, then write the response body. Returns the chosen path, or null if cancelled. */
 export async function saveResponse(name: string, body: { base64?: string | null; text?: string; bodyId?: number | null }): Promise<string | null> {
   const path = await saveDialog({ defaultPath: name, title: "Save response" });

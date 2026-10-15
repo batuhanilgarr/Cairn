@@ -60,6 +60,9 @@ const SENSITIVE = /(pass(?:word|wd)?|pwd|secret|token|api[_-]?key|apikey|access[
 const NOT_A_VALUE = /(url|uri|endpoint|path|name|header|prefix|scheme|type|mode|location|field|place|method|source|expires|expiry|ttl|lifetime|length|count|enabled|required|file|policy|style|format)$/i;
 const PLACEHOLDER = /^(x+|\*+|\.{3}|<.*>|\$\{.*\}|\$[A-Za-z_]\w*|your[-_ ].*|change[-_ ]?me|example.*|sample.*|dummy.*|placeholder.*|redacted|todo|tbd|secret|password|passwd|token|null|none|undefined|true|false|test|testing|abc|abc123|123456|string|value)$/i;
 
+/** True for names like password, token or apiKey (but not tokenUrl or authScheme). */
+export const isSensitiveName = (name: string) => SENSITIVE.test(name) && !NOT_A_VALUE.test(name);
+
 const unquote = (v: string) => v.replace(/^(["'])(.*)\1$/, "$2").trim();
 const looksLikeValue = (v: string, min: number) => {
   if (v.length < min || PLACEHOLDER.test(v) || v.includes("{{") || v === "|" || v === ">" || v === "|-" || v === ">-") return false;

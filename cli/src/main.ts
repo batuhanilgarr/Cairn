@@ -4,7 +4,8 @@ import { parseArgs } from "node:util";
 import { executeRequest } from "../../src/lib/pipeline";
 import { setNetwork } from "../../src/lib/net";
 import { atLeast, formatFindings, scanDirectory, SEVERITIES } from "./scan";
-import { effectiveEnv, linkTarget, loadChain, loadEnvironments, parseRequest, readCollectionName } from "../../src/lib/collection";
+import { buildOpenApi, collectExportItems, toJson, toYaml } from "../../src/lib/openapiExport";
+import { effectiveEnv, linkTarget, loadChain, loadDefaults, loadEnvironments, parseRequest, readCollectionName } from "../../src/lib/collection";
 import { listFilesRecursive } from "../../src/lib/fs";
 import type { Environment, RequestTab, TestResult } from "../../src/lib/types";
 import type { Layer } from "../../src/lib/inherit";
@@ -16,6 +17,9 @@ const HELP = `cairn ${VERSION}: run Cairn collections from the command line
 
 Usage
   cairn run <collection | folder | request.req.yaml> [options]
+  cairn export openapi [folder] [-o file] [--format yaml|json] [--env name]
+      Write the collection as an OpenAPI 3.0.3 document: requests become operations, folders tags, saved examples
+      responses, auth settings security schemes. Credentials are never written. The log goes to stderr when the spec goes to stdout.
   cairn scan [folder] [--fail-on high|medium|low|never] [--format text|json]
       Look for credentials that would be committed (tokens, passwords, keys in request files, folder defaults and
       environments). Prints masked previews only. Exit code 1 when something at or above --fail-on (default medium)
@@ -243,13 +247,40 @@ async function main(argv: string[]): Promise<number> {
       iterations: { type: "string", short: "n" }, bail: { type: "boolean" }, delay: { type: "string" }, timeout: { type: "string" },
       insecure: { type: "boolean", short: "k" }, "no-cookies": { type: "boolean" }, proxy: { type: "string" }, ca: { type: "string" },
       junit: { type: "string" }, json: { type: "string" }, html: { type: "string" }, "no-color": { type: "boolean" },
-      "fail-on": { type: "string" }, format: { type: "string" },
+      "fail-on": { type: "string" }, format: { type: "string" }, out: { type: "string", short: "o" },
       help: { type: "boolean", short: "h" }, version: { type: "boolean", short: "v" },
     },
   });
   if (values.version) return console.log(VERSION), 0;
   const [cmd, target] = positionals;
   if (values.help || !cmd) return console.log(HELP), cmd || values.help ? 0 : 2;
+  if (cmd === "export") {
+    if (target !== "openapi") throw new UsageError("Try: cairn export openapi <collection> [-o file] [--format yaml|json] [--env name]");
+    const dir = path.resolve(positionals[2] ?? ".");
+    if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) throw new UsageError(`Not a folder: ${positionals[2] ?? "."}`);
+    const fmt = values.format ?? (values.out?.toLowerCase().endsWith(".json") ? "json" : "yaml");
+    if (fmt !== "yaml" && fmt !== "json") throw new UsageError(`--format expects yaml or json, got "${fmt}"`);
+    const root = findRoot(dir).split(path.sep).join("/");
+    const name = (await readCollectionName(root)) ?? path.basename(root);
+    // variables that can name the server: collection defaults and the chosen environment, never secrets
+    const vars: Record<string, string> = {};
+    for (const v of (await loadDefaults(root)).vars ?? []) if (v.enabled && v.key) vars[v.key] = v.value;
+    const envs = await loadEnvironments(root);
+    const pick = values.env ? envs.find((e) => e.name.toLowerCase() === values.env!.toLowerCase() || path.basename(e.file ?? "").replace(/\.env\.yaml$/, "") === values.env) : envs.length === 1 ? envs[0] : undefined;
+    if (values.env && !pick) throw new UsageError(`No environment "${values.env}". Available: ${envs.map((e) => e.name).join(", ") || "none"}`);
+    for (const v of effectiveEnv(envs, pick)?.vars ?? []) if (v.enabled && v.key && !v.secret) vars[v.key] = v.value;
+    const { items, unreadable } = await collectExportItems(root, name);
+    const here = dir.split(path.sep).join("/");
+    const { doc, notes, operations } = buildOpenApi(items.filter((i) => i.file === here || i.file.startsWith(here + "/")), { title: name, vars });
+    const text = fmt === "json" ? toJson(doc) : toYaml(doc);
+    if (values.out) fs.writeFileSync(values.out, text);
+    else process.stdout.write(text);
+    for (const f of unreadable) notes.push(`Couldn't read ${path.relative(root, f)}.`);
+    const log = values.out ? console.log : console.error;
+    log(`${operations} operation${operations === 1 ? "" : "s"} exported${values.out ? ` to ${values.out}` : ""}.`);
+    for (const n of notes) log(dim(`  ${n}`));
+    return 0;
+  }
   if (cmd === "scan") {
     const failOn = (values["fail-on"] ?? "medium") as string;
     if (failOn !== "never" && !SEVERITIES.includes(failOn as never)) throw new UsageError(`--fail-on expects high, medium, low or never, got "${failOn}"`);
@@ -260,7 +291,7 @@ async function main(argv: string[]): Promise<number> {
     else console.log(formatFindings(findings, { red, yellow, dim, bold, green }));
     return failOn !== "never" && findings.some((f) => atLeast(f, failOn as "high")) ? 1 : 0;
   }
-  if (cmd !== "run") throw new UsageError(`Unknown command "${cmd}". Try: cairn run <collection> or cairn scan <collection>`);
+  if (cmd !== "run") throw new UsageError(`Unknown command "${cmd}". Try: cairn run, cairn scan or cairn export openapi`);
   if (!target) throw new UsageError("Tell me what to run: cairn run <collection | folder | request.req.yaml>");
 
   const vars: Record<string, string> = {};

@@ -865,6 +865,7 @@ for (const width of [760, 1360]) {
     try {
       await page.hover(".side-title, .side-head, .side-body");
       await page.locator('button[aria-label="More collection actions"]').first().click({ force: true });
+      const menuItems = await page.getByRole("menuitem").allTextContents();
       await page.getByRole("menuitem", { name: /Scan for secrets/ }).click();
       await page.waitForSelector(".dialog.scan .scan-row");
       const first = await page.evaluate((t) => {
@@ -884,6 +885,7 @@ for (const width of [760, 1360]) {
       const envText = await page.evaluate(() => [...document.querySelectorAll(".side-body input, .side-body select")].map((e) => e.value).join(" | "));
       await check(async () => {
         assert.deepEqual(errors, []);
+        assert.ok(menuItems.some((t) => /Export OpenAPI/.test(t)), `the collection menu should offer Export OpenAPI: ${menuItems.join(" | ")}`);
         assert.equal(first.rows, 1, `one finding expected: ${first.text}`);
         assert.match(first.kind, /GitHub token/);
         assert.ok(!first.leaks, "the scan dialog (or the page) must never show the whole secret");

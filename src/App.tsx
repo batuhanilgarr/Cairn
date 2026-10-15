@@ -38,6 +38,7 @@ import { BinaryView, suggestFileName } from "./BinaryView";
 import { BigBodyView, bigFind } from "./BigBodyView";
 import { bodyText } from "./lib/bigbody";
 import { SecretScanModal, type ScanState } from "./SecretScanModal";
+import { buildOpenApi, collectExportItems, toJson, toYaml } from "./lib/openapiExport";
 import { applyFix, checkGitignore, scanText, type Finding } from "./lib/secrets";
 import { dotenvName, parseDotenv } from "./lib/dotenv";
 import { formatFilterValues, runFilter } from "./lib/filter";
@@ -63,6 +64,7 @@ import {
   makeDir,
   pickAnyFile,
   pathExists,
+  askSavePath,
   pickFile,
   pickFolder,
   saveResponse,
@@ -1120,6 +1122,27 @@ export default function App() {
     for (const t of tabs) if (t.file) setLabel(t.file, pillOf(t) + (t.linkTo ? "|link" : ""));
   }, [tabs]);
 
+  /** Write the collection as an OpenAPI 3.0.3 document (YAML, or JSON when the file name ends in .json). */
+  const exportOpenApi = () =>
+    guard(async () => {
+      if (!collection) return;
+      const file = await askSavePath("Export OpenAPI", `${slug(collection.name) || "api"}.openapi.yaml`);
+      if (!file) return;
+      const { items, unreadable } = await collectExportItems(collection.root, collection.name);
+      // variables that can name the server: collection defaults and the current environment, never secrets
+      const vars: Record<string, string> = {};
+      for (const v of (await loadDefaults(collection.root)).vars ?? []) if (v.enabled && v.key) vars[v.key] = v.value;
+      for (const v of env?.vars ?? []) if (v.enabled && v.key && !v.secret) vars[v.key] = v.value;
+      const { doc, notes, operations } = buildOpenApi(items, { title: collection.name, vars });
+      if (!operations) return void (await info("Nothing to export", "This collection has no HTTP or GraphQL requests an OpenAPI document can describe."));
+      await writeText(file, file.toLowerCase().endsWith(".json") ? toJson(doc) : toYaml(doc));
+      for (const f of unreadable) notes.push(`Couldn't read ${f.slice(collection.root.length + 1)}.`);
+      await info(
+        `Exported ${operations} operation${operations === 1 ? "" : "s"}`,
+        [`Saved to ${file.split("/").pop()}. Credentials are not included.`, ...notes.slice(0, 8), ...(notes.length > 8 ? [`…and ${notes.length - 8} more notes.`] : [])].join("\n"),
+      );
+    });
+
   /* ------------------------------ secret scan ------------------------------ */
 
   const runScan = async (keepNote?: string) => {
@@ -1259,6 +1282,7 @@ export default function App() {
     "duplicate-tab": () => addTab({ ...active, id: uid(), file: null, saved: null, name: "New request" }),
     "next-tab": () => nextTab(1),
     "prev-tab": () => nextTab(-1),
+    "export-openapi": () => (collection ? void exportOpenApi() : void info("No collection open", "Open a collection to export it.")),
     "scan-secrets": () => (collection ? void runScan() : void info("No collection open", "Open a collection to scan its files for secrets.")),
     "run-collection": () => (collection ? void runFolder(collection.root, `Run ${collection.name}`) : void info("No collection open", "Open a collection to run its requests.")),
     palette: () => setPaletteOpen(true),
@@ -1365,6 +1389,7 @@ export default function App() {
     { id: "a:import", group: "Action", title: "Import OpenAPI, Postman, Bruno…", run: () => fire("import") },
     { id: "a:run", group: "Action", title: "Run collection", run: () => fire("run-collection") },
     { id: "a:scan", group: "Action", title: "Scan for secrets", run: () => fire("scan-secrets") },
+    { id: "a:openapi", group: "Action", title: "Export OpenAPI", run: () => fire("export-openapi") },
     { id: "a:mock", group: "Action", title: mockPort ? `Mock server (running on :${mockPort})` : "Mock server…", run: () => fire("mock") },
     { id: "a:diff", group: "Action", title: "Compare responses of this request", run: () => (hist.length > 1 ? setDiffOpen(true) : flash("Send the request at least twice to compare responses")) },
     { id: "a:code", group: "Action", title: "Show or hide the code snippet panel", hint: "⇧⌘G", run: () => fire("codegen") },
@@ -1472,6 +1497,7 @@ export default function App() {
                         items={[
                           { label: "Import…", hint: "OpenAPI, Postman, Bruno", onClick: importMenu },
                           { label: "Collection settings…", hint: "variables, headers, auth, scripts", onClick: () => openDefaults(collection.root, `Defaults for “${collection.name}”`) },
+                          { label: "Export OpenAPI…", hint: "a spec from your requests", onClick: () => fire("export-openapi") },
                           { label: "Scan for secrets…", hint: "before you commit", onClick: () => fire("scan-secrets") },
                           { label: mockPort ? `Mock server (running on :${mockPort})` : "Mock server…", onClick: () => fire("mock") },
                           "sep",
