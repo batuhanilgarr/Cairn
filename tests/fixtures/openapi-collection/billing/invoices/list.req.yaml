@@ -1,0 +1,24 @@
+name: List invoices
+method: GET
+url: '{{baseUrl}}/v1/invoices?limit=10&status=open'
+auth:
+  mode: inherit
+params:
+  - key: expand
+    value: customer
+    enabled: true
+examples:
+  - id: e1
+    name: OK
+    status: 200
+    headers:
+      - key: Content-Type
+        value: application/json
+    body: '{"data": [{"id": "inv_1", "amount": 12900, "paid": false, "customer": {"id": "cus_1"}}], "has_more": false}'
+  - id: e2
+    name: Unauthorized
+    status: 401
+    headers:
+      - key: Content-Type
+        value: application/json
+    body: '{"error": "unauthorized"}'

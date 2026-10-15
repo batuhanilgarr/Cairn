@@ -1,0 +1,3 @@
+name: Ping
+method: GET
+url: '{{baseUrl}}/ping'

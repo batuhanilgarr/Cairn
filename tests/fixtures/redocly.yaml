@@ -1,0 +1,8 @@
+# Ruleset for checking the OpenAPI that Cairn exports. The opinionated style rules are off because they ask Cairn to
+# invent content it doesn't have (a license, a 4XX response, a non-example.com server); every structural rule stays on.
+extends:
+  - recommended
+rules:
+  no-server-example.com: off
+  info-license: off
+  operation-4xx-response: off

@@ -1,0 +1,19 @@
+name: Create invoice
+method: POST
+url: '{{baseUrl}}/v1/invoices'
+auth:
+  mode: inherit
+body:
+  mode: json
+  content: |-
+    {
+      "customer": "{{customerId}}",
+      "amount": 12900,
+      "currency": "usd",
+      "lines": [{"sku": "a", "qty": 2}],
+      "password": "should-not-leak-1234"
+    }
+tests:
+  - kind: status
+    op: eq
+    value: "201"

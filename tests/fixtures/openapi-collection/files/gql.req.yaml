@@ -1,0 +1,9 @@
+name: Me
+type: graphql
+url: '{{baseUrl}}/graphql'
+auth:
+  mode: inherit
+graphql:
+  query: '{ me { id name } }'
+  variables: '{"id": 1}'
+  operation: Me

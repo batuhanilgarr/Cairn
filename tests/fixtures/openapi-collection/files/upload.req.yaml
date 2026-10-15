@@ -1,0 +1,16 @@
+name: Upload
+method: POST
+url: '{{baseUrl}}/v1/files'
+auth:
+  mode: inherit
+body:
+  mode: multipart
+  parts:
+    - key: title
+      value: report
+      enabled: true
+      kind: text
+    - key: file
+      value: /tmp/report.pdf
+      enabled: true
+      kind: file

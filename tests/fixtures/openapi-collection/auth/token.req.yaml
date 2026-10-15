@@ -1,0 +1,8 @@
+name: Token
+method: POST
+url: '{{baseUrl}}/oauth/token'
+auth:
+  mode: none
+body:
+  mode: form
+  content: grant_type=client_credentials&scope=read

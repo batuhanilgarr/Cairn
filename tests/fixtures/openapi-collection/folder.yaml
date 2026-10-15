@@ -1,0 +1,6 @@
+auth:
+  mode: bearer
+  token: '{{token}}'
+headers:
+  - key: X-Team
+    value: core

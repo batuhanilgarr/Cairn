@@ -55,5 +55,6 @@ npm run tauri dev      # run the app
 npm run tauri build    # produce a .app / .dmg (the .app is about 10 MB)
 npm run build --prefix cli   # the CI runner: see cli/README.md
 npm run test:ui        # layout checks in real Chrome: many sizes, light/dark, panels open/closed (also runs in CI)
+npm run test:openapi   # exports a fixture collection and validates the result with Redocly (needs network; runs in CI)
 npm run bench:ui       # rendering benchmark: 10,000-request collection, 5 and 50 MB responses
 ```

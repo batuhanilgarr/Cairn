@@ -65,9 +65,10 @@ test("a request becomes an operation: path, query, headers, tags, operationId", 
   assert.equal(op.summary, "List invoices");
   assert.equal(op.operationId, "listInvoices");
   assert.deepEqual(op.tags, ["billing / invoices"]);
-  assert.deepEqual(op.parameters.map((p) => [p.in, p.name, p.example]), [["query", "limit", "10"], ["query", "status", "open"], ["query", "expand", "customer"], ["header", "X-Trace", "abc"]]);
+  assert.deepEqual(op.parameters.map((p) => [p.in, p.name, p.example]), [["query", "limit", 10], ["query", "status", "open"], ["query", "expand", "customer"], ["header", "X-Trace", "abc"]], "examples are typed like their schema: 10, not \"10\"");
   assert.equal(op.parameters[0].schema.type, "integer");
-  assert.deepEqual(doc.tags, [{ name: "billing / invoices" }]);
+  assert.deepEqual(doc.tags, [{ name: "billing / invoices", description: "Requests in the “billing / invoices” folder." }]);
+  assert.deepEqual(op.security, [], "a request with no auth says so explicitly");
 });
 
 test("an unresolved {{baseUrl}} becomes a server variable; path variables become required path parameters", () => {
@@ -222,4 +223,14 @@ test("CLI: cairn export openapi reads a collection with folder defaults, links a
   assert.deepEqual(Object.keys(sub.paths).sort(), ["/ping", "/v1/invoices"], "exporting a folder exports only its requests");
   assert.notEqual((await sh(["export", "openapi", dir, "--format", "xml"])).code, 0);
   assert.notEqual((await sh(["export", "swagger", dir])).code, 0);
+});
+
+test("a link and the request it points at are exported once", () => {
+  const shared = { tab: req({ name: "Ping", method: "GET", url: "https://x.io/ping" }), folder: ["shared"], file: "/c/shared/ping.req.yaml" };
+  const link = (file) => ({ tab: { ...req({ name: "Ping", method: "GET", url: "https://x.io/ping" }), linkTo: "/c/shared/ping.req.yaml" }, folder: ["a"], file });
+  const both = X.buildOpenApi([shared, link("/c/a/ping.req.yaml"), link("/c/b/ping.req.yaml")], { title: "T" });
+  assert.equal(both.operations, 1);
+  assert.deepEqual(both.notes, []);
+  const onlyLinks = X.buildOpenApi([link("/c/a/ping.req.yaml"), link("/c/b/ping.req.yaml")], { title: "T" });
+  assert.equal(onlyLinks.operations, 1, "two links to one shared request that is outside the export");
 });

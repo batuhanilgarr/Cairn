@@ -1,0 +1,8 @@
+name: With OAuth
+method: GET
+url: '{{baseUrl}}/v1/me'
+auth:
+  mode: oauth2
+  grant: client_credentials
+  tokenUrl: https://auth.example.com/token
+  scope: read write

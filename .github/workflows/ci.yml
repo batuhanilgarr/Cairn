@@ -16,6 +16,8 @@ jobs:
       - name: CLI
         working-directory: cli
         run: npm ci && npm run typecheck && npm test
+      - name: The exported OpenAPI is valid (Redocly)
+        run: npm run test:openapi
   rust:
     runs-on: macos-14
     steps:
