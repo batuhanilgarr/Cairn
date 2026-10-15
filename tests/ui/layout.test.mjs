@@ -974,3 +974,129 @@ test("import from clipboard: preview first, then import; wrong content says why;
     await context.close();
   }
 });
+
+test("split view: two tabs side by side, each with its own request and response; focus follows the click", async () => {
+  const { page, context, errors, check } = await open({ width: 1360 }, "split view");
+  try {
+    const pane = (i) => page.locator(".pane").nth(i);
+    const send = async (i, url) => {
+      await pane(i).locator(".url-cell").click();
+      await page.keyboard.press("Meta+a");
+      await page.keyboard.press("Control+a");
+      await page.keyboard.type(url);
+      await pane(i).locator(".urlbar > .btn.primary").click();
+      await pane(i).locator(".panel.res .pill").waitFor();
+    };
+    const info = () => page.evaluate(() => ({
+      panes: [...document.querySelectorAll(".pane")].map((p) => ({ focus: p.classList.contains("focus"), url: p.querySelector(".url-cell")?.textContent ?? "", pill: !!p.querySelector(".panel.res .pill"), w: Math.round(p.getBoundingClientRect().width), sendOk: (() => { const b = p.querySelector(".urlbar > .btn.primary")?.getBoundingClientRect(); const r = p.getBoundingClientRect(); return !!b && b.left >= r.left - 1 && b.right <= r.right + 1 && b.width > 0; })() })),
+      split: !!document.querySelector(".panes.split"),
+      metaVisible: [...document.querySelectorAll(".pane")].map((p) => { const nav = p.querySelector(".panel.res .subtabs"); const meta = nav?.querySelector(".meta"); if (!nav || !meta) return true; const n = nav.getBoundingClientRect(); return [...meta.children].filter((c) => getComputedStyle(c).display !== "none").every((c) => { const r = c.getBoundingClientRect(); return r.left >= n.left - 1 && r.right <= n.right + 1; }); }),
+      tabs: [...document.querySelectorAll(".tabstrip .tab")].map((t) => ({ title: t.querySelector(".tab-title").textContent, on: t.classList.contains("on"), inSplit: t.classList.contains("in-split") })),
+      over: document.documentElement.scrollWidth - innerWidth,
+    }));
+    // one request with a response, then split
+    await page.click(".url-cell");
+    await page.keyboard.type("https://api.example.com/v1/left");
+    await page.click(".urlbar > .btn.primary");
+    await page.waitForSelector(".panel.res .pill");
+    const single = await info();
+    await page.keyboard.press("Control+\\");
+    await page.waitForSelector(".panes.split");
+    await page.waitForTimeout(300);
+    const split = await info();
+    // work in the right pane: focus flips, the left pane keeps its request and its response
+    await send(1, "https://api.example.com/v1/right");
+    const afterRight = await info();
+    fs.mkdirSync(SHOTS, { recursive: true });
+    await page.screenshot({ path: path.join(SHOTS, "split-view.png") });
+    const v = await axeViolations(page);
+    // click back into the left pane
+    await pane(0).locator(".url-cell").click();
+    await page.waitForTimeout(200);
+    const backLeft = await info();
+    // a new tab replaces the focused pane
+    await page.keyboard.press("Control+t");
+    await page.waitForTimeout(300);
+    const withNew = await info();
+    // end the split with the keyboard
+    await page.keyboard.press("Control+\\");
+    await page.waitForTimeout(300);
+    const ended = await info();
+    await check(async () => {
+      assert.deepEqual(errors, []);
+      assert.equal(single.panes.length, 1);
+      assert.ok(!single.split);
+      assert.equal(split.panes.length, 2, "⌘\\ should open a second pane");
+      assert.ok(split.split);
+      assert.deepEqual(split.panes.map((p) => p.focus), [true, false], "the left pane keeps focus when the split opens");
+      assert.ok(split.panes[0].pill, "the left pane still shows its response");
+      assert.ok(split.panes.every((p) => p.sendOk), "every pane keeps its own Send button inside it");
+      assert.ok(split.panes.every((p) => p.w > 500), `each pane needs room: ${split.panes.map((p) => p.w)}`);
+      assert.ok(Math.abs(split.panes[0].w - split.panes[1].w) <= 2, "the panes share the width");
+      assert.ok(split.tabs.some((t) => t.inSplit) && split.tabs.some((t) => t.on), "the tab strip marks both tabs");
+      assert.deepEqual(afterRight.panes.map((p) => p.focus), [false, true], "clicking into the right pane focuses it");
+      assert.ok(afterRight.panes[1].pill, "the right pane shows its own response");
+      assert.match(afterRight.panes[0].url, /v1\/left/);
+      assert.match(afterRight.panes[1].url, /v1\/right/);
+      assert.ok(afterRight.over <= 0, "the page overflows sideways");
+      assert.deepEqual(afterRight.metaVisible, [true, true], "the status and timing must stay fully visible in each pane");
+      assert.deepEqual(v.map((x) => `${x.id}: ${x.where.join(" | ")}`), [], "accessibility violations in split view");
+      assert.deepEqual(backLeft.panes.map((p) => p.focus), [true, false], "clicking the left pane focuses it again");
+      assert.equal(withNew.panes.length, 2, "a new tab while split replaces the focused pane, the split stays");
+      assert.ok(!/v1\/left/.test(withNew.panes[0].url), "the new tab took the focused (left) pane");
+      assert.match(withNew.panes[1].url, /v1\/right/, "the other pane is untouched");
+      assert.equal(ended.panes.length, 1, "⌘\\ again ends the split");
+      assert.ok(!ended.split);
+    });
+  } finally {
+    await context.close();
+  }
+});
+
+test("split view: too narrow for two panes, only the focused one shows and the tab strip switches", async () => {
+  const { page, context, errors, check } = await open({ width: 760 }, "narrow split");
+  try {
+    await page.click(".url-cell");
+    await page.keyboard.type("https://api.example.com/v1/one");
+    await page.keyboard.press("Control+\\");
+    await page.waitForSelector(".panes.split");
+    await page.waitForTimeout(300);
+    const m = await page.evaluate(() => ({ visible: [...document.querySelectorAll(".pane")].map((p) => getComputedStyle(p).display !== "none" && p.getBoundingClientRect().width > 0), over: document.documentElement.scrollWidth - innerWidth }));
+    await page.locator(".tabstrip .tab-main").nth(1).click();
+    await page.waitForTimeout(250);
+    const swapped = await page.evaluate(() => [...document.querySelectorAll(".pane")].map((p) => getComputedStyle(p).display !== "none" && p.getBoundingClientRect().width > 0));
+    await check(async () => {
+      assert.deepEqual(errors, []);
+      assert.deepEqual(m.visible, [true, false], "only the focused pane is shown in a narrow window");
+      assert.ok(m.over <= 0, "the page overflows sideways");
+      assert.deepEqual(swapped, [false, true], "choosing the other tab in the strip shows the other pane");
+    });
+  } finally {
+    await context.close();
+  }
+});
+
+test("split view: the tab menu offers to open a tab to the right and to close the split", async () => {
+  const { page, context, errors, check } = await open({ width: 1360 }, "split tab menu");
+  try {
+    await page.keyboard.press("Control+t");
+    await page.waitForTimeout(250);
+    await page.locator(".tabstrip .tab").first().click({ button: "right" });
+    const before = await page.getByRole("menuitem").allTextContents();
+    await page.getByRole("menuitem", { name: /Open to the right/ }).click();
+    await page.waitForSelector(".panes.split");
+    await page.locator(".tabstrip .tab").first().click({ button: "right" });
+    const during = await page.getByRole("menuitem").allTextContents();
+    await page.getByRole("menuitem", { name: /Close split/ }).click();
+    await page.waitForTimeout(250);
+    const ended = await page.locator(".pane").count();
+    await check(async () => {
+      assert.deepEqual(errors, []);
+      assert.ok(before.some((t) => /Open to the right/.test(t)), before.join(" | "));
+      assert.ok(during.some((t) => /Close split/.test(t)), during.join(" | "));
+      assert.equal(ended, 1);
+    });
+  } finally {
+    await context.close();
+  }
+});

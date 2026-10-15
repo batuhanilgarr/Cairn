@@ -43,7 +43,7 @@ import { isHar, parseHar } from "./lib/har";
 import { PasteImportModal } from "./PasteImportModal";
 import { applyFix, checkGitignore, scanText, type Finding } from "./lib/secrets";
 import { dotenvName, parseDotenv } from "./lib/dotenv";
-import { formatFilterValues, runFilter } from "./lib/filter";
+import { formatFilterValues, runFilter, type FilterResult } from "./lib/filter";
 import { parseJsonSafe } from "./lib/assert";
 import { parseSetCookie } from "./lib/cookies";
 import { GrpcPanel, type GrpcSchema } from "./GrpcPanel";
@@ -57,7 +57,7 @@ import { executeRequest, prepareRequest, resolveOAuth, withSession } from "./lib
 import { buildRequest, dayLabel } from "./lib/util";
 import { DYNAMIC_DESCRIPTIONS } from "./lib/dynamic";
 import { MultipartEditor } from "./MultipartEditor";
-import { getToken, tokenKey, type TokenCache } from "./lib/oauth";
+import { getToken, tokenKey, type TokenCache, type TokenInfo } from "./lib/oauth";
 import {
   basename,
   dirname,
@@ -138,6 +138,62 @@ const defaultEnvs: Environment[] = [
   { id: "env-local", name: "Local", vars: [emptyKV()] },
 ];
 
+
+/* ---- what a pane shows about its tab: pure, so a second pane can show a tab that is not the active one ---- */
+type ResLike = ResponseData | { error: string } | null | undefined;
+type Derived = { resLang: Lang; setCookies: ReturnType<typeof parseSetCookie>[]; resBody: { pretty: string | null; text: string } | null };
+const EMPTY_DERIVED: Derived = { resLang: "text", setCookies: [], resBody: null };
+const derivedCache = new WeakMap<object, Derived>();
+const parsedCache = new WeakMap<object, unknown>();
+
+function derivedOf(response: ResLike): Derived {
+  if (!response || "error" in response) return EMPTY_DERIVED;
+  const hit = derivedCache.get(response);
+  if (hit) return hit;
+  const ct = (response.headers.find(([k]) => k.toLowerCase() === "content-type")?.[1] ?? "").toLowerCase();
+  let resLang: Lang = "text";
+  if (ct.includes("json") || (response.bodyId == null && /^\s*[[{]/.test(response.body.slice(0, 20)))) resLang = "json";
+  else if (ct.includes("html")) resLang = "html";
+  else if (ct.includes("xml") || /^\s*<\?xml/.test(response.body.slice(0, 40))) resLang = "xml";
+  else if (ct.includes("javascript")) resLang = "js";
+  const setCookies = response.headers.filter(([k]) => k.toLowerCase() === "set-cookie").map(([, v]) => parseSetCookie(v));
+  const resBody = response.bodyId != null ? { pretty: null, text: "" } : { pretty: resLang === "xml" ? tryPrettyXml(response.body) : tryPrettyJson(response.body), text: response.body };
+  const d = { resLang, setCookies, resBody };
+  derivedCache.set(response, d);
+  return d;
+}
+
+function parsedBodyOf(response: ResLike): unknown {
+  if (!response || "error" in response || response.bodyBase64 || response.bodyId != null) return undefined;
+  if (!parsedCache.has(response)) parsedCache.set(response, parseJsonSafe(response.body));
+  return parsedCache.get(response);
+}
+
+/** Everything the request and response panels need to draw one tab. The active pane gets a few extras (see mainView). */
+type PaneView = {
+  active: RequestTab;
+  sections: ReqSection[];
+  section: ReqSection;
+  showWelcome: boolean;
+  isStreamKind: boolean;
+  streamState: StreamState;
+  streamStatus: StreamState["status"];
+  hist: HistEntry[];
+  viewIdx: number | null;
+  response: ResLike;
+  run: RunOutput | null | undefined;
+  resLang: Lang;
+  setCookies: Derived["setCookies"];
+  resBody: Derived["resBody"];
+  resFilter: string;
+  filterable: boolean;
+  parsedBody: unknown;
+  filtered: FilterResult | null;
+  counts: { params: number; headers: number };
+  inherited: ReturnType<typeof applyDefaults> | null;
+  oauthToken: TokenInfo | undefined;
+};
+
 export default function App() {
   const [tabs, setTabs] = useState<RequestTab[]>(() => {
     const t = load<RequestTab[]>("rq.tabs", []).map(normalizeTab);
@@ -151,7 +207,7 @@ export default function App() {
   const [loading, setLoading] = useState<Record<string, boolean>>({});
   const [reqSection, setReqSection] = useState<ReqSection>("params");
   const [resSection, setResSection] = useState<ResSection>("body");
-  const [resFilter, setResFilter] = useState("");
+  const [resFilters, setResFilters] = useState<Record<string, string>>({});
   const [side, setSide] = useState<SideSection>(() => load("rq.side", "collections"));
   const [collection, setCollection] = useState<Collection | null>(() => load("rq.collection", null));
   const [tree, setTree] = useState<TreeNode[]>([]);
@@ -204,26 +260,55 @@ export default function App() {
   const closedTabs = useRef<RequestTab[]>([]);
   const [scan, setScan] = useState<ScanState | null>(null);
   const [pasteImport, setPasteImport] = useState(false);
+  /** Split view: two tabs side by side. `active` is whichever pane has focus. */
+  const [pair, setPair] = useState<{ left: string; right: string } | null>(null);
+  const paneSide = useRef<"left" | "right">("left");
   const [tabMenu, setTabMenu] = useState<{ id: string; x: number; y: number } | null>(null);
   const [dragTab, setDragTab] = useState<{ id: string; over: string | null } | null>(null);
 
   const active = tabs.find((t) => t.id === activeId) ?? tabs[0];
   const envRaw = envs.find((e) => e.id === envId);
   const env = useMemo(() => effectiveEnv(envs, envRaw), [envs, envRaw]);
-  const sections = SECTIONS[active?.kind ?? "http"];
-  const section: ReqSection = sections.includes(reqSection) ? reqSection : sections[0];
   const isBlank = (t: RequestTab) =>
     t.kind === "http" && !t.url.trim() && !t.body && !t.file && t.params.every((r) => !r.key) && t.headers.every((r) => !r.key) &&
     (t.authMode === "none" || t.authMode === "inherit") && !t.preScript && !t.postScript && !t.assertions.length && !t.examples.length;
-  const showWelcome = !!active && isBlank(active) && !responses[active.id] && !loading[active.id] && !streams[active.id];
-  const isStreamKind = active?.kind === "ws" || active?.kind === "sse" || active?.kind === "grpc" || active?.kind === "mcp";
-  const streamState = (active && streams[active.id]) || EMPTY_STREAM;
-  const streamStatus = streamState.status;
-  const hist = (active && respHist[active.id]) || [];
-  const viewIdx = active ? (viewing[active.id] ?? null) : null;
-  const latestResponse = active ? responses[active.id] : null;
-  const response = viewIdx !== null && hist[viewIdx] ? hist[viewIdx].response : latestResponse;
-  const run = active ? runs[active.id] : null;
+  const setResFilter = (v: string) => setResFilters((m) => ({ ...m, [active.id]: v }));
+
+  /** What the panels need to draw `t`, whether or not it is the active tab. */
+  const viewOf = (t: RequestTab): PaneView => {
+    const kinds = SECTIONS[t.kind ?? "http"];
+    const hist = respHist[t.id] ?? [];
+    const viewIdx = viewing[t.id] ?? null;
+    const response: ResLike = viewIdx !== null && hist[viewIdx] ? hist[viewIdx].response : responses[t.id];
+    const d = derivedOf(response);
+    const filterText = resFilters[t.id] ?? "";
+    const parsedBody = parsedBodyOf(response);
+    const filterable = !!response && !("error" in response) && !response.bodyBase64 && response.bodyId == null && d.resLang === "json";
+    return {
+      active: t,
+      sections: kinds,
+      section: kinds.includes(reqSection) ? reqSection : kinds[0],
+      showWelcome: isBlank(t) && !responses[t.id] && !loading[t.id] && !streams[t.id],
+      isStreamKind: t.kind === "ws" || t.kind === "sse" || t.kind === "grpc" || t.kind === "mcp",
+      streamState: streams[t.id] || EMPTY_STREAM,
+      streamStatus: (streams[t.id] || EMPTY_STREAM).status,
+      hist,
+      viewIdx,
+      response,
+      run: runs[t.id],
+      ...d,
+      resFilter: filterText,
+      filterable,
+      parsedBody,
+      filtered: filterable && filterText.trim() && parsedBody !== undefined ? runFilter(parsedBody, filterText) : null,
+      counts: { params: t.params.filter((p) => p.enabled && p.key).length, headers: t.headers.filter((p) => p.enabled && p.key).length },
+      inherited: null,
+      oauthToken: undefined,
+    };
+  };
+  const baseView = viewOf(active);
+  const { hist, response, resBody } = baseView;
+
 
   useEffect(() => {
     tabsRef.current = tabs;
@@ -1090,6 +1175,8 @@ export default function App() {
   };
 
   const oauthToken = effOAuth ? tokensRef.current.get(tokenKey(resolveOAuth(effOAuth, withSession(env, sessionRef.current, baseVars)))) : undefined;
+  /** The active pane also knows its inherited defaults and OAuth token; the other pane shows them once it is focused. */
+  const mainView: PaneView = { ...baseView, inherited, oauthToken };
 
   const getTokenNow = async () => {
     setOauthBusy(true);
@@ -1253,6 +1340,34 @@ export default function App() {
       await refreshTree();
     });
 
+  /* --------------------------- split view (two panes) --------------------------- */
+
+  const split = pair && pair.left !== pair.right && tabs.some((t) => t.id === pair.left) && tabs.some((t) => t.id === pair.right) ? pair : null;
+  const focusPane = (id: string) => {
+    if (id !== activeId) setActiveId(id);
+  };
+  // A tab opened or chosen while split replaces the pane that had focus; closing one of the two ends the split.
+  useEffect(() => {
+    if (!pair || !active) return;
+    if (!split) return setPair(null);
+    if (active.id === split.left) paneSide.current = "left";
+    else if (active.id === split.right) paneSide.current = "right";
+    else setPair(paneSide.current === "right" ? { left: split.left, right: active.id } : { left: active.id, right: split.right });
+  }, [active?.id, pair, split]);
+
+  /** Put `id` in a second pane next to the active tab (or end the split when it is already open). */
+  const splitWith = (id?: string) => {
+    if (split) return setPair(null);
+    let other = id && id !== active.id ? id : tabs[(tabs.findIndex((t) => t.id === active.id) + 1) % tabs.length]?.id;
+    if (!other || other === active.id) {
+      const fresh = newTab();
+      setTabs((ts) => [...ts, fresh]);
+      other = fresh.id;
+    }
+    paneSide.current = "left";
+    setPair({ left: active.id, right: other });
+  };
+
   const closeMany = (ids: string[]) => ids.forEach(closeTab);
   const reopenTab = () => {
     const t = closedTabs.current.shift();
@@ -1281,6 +1396,7 @@ export default function App() {
       { label: "Close others", disabled: tabs.length < 2, onClick: () => closeMany(tabs.filter((x) => x.id !== id).map((x) => x.id)) },
       { label: "Close tabs to the right", disabled: i >= tabs.length - 1, onClick: () => closeMany(tabs.slice(i + 1).map((x) => x.id)) },
       "sep" as const,
+      { label: split && (id === split.left || id === split.right) ? "Close split" : "Open to the right", hint: "⌘\\", onClick: () => splitWith(id) },
       { label: "Duplicate", onClick: () => t && addTab({ ...t, id: uid(), file: null, saved: null, preview: false, linkTo: undefined, name: "New request" }) },
       { label: "Move left", disabled: i <= 0, onClick: () => moveTab(id, i - 1) },
       { label: "Move right", disabled: i >= tabs.length - 1, onClick: () => moveTab(id, i + 1) },
@@ -1314,6 +1430,7 @@ export default function App() {
       v.focus();
       openSearchPanel(v);
     },
+    "split-view": () => splitWith(),
     "reopen-tab": reopenTab,
     "close-others": () => closeMany(tabs.filter((x) => x.id !== active.id).map((x) => x.id)),
     "tab-left": () => nudgeTab(-1),
@@ -1354,7 +1471,7 @@ export default function App() {
   }, [fire]);
 
   useEffect(() => {
-    const map: Record<string, string> = { Enter: "send", s: "save", t: "new-request", w: "close-tab", k: "palette", l: "focus-url", b: "toggle-sidebar", d: "duplicate-tab", ",": "settings", "/": "shortcuts", o: "open-collection", "=": "zoom-in", "-": "zoom-out", "0": "zoom-reset" };
+    const map: Record<string, string> = { Enter: "send", s: "save", t: "new-request", w: "close-tab", k: "palette", l: "focus-url", b: "toggle-sidebar", d: "duplicate-tab", "\\": "split-view", ",": "settings", "/": "shortcuts", o: "open-collection", "=": "zoom-in", "-": "zoom-out", "0": "zoom-reset" };
     const onKey = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
       if (e.shiftKey && e.key.toLowerCase() === "g") {
@@ -1420,6 +1537,7 @@ export default function App() {
     { id: "a:new", group: "Action", title: "New request", hint: "⌘T", run: () => fire("new-request") },
     { id: "a:save", group: "Action", title: "Save request", hint: "⌘S", run: () => fire("save") },
     { id: "a:dup", group: "Action", title: "Duplicate tab", hint: "⌘D", run: () => fire("duplicate-tab") },
+    { id: "a:split", group: "Action", title: split ? "Close split view" : "Split view: two tabs side by side", hint: "⌘\\", run: () => fire("split-view") },
     { id: "a:reopen", group: "Action", title: "Reopen closed tab", hint: "⇧⌘T", run: () => fire("reopen-tab") },
     { id: "a:others", group: "Action", title: "Close other tabs", run: () => fire("close-others") },
     { id: "a:left", group: "Action", title: "Move tab left", run: () => fire("tab-left") },
@@ -1449,13 +1567,6 @@ export default function App() {
   ];
 
 
-  const counts = useMemo(
-    () => ({
-      params: active?.params.filter((p) => p.enabled && p.key).length ?? 0,
-      headers: active?.headers.filter((p) => p.enabled && p.key).length ?? 0,
-    }),
-    [active],
-  );
 
   /** What {{variables}} resolve to right now (secrets masked), for highlighting and hover. */
   const varMap = useMemo<VarMap>(() => {
@@ -1467,35 +1578,481 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [env, tick, baseVars]);
 
-  const resLang: Lang = useMemo(() => {
-    if (!response || "error" in response) return "text";
-    const ct = (response.headers.find(([k]) => k.toLowerCase() === "content-type")?.[1] ?? "").toLowerCase();
-    if (ct.includes("json") || (response.bodyId == null && /^\s*[[{]/.test(response.body.slice(0, 20)))) return "json";
-    if (ct.includes("html")) return "html";
-    if (ct.includes("xml") || /^\s*<\?xml/.test(response.body.slice(0, 40))) return "xml";
-    if (ct.includes("javascript")) return "js";
-    return "text";
-  }, [response]);
 
-  const setCookies = useMemo(
-    () => (!response || "error" in response ? [] : response.headers.filter(([k]) => k.toLowerCase() === "set-cookie").map(([, v]) => parseSetCookie(v))),
-    [response],
-  );
 
-  const resBody = useMemo(() => {
-    if (!response || "error" in response) return null;
-    if (response.bodyId != null) return { pretty: null, text: "" };
-    const pretty = resLang === "xml" ? tryPrettyXml(response.body) : tryPrettyJson(response.body);
-    return { pretty, text: response.body };
-  }, [response, resLang]);
 
-  // The response filter (jq or JSONPath) only applies to JSON that was shipped to the page, not to big or binary bodies.
-  const filterable = !!response && !("error" in response) && !response.bodyBase64 && response.bodyId == null && resLang === "json";
-  const parsedBody = useMemo(() => (filterable && response && !("error" in response) ? parseJsonSafe(response.body) : undefined), [filterable, response]);
-  const filtered = useMemo(() => {
-    if (!filterable || !resFilter.trim() || parsedBody === undefined) return null;
-    return runFilter(parsedBody, resFilter);
-  }, [filterable, parsedBody, resFilter]);
+
+  /** The urlbar, request panel and response panel of one tab. Handlers act on the active tab, so a pane takes focus on first touch. */
+  const renderPane = (v: PaneView, focused: boolean) => {
+    const { active, sections, section, showWelcome, isStreamKind, streamState, streamStatus, hist, viewIdx, response, run, resLang, setCookies, resBody, resFilter, filterable, parsedBody, filtered, counts, inherited, oauthToken } = v;
+    return (
+      <>
+        <div className="urlbar">
+          <div className="reqbar">
+          <select className="kind" value={active.kind} onChange={(e) => patch({ kind: e.target.value as RequestKind })} title="Request type">
+            {(["http", "graphql", "sse", "ws", "grpc", "mcp"] as RequestKind[]).map((k) => (
+              <option key={k} value={k}>{KIND_LABEL[k]}</option>
+            ))}
+          </select>
+          {(active.kind === "http" || active.kind === "sse") && (
+          <select className={`method m-${active.method}`} aria-label="HTTP method" value={active.method} onChange={(e) => patch({ method: e.target.value })}>
+            {METHODS.map((m) => (
+              <option key={m}>{m}</option>
+            ))}
+          </select>
+          )}
+          {active.kind === "mcp" && active.mcp.transport === "stdio" ? (
+            <div className="url-static" title="Configured in the Explore tab">
+              <span className="muted">stdio</span> {active.mcp.command || "command"} {active.mcp.args}
+            </div>
+          ) : (
+          <div className="url-cell">
+          <CodeEditor
+            singleLine
+            className="url"
+            value={active.url}
+            vars={varMap}
+            editorRef={focused ? urlView : undefined}
+            placeholder={active.kind === "mcp" ? "https://example.com/mcp" : active.kind === "grpc" ? "localhost:50051  or  grpcs://api.example.com:443" : active.kind === "ws" ? "wss://example.com/socket" : "Enter URL, or paste a cURL command  (use {{variables}})"}
+            onSubmit={send}
+            onPasteText={(text) => {
+              if (!looksLikeCurl(text)) return false;
+              applyCurl(text);
+              return true;
+            }}
+            onChange={(v) => (looksLikeCurl(v) ? applyCurl(v) : patch({ url: v, params: rowsFromUrl(v, active.params) }))}
+          />
+          </div>
+          )}
+          </div>
+          <button
+            className={`btn primary ${isStreamKind && streamStatus === "open" ? "stop" : ""}`}
+            onClick={() => (isStreamKind && (streamStatus === "open" || streamStatus === "connecting") ? void disconnectStream(active) : void send())}
+            disabled={loading[active.id]}
+          >
+            {isStreamKind ? (streamStatus === "open" || streamStatus === "connecting" ? (active.kind === "grpc" ? "Cancel" : "Disconnect") : active.kind === "grpc" ? "Invoke" : "Connect") : loading[active.id] ? "Sending…" : "Send"}
+            <kbd>⌘↵</kbd>
+          </button>
+          {active.kind !== "ws" && active.kind !== "grpc" && (
+            <button className={`btn code-btn ${aside === "code" ? "on" : ""}`} onClick={() => fire("codegen")} title="Code snippet (⇧⌘G)" aria-label="Toggle code snippet panel" aria-pressed={aside === "code"}>
+              <IconCode />
+            </button>
+          )}
+          <button className={`btn code-btn ${aside === "ai" ? "on" : ""}`} onClick={() => fire("ai")} title="Ask AI about this request (⇧⌘A)" aria-label="Toggle AI assistant" aria-pressed={aside === "ai"}>
+            <IconSpark />
+          </button>
+        </div>
+
+        {showWelcome ? (
+          <div className="launch">
+            <Welcome
+              hasCollection={!!collection}
+              onCurl={() => fire("focus-url")}
+              onSample={(k) => {
+                if (k === "get") patch({ url: "https://httpbin.org/get?hello=cairn", method: "GET" });
+                else if (k === "post") patch({ url: "https://httpbin.org/post", method: "POST", bodyMode: "json", body: '{\n  "name": "Cairn",\n  "message": "Hello"\n}' });
+                else patch({ kind: "graphql", url: "https://countries.trevorblades.com/graphql", gql: { query: "query {\n  country(code: \"TR\") {\n    name\n    capital\n    languages { name }\n  }\n}", variables: "", operation: "" } });
+              }}
+              onNewCollection={() => fire("new-collection")}
+              onOpenCollection={() => fire("open-collection")}
+              onImport={() => fire("import")}
+              onPalette={() => fire("palette")}
+              onSettings={() => fire("settings")}
+            />
+          </div>
+        ) : (
+        <>
+        <section className="panel req" ref={focused ? reqPanel : undefined} style={{ flex: `0 0 ${splitPct}%` }}>
+          {active.linkTo && active.file && (
+            <div className="link-note" role="note">
+              <span title={active.linkTo}>⛓ Linked: edits change the shared request ({active.linkTo.split("/").slice(-2).join("/")}) wherever it is used.</span>
+              <button className="btn small" onClick={() => unlinkNode({ name: basename(active.file!), path: active.file!, isDir: false, children: [] })}>Make a separate copy</button>
+            </div>
+          )}
+          <nav className="subtabs">
+            {sections.map((s) => (
+              <button key={s} className={section === s ? "on" : ""} onClick={() => setReqSection(s)}>
+                {s === "headers" && active.kind === "grpc" ? "Metadata" : s[0].toUpperCase() + s.slice(1)}
+                {s === "params" && counts.params > 0 && <i>{counts.params}</i>}
+                {s === "headers" && counts.headers > 0 && <i>{counts.headers}</i>}
+                {s === "scripts" && (active.preScript.trim() || active.postScript.trim()) && <i>●</i>}
+                {s === "body" && active.bodyMode !== "none" && <i>●</i>}
+                {s === "auth" && active.authMode !== "none" && <i>●</i>}
+                {s === "examples" && active.examples.length > 0 && <i>{active.examples.length}</i>}
+                {s === "tests" && active.assertions.length + active.captures.length > 0 && <i>{active.assertions.length + active.captures.length}</i>}
+              </button>
+            ))}
+          </nav>
+          <div className={`panel-body ${section === "body" || reqSection === "scripts" ? "fill" : ""}`}>
+            {section === "params" && <KVEditor rows={active.params} onChange={(params) => patch({ params, url: urlFromRows(active.url, params) })} keyPlaceholder="Parameter" />}
+            {section === "headers" && (
+              <>
+                <KVEditor rows={active.headers} onChange={(headers) => patch({ headers })} />
+                {inherited && inherited.inheritedHeaders.length > 0 && (
+                  <div className="inherited">
+                    <h4>Inherited</h4>
+                    {inherited.inheritedHeaders.map((h, i) => (
+                      <div key={i} className={`inh-row ${h.overridden ? "over" : ""}`}>
+                        <code>{h.key}</code>
+                        <span>{h.value}</span>
+                        <em>{h.overridden ? "overridden here" : h.from}</em>
+                      </div>
+                    ))}
+                    <p className="muted small">To switch one off for this request, add the same header above and untick it.</p>
+                  </div>
+                )}
+              </>
+            )}
+            {section === "body" && (
+              <div className="col">
+                <div className="row">
+                  {(["none", "json", "text", "form", "multipart", "binary"] as BodyMode[]).map((m) => (
+                    <label key={m} className="radio">
+                      <input type="radio" checked={active.bodyMode === m} onChange={() => patch({ bodyMode: m, ...(m === "binary" && active.bodyMode !== "binary" ? { body: "" } : {}) })} />
+                      {m === "form" ? "form-urlencoded" : m === "multipart" ? "multipart/form-data" : m}
+                    </label>
+                  ))}
+                  {active.bodyMode === "json" && (
+                    <button
+                      className="btn small"
+                      onClick={() => {
+                        const p = tryPrettyJson(active.body);
+                        if (p) patch({ body: p });
+                      }}
+                    >
+                      Prettify
+                    </button>
+                  )}
+                </div>
+                {active.bodyMode === "none" ? (
+                  <p className="muted">This request has no body.</p>
+                ) : active.bodyMode === "multipart" ? (
+                  <MultipartEditor rows={active.formParts} onChange={(formParts) => patch({ formParts })} />
+                ) : active.bodyMode === "binary" ? (
+                  <div className="row">
+                    <button
+                      className="btn"
+                      onClick={async () => {
+                        const f = await pickAnyFile("Choose the file to send as the request body");
+                        if (f) patch({ body: f });
+                      }}
+                    >
+                      Choose file…
+                    </button>
+                    <span className="muted">{active.body ? active.body : "Sends the file's bytes as the raw body."}</span>
+                  </div>
+                ) : (
+                  <div className="editor-slot">
+                    <CodeEditor
+                      className="boxed"
+                      value={active.body}
+                      lang={active.bodyMode === "json" ? "json" : "text"}
+                      vars={varMap}
+                      placeholder={active.bodyMode === "form" ? "key=value&other=value" : active.bodyMode === "json" ? '{ "hello": "world" }' : ""}
+                      onChange={(v) => patch({ body: v })}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+            {section === "explore" && (
+              <McpPanel
+                tab={active}
+                patch={patch}
+                vars={varMap}
+                connected={streamStatus === "open"}
+                connecting={streamStatus === "connecting"}
+                info={mcpInfo[active.id]}
+                call={(method, params) => mcpRequest(active.id, method, params)}
+              />
+            )}
+            {section === "examples" && <div className="examples-wrap"><ExamplesPanel tab={active} patch={patch} vars={varMap} /></div>}
+            {section === "message" && active.kind === "grpc" && (
+              <GrpcPanel
+                tab={active}
+                patch={patch}
+                vars={varMap}
+                schema={grpcSchemas[active.id]}
+                active={streamStatus === "open" || streamStatus === "connecting"}
+                onLoad={loadGrpcSchema}
+                onSendMore={async (text) => {
+                  const body = interpolate(text, withSession(env, sessionRef.current, baseVars));
+                  try {
+                    await grpcSend(active.id, body);
+                    pushStream(active.id, [{ dir: "out", label: active.grpc.method.split("/")[1] ?? "request", text: body, size: new TextEncoder().encode(body).length }]);
+                  } catch (e) {
+                    pushStream(active.id, [{ dir: "sys", label: "error", text: String(e), tone: "error" }]);
+                  }
+                }}
+                onEndStream={() => void grpcEnd(active.id).then(() => pushStream(active.id, [{ dir: "sys", label: "half-close", text: "You ended the request stream" }])).catch(() => {})}
+              />
+            )}
+            {section === "message" && active.kind === "ws" && (
+              <WsPanel tab={active} patch={patch} vars={varMap} connected={streamStatus === "open"} onSend={(b, m) => void sendWsMessage(b, m)} onAskName={() => ask("Save message", "", "Save", "Give this message a short name.")} />
+            )}
+            {section === "query" && (
+              <GraphQLPanel
+                tab={active}
+                patch={patch}
+                vars={varMap}
+                schema={cachedSchema(active.url)}
+                fetching={!!gqlFetching[active.id]}
+                schemaError={gqlError[active.id] ?? null}
+                onFetchSchema={fetchSchema}
+              />
+            )}
+            {section === "auth" && (
+              <AuthPanel tab={active} patch={patch} token={oauthToken} busy={oauthBusy} onGetToken={getTokenNow} onResetToken={resetToken} inheritFrom={active.file && collection ? (inherited?.authFrom ?? null) : undefined} />
+            )}
+            {section === "scripts" && <ScriptsPanel tab={active} patch={patch} vars={varMap} />}
+            {section === "tests" && <TestsPanel tab={active} patch={patch} />}
+            {section === "settings" && (
+              <div className="req-settings">
+                {active.kind === "ws" && (
+                  <SettingRow label="Subprotocols" hint="Comma-separated, offered in the handshake.">
+                    <input className="cell" placeholder="graphql-transport-ws, chat" value={active.ws.protocols} spellCheck={false} onChange={(e) => patch({ ws: { ...active.ws, protocols: e.target.value } })} />
+                  </SettingRow>
+                )}
+                {active.kind === "grpc" && (
+                  <SettingRow label="Use TLS" hint="When the address has no grpc:// or grpcs:// prefix.">
+                    <Switch label="Use TLS" checked={active.grpc.tls} onChange={(tls) => patch({ grpc: { ...active.grpc, tls } })} />
+                  </SettingRow>
+                )}
+                {active.kind !== "ws" && active.kind !== "grpc" && (
+                  <SettingRow label="Follow redirects" hint="Follow 3xx responses automatically.">
+                    <Switch label="Follow redirects" checked={active.followRedirects} onChange={(followRedirects) => patch({ followRedirects })} />
+                  </SettingRow>
+                )}
+                <SettingRow label="Verify TLS certificate" hint="Turn off for a dev server with a self-signed certificate.">
+                  <Switch label="Verify TLS certificate" checked={!active.insecure} onChange={(verify) => patch({ insecure: !verify })} />
+                </SettingRow>
+                <SettingRow label="Timeout" hint="Milliseconds before the request gives up.">
+                  <input className="cell narrow" type="number" value={active.timeoutMs} onChange={(e) => patch({ timeoutMs: Number(e.target.value) || 30000 })} aria-label="Timeout in milliseconds" />
+                </SettingRow>
+              </div>
+            )}
+          </div>
+        </section>
+
+        <div className="splitter" onMouseDown={startDrag} role="separator" aria-orientation="horizontal" />
+
+        {isStreamKind ? (
+          <div className="stream-wrap" ref={focused ? (resPanel as unknown as React.RefObject<HTMLDivElement>) : undefined}>
+            <StreamLog
+              state={streamState}
+              onClear={() => setStreams((m) => ({ ...m, [active.id]: { ...(m[active.id] ?? EMPTY_STREAM), entries: [], dropped: 0, sent: 0, received: 0 } }))}
+              emptyHint={active.kind === "ws" ? "Connect, then send a message. Everything in both directions shows up here." : active.kind === "mcp" ? "Connect to a server. Every JSON-RPC message in both directions is logged here, plus the server's stderr for local commands." : active.kind === "grpc" ? "Pick a method and hit Invoke. Requests, responses, headers and the final status appear here." : "Connect to start receiving events."}
+            />
+          </div>
+        ) : (
+        <section className="panel res" ref={focused ? resPanel : undefined}>
+          <nav className="subtabs">
+            <button className={resSection === "body" ? "on" : ""} onClick={() => setResSection("body")}>
+              Response
+            </button>
+            <button className={resSection === "headers" ? "on" : ""} onClick={() => setResSection("headers")}>
+              Headers{response && !("error" in response) && <i>{response.headers.length}</i>}
+            </button>
+            {setCookies.length > 0 && (
+              <button className={resSection === "cookies" ? "on" : ""} onClick={() => setResSection("cookies")}>
+                Cookies<i>{setCookies.length}</i>
+              </button>
+            )}
+            <button className={resSection === "tests" ? "on" : ""} onClick={() => setResSection("tests")}>
+              Tests
+              {run && run.tests.length > 0 && (
+                <i className={run.tests.some((t) => !t.passed) ? "bad" : "good"}>
+                  {run.tests.filter((t) => t.passed).length}/{run.tests.length}
+                </i>
+              )}
+              {run?.scriptError && !run.tests.length && <i className="bad">!</i>}
+            </button>
+            {run && run.logs.length > 0 && (
+              <button className={resSection === "console" ? "on" : ""} onClick={() => setResSection("console")}>
+                Console<i>{run.logs.length}</i>
+              </button>
+            )}
+            <div className="spacer" />
+            {hist.length > 1 && (
+              <>
+                <select className="hist-pick" value={viewIdx ?? "latest"} title="Earlier responses to this request" onChange={(e) => setViewing((v) => ({ ...v, [active.id]: e.target.value === "latest" ? null : Number(e.target.value) }))}>
+                  <option value="latest">Latest</option>
+                  {hist.slice(0, -1).map((h, i) => (
+                    <option key={h.n} value={i}>{new Date(h.at).toTimeString().slice(0, 8)} · {h.response.status} · {h.response.timeMs} ms</option>
+                  )).reverse()}
+                </select>
+                <button className="btn small" onClick={() => setDiffOpen(true)} title="Compare two responses side by side">Compare</button>
+              </>
+            )}
+            {response && !("error" in response) && (
+              <div className="meta">
+                <span className={`pill ${statusClass(response.status)}`}>
+                  {response.status} {response.statusText}
+                </span>
+                <span title="Total time">{response.timeMs} ms</span>
+                {response.ttfbMs !== undefined && <span className="muted opt" title="Time to first byte">TTFB {response.ttfbMs} ms</span>}
+                <span className="size">{formatBytes(response.sizeBytes)}</span>
+                <span className="opt">{response.httpVersion}</span>
+              </div>
+            )}
+          </nav>
+          {viewIdx !== null && hist[viewIdx] && (
+            <div className="view-banner">
+              Showing an earlier response from {new Date(hist[viewIdx].at).toLocaleTimeString()}.
+              <button className="link" onClick={() => setViewing((v) => ({ ...v, [active.id]: null }))}>Back to latest</button>
+            </div>
+          )}
+          <div className={`panel-body ${resSection === "body" && response && !("error" in response) ? "fill" : ""}`}>
+            {loading[active.id] && <p className="muted">Sending request…</p>}
+            {!loading[active.id] && !response && active.url.trim() && (
+              <div className="empty-resp">
+                <IconInbox />
+                <b>No response yet</b>
+                <span>Press <kbd>⌘↵</kbd> or Send to run this request.</span>
+              </div>
+            )}
+            {response && "error" in response && resSection !== "tests" && resSection !== "console" && (
+              <div className="error-card" role="alert">
+                <IconAlert />
+                <div>
+                  <b>The request failed</b>
+                  <p>{response.error}</p>
+                </div>
+              </div>
+            )}
+            {resSection === "tests" && run && (
+              <div className="tests-list">
+                {run.scriptError && <pre className="err">{run.scriptError}</pre>}
+                {run.tests.length === 0 && !run.scriptError && <p className="muted">No tests ran. Add assertions in the Tests tab or <code>test()</code> calls in a script.</p>}
+                {run.tests.map((t, i) => (
+                  <div key={i} className={`test ${t.passed ? "pass" : "fail"}`}>
+                    <span>{t.passed ? "✓" : "✗"}</span>
+                    <div>
+                      {t.name}
+                      {t.error && <div className="run-err">{t.error}</div>}
+                    </div>
+                  </div>
+                ))}
+                {Object.keys(run.captured).length > 0 && (
+                  <p className="muted small">Set variables: {Object.keys(run.captured).map((k) => `{{${k}}}`).join("  ")}</p>
+                )}
+              </div>
+            )}
+            {resSection === "tests" && !run && !loading[active.id] && <p className="muted">Send the request to see test results.</p>}
+            {resSection === "console" && run && <pre className="code">{run.logs.join("\n")}</pre>}
+            {response && !("error" in response) && resSection === "body" && resBody && (
+              <>
+                <div className="row tools">
+                  {resBody.pretty && (
+                    <label className="check">
+                      <input type="checkbox" checked={rawView} onChange={(e) => setRawView(e.target.checked)} /> Raw
+                    </label>
+                  )}
+                  {response.bodyId == null && (
+                    <label className="check">
+                      <input type="checkbox" checked={wrapRes} onChange={(e) => setWrapRes(e.target.checked)} /> Wrap
+                    </label>
+                  )}
+                  {!response.bodyBase64 && (
+                    <button className="btn small" onClick={() => fire("find-in-response")} title="Search the response (⌘F)">
+                      Search
+                    </button>
+                  )}
+                  {!response.bodyBase64 && (
+                    <button className="btn small" onClick={() => guard(async () => navigator.clipboard.writeText(response.bodyId != null ? await bodyText(response.bodyId) : (resBody.pretty ?? resBody.text)))}>
+                      Copy
+                    </button>
+                  )}
+                  <button
+                    className="btn small"
+                    onClick={() =>
+                      guard(async () => {
+                        const name = suggestFileName(active.url, response.headers, response.contentType ?? "");
+                        const path = await saveResponse(name, { base64: response.bodyBase64, text: resBody.text, bodyId: response.bodyId });
+                        if (path) flash(`Saved to ${path.split("/").pop()}`);
+                      })
+                    }
+                  >
+                    Save…
+                  </button>
+                  {(active.kind === "http" || active.kind === "graphql") && (
+                    <button className="btn small" onClick={saveAsExample} title="Keep this response as a documented example; the mock server will serve it">
+                      Save as example
+                    </button>
+                  )}
+                </div>
+                {filterable && parsedBody !== undefined && (
+                  <div className="filter-row">
+                    <input
+                      className="cell filter-input"
+                      aria-label="Filter response"
+                      placeholder="Filter: $.data[*].id   or   .data | map(.id)"
+                      spellCheck={false}
+                      value={resFilter}
+                      onChange={(e) => setResFilter(e.target.value)}
+                    />
+                    {filtered && (
+                      <span className={`small ${filtered.ok ? "muted" : "bad-text"}`} role="status">
+                        {filtered.ok ? `${filtered.values.length} ${filtered.values.length === 1 ? "result" : "results"} (${filtered.syntax === "jq" ? "jq" : "JSONPath"})` : filtered.error}
+                      </span>
+                    )}
+                    {resFilter && <button className="btn small" onClick={() => setResFilter("")}>Clear</button>}
+                  </div>
+                )}
+                {response.bodyBase64 ? (
+                  <div className="editor-slot scroll"><BinaryView base64={response.bodyBase64} contentType={response.contentType ?? ""} size={response.sizeBytes} /></div>
+                ) : response.bodyId != null ? (
+                  <div className="editor-slot"><BigBodyView key={response.bodyId} id={response.bodyId} json={resLang === "json"} /></div>
+                ) : (
+                <div className="editor-slot">
+                  <CodeEditor
+                    readOnly
+                    wrap={wrapRes}
+                    lang={resLang}
+                    value={filtered?.ok ? formatFilterValues(filtered.values) : resBody.pretty && !rawView ? resBody.pretty : resBody.text}
+                    vars={undefined}
+                    editorRef={focused ? resView : undefined}
+                    className="fill"
+                  />
+                </div>
+                )}
+              </>
+            )}
+            {response && !("error" in response) && resSection === "cookies" && (
+              <table className="htable">
+                <tbody>
+                  {setCookies.map((c, i) => (
+                    <tr key={i}>
+                      <td>{c.name}</td>
+                      <td>
+                        {c.value}
+                        {c.attrs.length > 0 && <div className="muted small">{c.attrs.join(" · ")}</div>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            {response && !("error" in response) && resSection === "headers" && (
+              <table className="htable">
+                <tbody>
+                  {response.headers.map(([k, v], i) => (
+                    <tr key={i}>
+                      <td>{k}</td>
+                      <td>{v}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </section>
+        )}
+        </>
+        )}
+      </>
+    );
+  };
 
   return (
     <div className={`app ${sidebarOpen ? "" : "no-side"} ${aside ? "with-aside" : ""}`}>
@@ -1720,7 +2277,7 @@ export default function App() {
           {tabs.map((t) => (
             <div
               key={t.id}
-              className={`tab ${t.id === active.id ? "on" : ""} ${t.preview ? "preview" : ""} ${dragTab?.over === t.id && dragTab.id !== t.id ? "drop" : ""}`}
+              className={`tab ${t.id === active.id ? "on" : ""} ${split && t.id !== active.id && (t.id === split.left || t.id === split.right) ? "in-split" : ""} ${t.preview ? "preview" : ""} ${dragTab?.over === t.id && dragTab.id !== t.id ? "drop" : ""}`}
               draggable
               onDragStart={(e) => {
                 e.dataTransfer.effectAllowed = "move";
@@ -1795,469 +2352,17 @@ export default function App() {
           </select>
         </div>
 
-        <div className="urlbar">
-          <div className="reqbar">
-          <select className="kind" value={active.kind} onChange={(e) => patch({ kind: e.target.value as RequestKind })} title="Request type">
-            {(["http", "graphql", "sse", "ws", "grpc", "mcp"] as RequestKind[]).map((k) => (
-              <option key={k} value={k}>{KIND_LABEL[k]}</option>
-            ))}
-          </select>
-          {(active.kind === "http" || active.kind === "sse") && (
-          <select className={`method m-${active.method}`} aria-label="HTTP method" value={active.method} onChange={(e) => patch({ method: e.target.value })}>
-            {METHODS.map((m) => (
-              <option key={m}>{m}</option>
-            ))}
-          </select>
-          )}
-          {active.kind === "mcp" && active.mcp.transport === "stdio" ? (
-            <div className="url-static" title="Configured in the Explore tab">
-              <span className="muted">stdio</span> {active.mcp.command || "command"} {active.mcp.args}
-            </div>
-          ) : (
-          <div className="url-cell">
-          <CodeEditor
-            singleLine
-            className="url"
-            value={active.url}
-            vars={varMap}
-            editorRef={urlView}
-            placeholder={active.kind === "mcp" ? "https://example.com/mcp" : active.kind === "grpc" ? "localhost:50051  or  grpcs://api.example.com:443" : active.kind === "ws" ? "wss://example.com/socket" : "Enter URL, or paste a cURL command  (use {{variables}})"}
-            onSubmit={send}
-            onPasteText={(text) => {
-              if (!looksLikeCurl(text)) return false;
-              applyCurl(text);
-              return true;
-            }}
-            onChange={(v) => (looksLikeCurl(v) ? applyCurl(v) : patch({ url: v, params: rowsFromUrl(v, active.params) }))}
-          />
-          </div>
-          )}
-          </div>
-          <button
-            className={`btn primary ${isStreamKind && streamStatus === "open" ? "stop" : ""}`}
-            onClick={() => (isStreamKind && (streamStatus === "open" || streamStatus === "connecting") ? void disconnectStream(active) : void send())}
-            disabled={loading[active.id]}
-          >
-            {isStreamKind ? (streamStatus === "open" || streamStatus === "connecting" ? (active.kind === "grpc" ? "Cancel" : "Disconnect") : active.kind === "grpc" ? "Invoke" : "Connect") : loading[active.id] ? "Sending…" : "Send"}
-            <kbd>⌘↵</kbd>
-          </button>
-          {active.kind !== "ws" && active.kind !== "grpc" && (
-            <button className={`btn code-btn ${aside === "code" ? "on" : ""}`} onClick={() => fire("codegen")} title="Code snippet (⇧⌘G)" aria-label="Toggle code snippet panel" aria-pressed={aside === "code"}>
-              <IconCode />
-            </button>
-          )}
-          <button className={`btn code-btn ${aside === "ai" ? "on" : ""}`} onClick={() => fire("ai")} title="Ask AI about this request (⇧⌘A)" aria-label="Toggle AI assistant" aria-pressed={aside === "ai"}>
-            <IconSpark />
-          </button>
+        <div className={`panes ${split ? "split" : ""}`}>
+          {(split ? [split.left, split.right] : [active.id]).map((tid) => {
+            const focused = tid === active.id;
+            const t = tabs.find((x) => x.id === tid) ?? active;
+            return (
+              <div key={tid} className={`pane ${focused ? "focus" : ""}`} onMouseDownCapture={() => focusPane(tid)} onFocusCapture={() => focusPane(tid)}>
+                {renderPane(focused ? mainView : viewOf(t), focused)}
+              </div>
+            );
+          })}
         </div>
-
-        {showWelcome ? (
-          <div className="launch">
-            <Welcome
-              hasCollection={!!collection}
-              onCurl={() => fire("focus-url")}
-              onSample={(k) => {
-                if (k === "get") patch({ url: "https://httpbin.org/get?hello=cairn", method: "GET" });
-                else if (k === "post") patch({ url: "https://httpbin.org/post", method: "POST", bodyMode: "json", body: '{\n  "name": "Cairn",\n  "message": "Hello"\n}' });
-                else patch({ kind: "graphql", url: "https://countries.trevorblades.com/graphql", gql: { query: "query {\n  country(code: \"TR\") {\n    name\n    capital\n    languages { name }\n  }\n}", variables: "", operation: "" } });
-              }}
-              onNewCollection={() => fire("new-collection")}
-              onOpenCollection={() => fire("open-collection")}
-              onImport={() => fire("import")}
-              onPalette={() => fire("palette")}
-              onSettings={() => fire("settings")}
-            />
-          </div>
-        ) : (
-        <>
-        <section className="panel req" ref={reqPanel} style={{ flex: `0 0 ${splitPct}%` }}>
-          {active.linkTo && active.file && (
-            <div className="link-note" role="note">
-              <span title={active.linkTo}>⛓ Linked: edits change the shared request ({active.linkTo.split("/").slice(-2).join("/")}) wherever it is used.</span>
-              <button className="btn small" onClick={() => unlinkNode({ name: basename(active.file!), path: active.file!, isDir: false, children: [] })}>Make a separate copy</button>
-            </div>
-          )}
-          <nav className="subtabs">
-            {sections.map((s) => (
-              <button key={s} className={section === s ? "on" : ""} onClick={() => setReqSection(s)}>
-                {s === "headers" && active.kind === "grpc" ? "Metadata" : s[0].toUpperCase() + s.slice(1)}
-                {s === "params" && counts.params > 0 && <i>{counts.params}</i>}
-                {s === "headers" && counts.headers > 0 && <i>{counts.headers}</i>}
-                {s === "scripts" && (active.preScript.trim() || active.postScript.trim()) && <i>●</i>}
-                {s === "body" && active.bodyMode !== "none" && <i>●</i>}
-                {s === "auth" && active.authMode !== "none" && <i>●</i>}
-                {s === "examples" && active.examples.length > 0 && <i>{active.examples.length}</i>}
-                {s === "tests" && active.assertions.length + active.captures.length > 0 && <i>{active.assertions.length + active.captures.length}</i>}
-              </button>
-            ))}
-          </nav>
-          <div className={`panel-body ${section === "body" || reqSection === "scripts" ? "fill" : ""}`}>
-            {section === "params" && <KVEditor rows={active.params} onChange={(params) => patch({ params, url: urlFromRows(active.url, params) })} keyPlaceholder="Parameter" />}
-            {section === "headers" && (
-              <>
-                <KVEditor rows={active.headers} onChange={(headers) => patch({ headers })} />
-                {inherited && inherited.inheritedHeaders.length > 0 && (
-                  <div className="inherited">
-                    <h4>Inherited</h4>
-                    {inherited.inheritedHeaders.map((h, i) => (
-                      <div key={i} className={`inh-row ${h.overridden ? "over" : ""}`}>
-                        <code>{h.key}</code>
-                        <span>{h.value}</span>
-                        <em>{h.overridden ? "overridden here" : h.from}</em>
-                      </div>
-                    ))}
-                    <p className="muted small">To switch one off for this request, add the same header above and untick it.</p>
-                  </div>
-                )}
-              </>
-            )}
-            {section === "body" && (
-              <div className="col">
-                <div className="row">
-                  {(["none", "json", "text", "form", "multipart", "binary"] as BodyMode[]).map((m) => (
-                    <label key={m} className="radio">
-                      <input type="radio" checked={active.bodyMode === m} onChange={() => patch({ bodyMode: m, ...(m === "binary" && active.bodyMode !== "binary" ? { body: "" } : {}) })} />
-                      {m === "form" ? "form-urlencoded" : m === "multipart" ? "multipart/form-data" : m}
-                    </label>
-                  ))}
-                  {active.bodyMode === "json" && (
-                    <button
-                      className="btn small"
-                      onClick={() => {
-                        const p = tryPrettyJson(active.body);
-                        if (p) patch({ body: p });
-                      }}
-                    >
-                      Prettify
-                    </button>
-                  )}
-                </div>
-                {active.bodyMode === "none" ? (
-                  <p className="muted">This request has no body.</p>
-                ) : active.bodyMode === "multipart" ? (
-                  <MultipartEditor rows={active.formParts} onChange={(formParts) => patch({ formParts })} />
-                ) : active.bodyMode === "binary" ? (
-                  <div className="row">
-                    <button
-                      className="btn"
-                      onClick={async () => {
-                        const f = await pickAnyFile("Choose the file to send as the request body");
-                        if (f) patch({ body: f });
-                      }}
-                    >
-                      Choose file…
-                    </button>
-                    <span className="muted">{active.body ? active.body : "Sends the file's bytes as the raw body."}</span>
-                  </div>
-                ) : (
-                  <div className="editor-slot">
-                    <CodeEditor
-                      className="boxed"
-                      value={active.body}
-                      lang={active.bodyMode === "json" ? "json" : "text"}
-                      vars={varMap}
-                      placeholder={active.bodyMode === "form" ? "key=value&other=value" : active.bodyMode === "json" ? '{ "hello": "world" }' : ""}
-                      onChange={(v) => patch({ body: v })}
-                    />
-                  </div>
-                )}
-              </div>
-            )}
-            {section === "explore" && (
-              <McpPanel
-                tab={active}
-                patch={patch}
-                vars={varMap}
-                connected={streamStatus === "open"}
-                connecting={streamStatus === "connecting"}
-                info={mcpInfo[active.id]}
-                call={(method, params) => mcpRequest(active.id, method, params)}
-              />
-            )}
-            {section === "examples" && <div className="examples-wrap"><ExamplesPanel tab={active} patch={patch} vars={varMap} /></div>}
-            {section === "message" && active.kind === "grpc" && (
-              <GrpcPanel
-                tab={active}
-                patch={patch}
-                vars={varMap}
-                schema={grpcSchemas[active.id]}
-                active={streamStatus === "open" || streamStatus === "connecting"}
-                onLoad={loadGrpcSchema}
-                onSendMore={async (text) => {
-                  const body = interpolate(text, withSession(env, sessionRef.current, baseVars));
-                  try {
-                    await grpcSend(active.id, body);
-                    pushStream(active.id, [{ dir: "out", label: active.grpc.method.split("/")[1] ?? "request", text: body, size: new TextEncoder().encode(body).length }]);
-                  } catch (e) {
-                    pushStream(active.id, [{ dir: "sys", label: "error", text: String(e), tone: "error" }]);
-                  }
-                }}
-                onEndStream={() => void grpcEnd(active.id).then(() => pushStream(active.id, [{ dir: "sys", label: "half-close", text: "You ended the request stream" }])).catch(() => {})}
-              />
-            )}
-            {section === "message" && active.kind === "ws" && (
-              <WsPanel tab={active} patch={patch} vars={varMap} connected={streamStatus === "open"} onSend={(b, m) => void sendWsMessage(b, m)} onAskName={() => ask("Save message", "", "Save", "Give this message a short name.")} />
-            )}
-            {section === "query" && (
-              <GraphQLPanel
-                tab={active}
-                patch={patch}
-                vars={varMap}
-                schema={cachedSchema(active.url)}
-                fetching={!!gqlFetching[active.id]}
-                schemaError={gqlError[active.id] ?? null}
-                onFetchSchema={fetchSchema}
-              />
-            )}
-            {section === "auth" && (
-              <AuthPanel tab={active} patch={patch} token={oauthToken} busy={oauthBusy} onGetToken={getTokenNow} onResetToken={resetToken} inheritFrom={active.file && collection ? (inherited?.authFrom ?? null) : undefined} />
-            )}
-            {section === "scripts" && <ScriptsPanel tab={active} patch={patch} vars={varMap} />}
-            {section === "tests" && <TestsPanel tab={active} patch={patch} />}
-            {section === "settings" && (
-              <div className="req-settings">
-                {active.kind === "ws" && (
-                  <SettingRow label="Subprotocols" hint="Comma-separated, offered in the handshake.">
-                    <input className="cell" placeholder="graphql-transport-ws, chat" value={active.ws.protocols} spellCheck={false} onChange={(e) => patch({ ws: { ...active.ws, protocols: e.target.value } })} />
-                  </SettingRow>
-                )}
-                {active.kind === "grpc" && (
-                  <SettingRow label="Use TLS" hint="When the address has no grpc:// or grpcs:// prefix.">
-                    <Switch label="Use TLS" checked={active.grpc.tls} onChange={(tls) => patch({ grpc: { ...active.grpc, tls } })} />
-                  </SettingRow>
-                )}
-                {active.kind !== "ws" && active.kind !== "grpc" && (
-                  <SettingRow label="Follow redirects" hint="Follow 3xx responses automatically.">
-                    <Switch label="Follow redirects" checked={active.followRedirects} onChange={(followRedirects) => patch({ followRedirects })} />
-                  </SettingRow>
-                )}
-                <SettingRow label="Verify TLS certificate" hint="Turn off for a dev server with a self-signed certificate.">
-                  <Switch label="Verify TLS certificate" checked={!active.insecure} onChange={(verify) => patch({ insecure: !verify })} />
-                </SettingRow>
-                <SettingRow label="Timeout" hint="Milliseconds before the request gives up.">
-                  <input className="cell narrow" type="number" value={active.timeoutMs} onChange={(e) => patch({ timeoutMs: Number(e.target.value) || 30000 })} aria-label="Timeout in milliseconds" />
-                </SettingRow>
-              </div>
-            )}
-          </div>
-        </section>
-
-        <div className="splitter" onMouseDown={startDrag} role="separator" aria-orientation="horizontal" />
-
-        {isStreamKind ? (
-          <div className="stream-wrap" ref={resPanel as unknown as React.RefObject<HTMLDivElement>}>
-            <StreamLog
-              state={streamState}
-              onClear={() => setStreams((m) => ({ ...m, [active.id]: { ...(m[active.id] ?? EMPTY_STREAM), entries: [], dropped: 0, sent: 0, received: 0 } }))}
-              emptyHint={active.kind === "ws" ? "Connect, then send a message. Everything in both directions shows up here." : active.kind === "mcp" ? "Connect to a server. Every JSON-RPC message in both directions is logged here, plus the server's stderr for local commands." : active.kind === "grpc" ? "Pick a method and hit Invoke. Requests, responses, headers and the final status appear here." : "Connect to start receiving events."}
-            />
-          </div>
-        ) : (
-        <section className="panel res" ref={resPanel}>
-          <nav className="subtabs">
-            <button className={resSection === "body" ? "on" : ""} onClick={() => setResSection("body")}>
-              Response
-            </button>
-            <button className={resSection === "headers" ? "on" : ""} onClick={() => setResSection("headers")}>
-              Headers{response && !("error" in response) && <i>{response.headers.length}</i>}
-            </button>
-            {setCookies.length > 0 && (
-              <button className={resSection === "cookies" ? "on" : ""} onClick={() => setResSection("cookies")}>
-                Cookies<i>{setCookies.length}</i>
-              </button>
-            )}
-            <button className={resSection === "tests" ? "on" : ""} onClick={() => setResSection("tests")}>
-              Tests
-              {run && run.tests.length > 0 && (
-                <i className={run.tests.some((t) => !t.passed) ? "bad" : "good"}>
-                  {run.tests.filter((t) => t.passed).length}/{run.tests.length}
-                </i>
-              )}
-              {run?.scriptError && !run.tests.length && <i className="bad">!</i>}
-            </button>
-            {run && run.logs.length > 0 && (
-              <button className={resSection === "console" ? "on" : ""} onClick={() => setResSection("console")}>
-                Console<i>{run.logs.length}</i>
-              </button>
-            )}
-            <div className="spacer" />
-            {hist.length > 1 && (
-              <>
-                <select className="hist-pick" value={viewIdx ?? "latest"} title="Earlier responses to this request" onChange={(e) => setViewing((v) => ({ ...v, [active.id]: e.target.value === "latest" ? null : Number(e.target.value) }))}>
-                  <option value="latest">Latest</option>
-                  {hist.slice(0, -1).map((h, i) => (
-                    <option key={h.n} value={i}>{new Date(h.at).toTimeString().slice(0, 8)} · {h.response.status} · {h.response.timeMs} ms</option>
-                  )).reverse()}
-                </select>
-                <button className="btn small" onClick={() => setDiffOpen(true)} title="Compare two responses side by side">Compare</button>
-              </>
-            )}
-            {response && !("error" in response) && (
-              <div className="meta">
-                <span className={`pill ${statusClass(response.status)}`}>
-                  {response.status} {response.statusText}
-                </span>
-                <span title="Total time">{response.timeMs} ms</span>
-                {response.ttfbMs !== undefined && <span className="muted opt" title="Time to first byte">TTFB {response.ttfbMs} ms</span>}
-                <span>{formatBytes(response.sizeBytes)}</span>
-                <span className="opt">{response.httpVersion}</span>
-              </div>
-            )}
-          </nav>
-          {viewIdx !== null && hist[viewIdx] && (
-            <div className="view-banner">
-              Showing an earlier response from {new Date(hist[viewIdx].at).toLocaleTimeString()}.
-              <button className="link" onClick={() => setViewing((v) => ({ ...v, [active.id]: null }))}>Back to latest</button>
-            </div>
-          )}
-          <div className={`panel-body ${resSection === "body" && response && !("error" in response) ? "fill" : ""}`}>
-            {loading[active.id] && <p className="muted">Sending request…</p>}
-            {!loading[active.id] && !response && active.url.trim() && (
-              <div className="empty-resp">
-                <IconInbox />
-                <b>No response yet</b>
-                <span>Press <kbd>⌘↵</kbd> or Send to run this request.</span>
-              </div>
-            )}
-            {response && "error" in response && resSection !== "tests" && resSection !== "console" && (
-              <div className="error-card" role="alert">
-                <IconAlert />
-                <div>
-                  <b>The request failed</b>
-                  <p>{response.error}</p>
-                </div>
-              </div>
-            )}
-            {resSection === "tests" && run && (
-              <div className="tests-list">
-                {run.scriptError && <pre className="err">{run.scriptError}</pre>}
-                {run.tests.length === 0 && !run.scriptError && <p className="muted">No tests ran. Add assertions in the Tests tab or <code>test()</code> calls in a script.</p>}
-                {run.tests.map((t, i) => (
-                  <div key={i} className={`test ${t.passed ? "pass" : "fail"}`}>
-                    <span>{t.passed ? "✓" : "✗"}</span>
-                    <div>
-                      {t.name}
-                      {t.error && <div className="run-err">{t.error}</div>}
-                    </div>
-                  </div>
-                ))}
-                {Object.keys(run.captured).length > 0 && (
-                  <p className="muted small">Set variables: {Object.keys(run.captured).map((k) => `{{${k}}}`).join("  ")}</p>
-                )}
-              </div>
-            )}
-            {resSection === "tests" && !run && !loading[active.id] && <p className="muted">Send the request to see test results.</p>}
-            {resSection === "console" && run && <pre className="code">{run.logs.join("\n")}</pre>}
-            {response && !("error" in response) && resSection === "body" && resBody && (
-              <>
-                <div className="row tools">
-                  {resBody.pretty && (
-                    <label className="check">
-                      <input type="checkbox" checked={rawView} onChange={(e) => setRawView(e.target.checked)} /> Raw
-                    </label>
-                  )}
-                  {response.bodyId == null && (
-                    <label className="check">
-                      <input type="checkbox" checked={wrapRes} onChange={(e) => setWrapRes(e.target.checked)} /> Wrap
-                    </label>
-                  )}
-                  {!response.bodyBase64 && (
-                    <button className="btn small" onClick={() => fire("find-in-response")} title="Search the response (⌘F)">
-                      Search
-                    </button>
-                  )}
-                  {!response.bodyBase64 && (
-                    <button className="btn small" onClick={() => guard(async () => navigator.clipboard.writeText(response.bodyId != null ? await bodyText(response.bodyId) : (resBody.pretty ?? resBody.text)))}>
-                      Copy
-                    </button>
-                  )}
-                  <button
-                    className="btn small"
-                    onClick={() =>
-                      guard(async () => {
-                        const name = suggestFileName(active.url, response.headers, response.contentType ?? "");
-                        const path = await saveResponse(name, { base64: response.bodyBase64, text: resBody.text, bodyId: response.bodyId });
-                        if (path) flash(`Saved to ${path.split("/").pop()}`);
-                      })
-                    }
-                  >
-                    Save…
-                  </button>
-                  {(active.kind === "http" || active.kind === "graphql") && (
-                    <button className="btn small" onClick={saveAsExample} title="Keep this response as a documented example; the mock server will serve it">
-                      Save as example
-                    </button>
-                  )}
-                </div>
-                {filterable && parsedBody !== undefined && (
-                  <div className="filter-row">
-                    <input
-                      className="cell filter-input"
-                      aria-label="Filter response"
-                      placeholder="Filter: $.data[*].id   or   .data | map(.id)"
-                      spellCheck={false}
-                      value={resFilter}
-                      onChange={(e) => setResFilter(e.target.value)}
-                    />
-                    {filtered && (
-                      <span className={`small ${filtered.ok ? "muted" : "bad-text"}`} role="status">
-                        {filtered.ok ? `${filtered.values.length} ${filtered.values.length === 1 ? "result" : "results"} (${filtered.syntax === "jq" ? "jq" : "JSONPath"})` : filtered.error}
-                      </span>
-                    )}
-                    {resFilter && <button className="btn small" onClick={() => setResFilter("")}>Clear</button>}
-                  </div>
-                )}
-                {response.bodyBase64 ? (
-                  <div className="editor-slot scroll"><BinaryView base64={response.bodyBase64} contentType={response.contentType ?? ""} size={response.sizeBytes} /></div>
-                ) : response.bodyId != null ? (
-                  <div className="editor-slot"><BigBodyView key={response.bodyId} id={response.bodyId} json={resLang === "json"} /></div>
-                ) : (
-                <div className="editor-slot">
-                  <CodeEditor
-                    readOnly
-                    wrap={wrapRes}
-                    lang={resLang}
-                    value={filtered?.ok ? formatFilterValues(filtered.values) : resBody.pretty && !rawView ? resBody.pretty : resBody.text}
-                    vars={undefined}
-                    editorRef={resView}
-                    className="fill"
-                  />
-                </div>
-                )}
-              </>
-            )}
-            {response && !("error" in response) && resSection === "cookies" && (
-              <table className="htable">
-                <tbody>
-                  {setCookies.map((c, i) => (
-                    <tr key={i}>
-                      <td>{c.name}</td>
-                      <td>
-                        {c.value}
-                        {c.attrs.length > 0 && <div className="muted small">{c.attrs.join(" · ")}</div>}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-            {response && !("error" in response) && resSection === "headers" && (
-              <table className="htable">
-                <tbody>
-                  {response.headers.map(([k, v], i) => (
-                    <tr key={i}>
-                      <td>{k}</td>
-                      <td>{v}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        </section>
-        )}
-        </>
-        )}
       </main>
       {aside && (() => {
         const tabs = <AsideTabs active={aside} onSelect={setAside} onClose={() => setAside(null)} />;

@@ -106,12 +106,14 @@ export function BigBodyView({ id, json, onPrepared }: { id: number; json: boolea
   }, []);
 
   const lines = info?.lines ?? 0;
-  const totalPx = lines * LINE_HEIGHT;
-  const scaled = totalPx > MAX_SCROLL_PX;
-  const spacer = scaled ? MAX_SCROLL_PX : totalPx;
+  // At the end of the scroll the last line must sit fully inside the window, whatever the window height is.
   const visible = Math.ceil(view.h / LINE_HEIGHT) + 1;
+  const rowsFit = Math.max(1, Math.floor(view.h / LINE_HEIGHT));
+  const lastFirst = Math.max(0, lines - rowsFit);
+  const fullPx = lastFirst * LINE_HEIGHT + view.h;
+  const scaled = fullPx > MAX_SCROLL_PX;
+  const spacer = scaled ? MAX_SCROLL_PX : fullPx;
   const maxScroll = Math.max(1, spacer - view.h);
-  const lastFirst = Math.max(0, lines - visible + 1);
   const first = scaled ? Math.min(lastFirst, Math.round((view.top / maxScroll) * lastFirst)) : Math.min(lastFirst, Math.floor(view.top / LINE_HEIGHT));
 
   const measure = useCallback(() => {

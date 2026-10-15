@@ -37,7 +37,7 @@ No account, no cloud, no telemetry. Fast startup, tiny footprint.
 - **Auto-save** (optional) writes request edits to disk as you type
 - Draggable split between request and response
 - Edits made outside the app (git pull, editor) are picked up when the window regains focus
-- Tabs, request history, JSON highlighting, response headers/size/time
+- Tabs (preview tab, drag to reorder, reopen closed, **split view** with two requests side by side: ⌘\\), request history, JSON highlighting, response headers/size/time
 - Per-request: redirects, TLS verification toggle, timeout
 - `⌘↵` send, `⌘S` save, `⌘T` new tab, `⌘W` close tab
 
