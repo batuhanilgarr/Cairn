@@ -1,47 +1,71 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Cairn: the API client that lives in your repo</title>
-  <meta name="description" content="A fast, local-first API client for macOS. REST, GraphQL, gRPC, WebSocket, SSE and MCP. Every request is a small file you commit to Git, Postman collections import with their scripts, and an AI assistant runs on your own model. No account, no cloud, no telemetry.">
-  <meta property="og:title" content="Cairn: the API client that lives in your repo">
-  <meta property="og:description" content="Local-first API client for REST, GraphQL, gRPC, WebSocket, SSE and MCP. Plain-file collections, Postman import, an AI assistant on your own model, a CI runner and a mock server built in.">
-  <meta property="og:image" content="https://batuhanilgarr.github.io/Cairn/assets/og.png">
-  <meta name="twitter:card" content="summary_large_image">
-  <meta name="theme-color" content="#0b6e8a">
-  <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="styles.css">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cairn: the API client that lives in your repo</title>
+<meta name="description" content="Cairn is a fast, local-first API client for macOS. Requests are plain YAML files in Git. Import Postman, OpenAPI, HAR and WSDL. No account, no telemetry.">
+<link rel="canonical" href="https://batuhanilgarr.github.io/Cairn/">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f4f5f2" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#101517" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+<link rel="icon" href="assets/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<link rel="manifest" href="site.webmanifest">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cairn">
+<meta property="og:locale" content="en_US">
+<meta property="og:title" content="Cairn: the API client that lives in your repo">
+<meta property="og:description" content="Cairn is a fast, local-first API client for macOS. Requests are plain YAML files in Git. Import Postman, OpenAPI, HAR and WSDL. No account, no telemetry.">
+<meta property="og:url" content="https://batuhanilgarr.github.io/Cairn/">
+<meta property="og:image" content="https://batuhanilgarr.github.io/Cairn/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Cairn: the API client that lives in your repo. A stack of balanced stones above topographic lines.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Cairn: the API client that lives in your repo">
+<meta name="twitter:description" content="Cairn is a fast, local-first API client for macOS. Requests are plain YAML files in Git. Import Postman, OpenAPI, HAR and WSDL. No account, no telemetry.">
+<meta name="twitter:image" content="https://batuhanilgarr.github.io/Cairn/assets/og.png">
+<meta name="twitter:image:alt" content="Cairn: the API client that lives in your repo.">
+<script>document.documentElement.className+=" js"</script>
+<link rel="stylesheet" href="styles.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","name":"Cairn","url":"https://batuhanilgarr.github.io/Cairn/","description":"Cairn is a fast, local-first API client for macOS. Requests are plain YAML files in Git. Import Postman, OpenAPI, HAR and WSDL. No account, no telemetry.","inLanguage":"en"}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Cairn","url":"https://batuhanilgarr.github.io/Cairn/","description":"A fast, local-first API client for macOS. Requests are plain YAML files you keep in Git. REST, GraphQL, gRPC, WebSocket, SSE and MCP, a CLI for CI, a mock server and an AI assistant on your own endpoint.","applicationCategory":"DeveloperApplication","operatingSystem":"macOS 11 or later","softwareVersion":"0.3.1","downloadUrl":"https://github.com/batuhanilgarr/Cairn/releases/latest/download/Cairn-universal.dmg","releaseNotes":"https://batuhanilgarr.github.io/Cairn/changelog/","softwareHelp":"https://batuhanilgarr.github.io/Cairn/docs/","image":"https://batuhanilgarr.github.io/Cairn/assets/og.png","screenshot":"https://batuhanilgarr.github.io/Cairn/assets/app-light.webp","sameAs":["https://github.com/batuhanilgarr/Cairn"],"featureList":["Requests stored as plain YAML files","REST, GraphQL, gRPC, WebSocket, SSE and MCP","Postman, OpenAPI, HAR, WSDL, Bruno and cURL import","CLI runner for CI and a GitHub Action","Secret scanner and macOS Keychain support","Mock server and response history with diff","AI assistant on your own model endpoint"]}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is Cairn?","acceptedAnswer":{"@type":"Answer","text":"Cairn is a local-first API client for macOS. Your requests are plain YAML files in a folder you keep in Git. It sends REST, GraphQL, gRPC, WebSocket, SSE and MCP requests, runs tests and scripts, and has a command-line runner for CI."}},{"@type":"Question","name":"Is there a Postman alternative that works without an account?","acceptedAnswer":{"@type":"Answer","text":"Yes. Cairn needs no account, no sign-in and no cloud. Collections are folders on your disk. Requests go straight from your Mac to the API you call, and the only other thing that can leave your Mac is a question you ask the AI assistant, which goes to the endpoint you configured."}},{"@type":"Question","name":"Is Cairn a git-friendly API client?","acceptedAnswer":{"@type":"Answer","text":"That is the point of it. Every request is a small *.req.yaml file with no generated IDs, keys in a fixed order and bodies as literal blocks, so a changed JSON field is one changed line in a pull request. Order comes from file names, and secrets are kept out of the files. The format is documented and has published JSON Schemas."}},{"@type":"Question","name":"How do I import a Postman collection into plain files?","acceptedAnswer":{"@type":"Answer","text":"In Postman, open Settings, Data, Export Data. In Cairn, choose Import and pick that folder. Every collection, environment and your globals come across in one go: auth, folder-level variables and scripts, saved examples and pm.* scripts included. Digest, AWS and NTLM auth and pm.sendRequest are not supported yet, and the import lists everything it could not carry over."}},{"@type":"Question","name":"Can I open OpenAPI, WSDL or HAR files?","acceptedAnswer":{"@type":"Answer","text":"Yes. Cairn imports OpenAPI 3 and Swagger 2 from a URL, a file or the clipboard with a preview, WSDL 1.1 services (every SOAP operation becomes a POST with a sample envelope) and HAR recordings from a browser, in the app or with cairn import har. Bruno collections and cURL commands work too. The WSDL import has been tried against WSDL files written for our tests, not against live SOAP services."}},{"@type":"Question","name":"What does it cost?","acceptedAnswer":{"@type":"Answer","text":"Pricing and licensing are not decided yet. They will be announced on this page and in the releases. Your collections are plain files, so you are never locked in: they stay readable without Cairn."}},{"@type":"Question","name":"What does it send to your servers?","acceptedAnswer":{"@type":"Answer","text":"Nothing. There is no account, no analytics and no telemetry, and this website loads no external scripts, fonts or trackers either. The one other thing that can leave your Mac is a question you ask the AI assistant, and it goes only to the endpoint you set."}},{"@type":"Question","name":"Where are my secrets stored?","acceptedAnswer":{"@type":"Answer","text":"Variables marked as secret live in .cairn/secrets.yaml, which Cairn adds to .gitignore, or in the macOS Keychain if you choose that in Settings. Tokens fetched by OAuth stay in memory only. cairn scan looks for credentials written into the files you commit."}},{"@type":"Question","name":"Does the AI assistant need an account or a subscription?","acceptedAnswer":{"@type":"Answer","text":"No. You bring the model: Ollama running on your machine or server, or any OpenAI-compatible service you already use. Cairn adds nothing in between. A token is optional, and credentials from your requests are hidden before a question is sent."}},{"@type":"Question","name":"Does Cairn run on Windows or Linux?","acceptedAnswer":{"@type":"Answer","text":"Not yet. The app is built on Tauri, so other platforms are possible, but today it targets macOS 11 or later. The CLI already runs anywhere Node 20 does."}},{"@type":"Question","name":"Can scripts access my files?","acceptedAnswer":{"@type":"Answer","text":"In the app, scripts run in an isolated sandbox with a time limit and cannot reach your files or secrets. The CLI runs them in a Node worker, so treat CLI scripts like the rest of your CI code."}},{"@type":"Question","name":"How mature is Cairn?","acceptedAnswer":{"@type":"Answer","text":"Cairn is early software (version 0.3.1). The interface is tested in real Chrome against a stand-in for the native side, but we have not yet exercised the packaged app end to end, and the app is not signed with an Apple Developer ID, so macOS blocks the first launch. Keep your collections in Git, which you would do anyway."}}]}</script>
 </head>
 <body>
+<a class="skip" href="#main">Skip to content</a>
 <header class="nav">
-  <a class="brand" href="#top" aria-label="Cairn home"><img src="assets/logo.svg" alt="" width="28" height="28"><span>Cairn</span></a>
-  <nav aria-label="Main">
-    <a href="#run">Try it</a>
-    <a href="#files">Plain files</a>
-    <a href="#postman">Postman</a>
-    <a href="#ai">AI</a>
-    <a href="#speed">Speed</a>
-    <a href="#features">Features</a>
-    <a href="#faq">FAQ</a>
-    <a href="https://github.com/batuhanilgarr/Cairn" rel="noopener">GitHub</a>
-    <a class="btn small" href="https://github.com/batuhanilgarr/Cairn/releases/latest/download/Cairn-universal.dmg">Download</a>
-  </nav>
+  <div class="wrap navin">
+    <a class="brand" href="./" aria-label="Cairn, home"><img src="assets/logo.svg" alt="" width="28" height="28"><span>Cairn</span></a>
+    <button class="menu-btn" id="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav"><i aria-hidden="true"></i>Menu</button>
+    <nav class="nav-links" id="site-nav" aria-label="Main">
+      <a href="#features">Features</a>
+      <a href="#cli">CLI &amp; CI</a>
+      <a href="migrate-from-postman/">Migrate</a>
+      <a href="changelog/">Changelog</a>
+      <a href="docs/">Docs</a>
+      <a href="#faq">FAQ</a>
+      <a href="https://github.com/batuhanilgarr/Cairn" rel="noopener">GitHub</a>
+      <a class="btn" href="#download">Download</a>
+    </nav>
+  </div>
 </header>
-
-<main id="top">
-  <section class="hero">
+<main id="main">
+  <section class="hero" aria-labelledby="top">
     <div class="wrap hero-grid">
       <div class="hero-copy">
-        <h1>Your API requests are files.</h1>
-        <p class="lead">Cairn is a native Mac client for REST, GraphQL, gRPC, WebSocket, SSE and MCP. Every request is a small YAML file you review in a pull request, run in CI and keep for good. Bring your Postman collections, and ask your own AI model about any request. No account, no cloud, no telemetry.</p>
+        <span class="eyebrow">Local-first API client for macOS</span>
+        <h1 id="top">The API client that lives in <em>your repo.</em></h1>
+        <p class="lead">Cairn is a fast Mac app for REST, GraphQL, gRPC, WebSocket, SSE and MCP. Every request is a small YAML file you review in a pull request and run in CI. No account, no cloud, no telemetry.</p>
         <div class="cta">
           <a class="btn big" href="https://github.com/batuhanilgarr/Cairn/releases/latest/download/Cairn-universal.dmg">Download for macOS</a>
           <a class="btn big ghost" href="https://github.com/batuhanilgarr/Cairn" rel="noopener">View on GitHub</a>
         </div>
-        <p class="fine">About 11 MB. macOS 11 or later, Apple silicon and Intel.</p>
+        <p class="fine">Version 0.3.1, about 12 MB. macOS 11 or later, Apple silicon and Intel. Not yet signed with an Apple Developer ID, so the first launch needs one extra step: <a class="link" href="#download">see how</a>.</p>
       </div>
-
       <div class="cairn" role="img" aria-label="A stack of request files balanced like a trail cairn">
         <span class="stone s1"><b class="m post">POST</b> create-invoice</span>
         <span class="stone s2"><b class="m get">GET</b> list-invoices</span>
@@ -54,61 +78,81 @@
     </div>
   </section>
 
-  <section id="run" class="sec run">
+  <section class="sec-tight" aria-label="Cairn at a glance" style="padding-top:8px">
     <div class="wrap">
-      <h2 class="left">A request, run</h2>
-      <p class="sub">This is the file on disk, and what comes back. Press Send.</p>
+      <figure class="shot">
+        <picture>
+          <source media="(prefers-color-scheme: dark)" srcset="assets/app-dark.webp">
+          <img src="assets/app-light.webp" width="1800" height="1016" fetchpriority="high" alt="The Cairn window: a collection tree with auth, customers and invoices folders on the left, a POST request to /v1/invoices with a JSON body, and a 201 Created response with the returned JSON below it.">
+        </picture>
+        <figcaption>The Cairn 0.3.1 interface with sample data, captured from our UI test harness (the interface runs against a stand-in for the native side). Not a recording of the packaged app.</figcaption>
+      </figure>
+      <ul class="facts" style="margin-top:56px">
+        <li><b>No account, no telemetry</b><span>Requests go from your Mac to the API you call. Nothing else leaves.</span></li>
+        <li><b>Plain YAML in Git</b><span>No generated IDs, stable key order, bodies as literal blocks.</span></li>
+        <li><b>Runs in CI</b><span>A CLI with the same engine, JUnit, JSON and HTML reports, and a GitHub Action.</span></li>
+        <li><b>Built for big payloads</b><span>100 MB JSON responses scroll and filter without freezing, in our benchmark.</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="run" class="sec">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">Files, not a database</span>
+        <h2>A request is a file.</h2>
+        <p class="sub">This is the file on disk and what comes back. Press Send to replay the response.</p>
+      </div>
       <figure class="win" id="demo" aria-label="A request file next to the response it produces">
         <div class="win-bar"><i></i><i></i><i></i><span>payments / invoices / create-invoice.req.yaml</span></div>
         <div class="urlrow">
           <b class="m post">POST</b>
           <code class="url"><u>{{baseUrl}}</u>/v1/invoices</code>
-          <button class="send" id="send" type="button">Send <kbd>⌘↵</kbd></button>
+          <button class="send" id="send" type="button">Send <kbd>&#8984;&#8629;</kbd></button>
         </div>
         <div class="win-body">
-<pre class="file" aria-label="Request file"><span class="ln">1</span><k>name</k>: Create invoice
-<span class="ln">2</span><k>method</k>: POST
-<span class="ln">3</span><k>url</k>: <s>"{{baseUrl}}/v1/invoices"</s>
-<span class="ln">4</span><k>auth</k>:
-<span class="ln">5</span>  <k>mode</k>: inherit
-<span class="ln">6</span><k>body</k>:
-<span class="ln">7</span>  <k>mode</k>: json
-<span class="ln">8</span>  <k>content</k>: |-
+<pre class="file" aria-label="Request file"><span class="ln">1</span><span class="k">name</span>: Create invoice
+<span class="ln">2</span><span class="k">method</span>: POST
+<span class="ln">3</span><span class="k">url</span>: <span class="s">"<u>{{baseUrl}}</u>/v1/invoices"</span>
+<span class="ln">4</span><span class="k">auth</span>:
+<span class="ln">5</span>  <span class="k">mode</span>: inherit
+<span class="ln">6</span><span class="k">body</span>:
+<span class="ln">7</span>  <span class="k">mode</span>: json
+<span class="ln">8</span>  <span class="k">content</span>: |-
 <span class="ln">9</span>    {
 <span class="ln">10</span>      "customer": "{{customerId}}",
 <span class="ln">11</span>      "amount": 12900
 <span class="ln">12</span>    }
-<span class="ln">13</span><k>tests</k>:
-<span class="ln">14</span>  - <k>kind</k>: status
-<span class="ln">15</span>    <k>op</k>: eq
-<span class="ln">16</span>    <k>value</k>: <s>"201"</s></pre>
-          <div class="resp" aria-live="polite">
-            <div class="resp-head">
-              <span class="idle" id="idle">Press Send to run it</span>
-              <span class="status" id="status" hidden><b>201 Created</b><em>141 ms</em><em>312 B</em></span>
-            </div>
-<pre class="json" id="out" hidden><span class="r">{</span>
-<span class="r">  <k>"id"</k>: <s>"inv_8f2k1"</s>,</span>
-<span class="r">  <k>"status"</k>: <s>"draft"</s>,</span>
-<span class="r">  <k>"amount"</k>: <n>12900</n>,</span>
-<span class="r">  <k>"currency"</k>: <s>"usd"</s></span>
+<span class="ln">13</span><span class="k">tests</span>:
+<span class="ln">14</span>  - <span class="k">kind</span>: status
+<span class="ln">15</span>    <span class="k">op</span>: eq
+<span class="ln">16</span>    <span class="k">value</span>: <span class="s">"201"</span></pre>
+          <div class="resp">
+            <div class="resp-head"><span class="status"><b>201 Created</b><em>141 ms</em><em>312 B</em></span></div>
+<pre class="json"><span class="r">{</span>
+<span class="r">  <span class="k">"id"</span>: <span class="s">"inv_8f2k1"</span>,</span>
+<span class="r">  <span class="k">"status"</span>: <span class="s">"draft"</span>,</span>
+<span class="r">  <span class="k">"amount"</span>: <span class="n">12900</span>,</span>
+<span class="r">  <span class="k">"currency"</span>: <span class="s">"usd"</span></span>
 <span class="r">}</span></pre>
-            <p class="pass" id="pass" hidden><span>✓</span> Status equals 201</p>
+            <p class="pass"><span aria-hidden="true">&#10003;</span> Status equals 201</p>
           </div>
         </div>
       </figure>
+      <p class="fine">Illustration with sample data. The response above is not from a live server.</p>
     </div>
   </section>
 
-  <section id="files" class="sec">
-    <div class="wrap diff-grid">
+  <section id="files" class="sec" style="padding-top:0">
+    <div class="wrap split">
       <div class="prose">
         <h2>Reviews that read like code reviews</h2>
         <p>Keys are always in the same order. There are no generated IDs and no sequence numbers. Bodies are literal blocks, so a changed JSON field is one changed line in the diff.</p>
         <p>The collection is a folder. Open it in any editor, check it in, run it in CI with the CLI. If you stop using Cairn tomorrow, you still have readable files.</p>
         <ul class="plain">
-          <li>Secrets live in <code>.cairn/secrets.yaml</code>, which is git-ignored for you.</li>
           <li>Order comes from file names, never from file contents.</li>
+          <li>One request can be shared by many folders with <code>use:</code> links.</li>
+          <li>The format is documented, with <a class="link" href="docs/#schemas">published JSON Schemas</a> and <code>cairn validate</code>.</li>
           <li>Edits made outside the app are picked up when the window regains focus.</li>
         </ul>
       </div>
@@ -132,18 +176,44 @@
     </div>
   </section>
 
-  <section id="postman" class="sec tint">
-    <div class="wrap diff-grid">
+  <section id="secrets" class="sec tint">
+    <div class="wrap split flip">
+      <div class="term" aria-label="Secret scanner commands">
+        <button class="copy" type="button" data-copy="cairn scan ./my-collection
+cairn scan . --fail-on high
+cairn scan . --format json" aria-label="Copy scan commands">Copy</button>
+<pre><span class="c"># credentials written into the files you commit</span>
+<span class="p">$ </span>cairn scan ./my-collection
+<span class="c"># exit code 1 at "medium" or above</span>
+<span class="p">$ </span>cairn scan . --fail-on high
+<span class="c"># only known token formats, private keys, passwords in URLs</span>
+<span class="p">$ </span>cairn scan . --format json</pre>
+      </div>
       <div class="prose">
-        <h2>Bring your Postman collections with you</h2>
-        <p>In Postman, open Settings, Data, Export Data. In Cairn, choose Import and pick that folder. Every collection, environment and your globals come across in one go.</p>
+        <h2>Secrets stay out of Git</h2>
+        <p>Secret variables live in a git-ignored file, or in the macOS Keychain if you prefer. Imports move credentials out of the request files, and a scanner catches the ones that slip in.</p>
+        <ul class="plain">
+          <li>Secret values go to <code>.cairn/secrets.yaml</code>, which Cairn adds to <code>.gitignore</code>, or to the macOS Keychain (Settings, Secrets). The CLI can read Keychain values on the same Mac.</li>
+          <li><code>cairn scan</code> finds known token formats, private keys and literal passwords in committed YAML, shows only a masked preview, and works as a pre-commit hook or CI step.</li>
+          <li>Postman and HAR imports move passwords, tokens and keys into secret variables instead of the files.</li>
+        </ul>
+        <p class="fine">The scanner reads files, not Git history: rotate a credential that was already committed. The app is not signed yet, so macOS may ask again for Keychain access after an update.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="import" class="sec">
+    <div class="wrap split">
+      <div class="prose">
+        <h2>Bring what you already have</h2>
+        <p>Export from Postman, pick the folder in Cairn, and every collection, environment and your globals come across in one go.</p>
         <ul class="plain">
           <li>Each collection becomes a folder. Its folders keep their own auth, variables and scripts.</li>
-          <li>OAuth 2.0, API key, bearer and basic auth, form-data, file and GraphQL bodies, and saved example responses are carried over.</li>
-          <li>Your pre-request and test scripts run as they are: <code>pm.test</code>, <code>pm.expect</code>, <code>pm.environment</code>, <code>pm.response</code>.</li>
-          <li>Passwords and tokens are moved out of the files into variables on your Mac, so nothing secret gets committed.</li>
+          <li>OAuth 2.0, API key, bearer and basic auth, form-data, file and GraphQL bodies, and saved examples are carried over.</li>
+          <li>Pre-request and test scripts run as they are: <code>pm.test</code>, <code>pm.expect</code>, <code>pm.environment</code>, <code>pm.response</code>.</li>
         </ul>
         <p class="fine">Digest, AWS and NTLM auth and <code>pm.sendRequest</code> are not supported yet. The import lists everything it could not carry over.</p>
+        <p style="margin-top:22px;color:var(--text)"><a class="link" href="migrate-from-postman/">Migrating from Postman, step by step</a><br><a class="link" href="import-openapi-har-wsdl/">Importing OpenAPI, HAR and WSDL</a></p>
       </div>
       <figure class="card" aria-label="The summary Cairn shows after an import">
         <figcaption>Postman import finished</figcaption>
@@ -163,8 +233,56 @@ on this Mac, so nothing secret gets committed.
     </div>
   </section>
 
+  <section id="cli" class="sec tint">
+    <div class="wrap split flip">
+      <div>
+        <div class="term">
+          <button class="copy" type="button" data-copy="cairn run ./my-collection --env Staging --junit results.xml
+cairn scan ./my-collection
+cairn validate ./my-collection
+cairn export openapi ./my-collection -o api.yaml
+cairn import har recording.har ./my-collection --dry-run" aria-label="Copy CLI commands">Copy</button>
+<pre><span class="c"># run, check, export, import</span>
+<span class="p">$ </span>cairn run ./my-collection --env Staging --junit results.xml
+<span class="p">$ </span>cairn scan ./my-collection
+<span class="p">$ </span>cairn validate ./my-collection
+<span class="p">$ </span>cairn export openapi ./my-collection -o api.yaml
+<span class="p">$ </span>cairn import har recording.har ./my-collection --dry-run</pre>
+        </div>
+        <div class="term">
+          <button class="copy" type="button" data-copy="- uses: batuhanilgarr/Cairn@main
+  with:
+    path: api-tests
+    env: Staging
+    junit: results.xml
+  env:
+    CAIRN_VAR_clientSecret: ${{ secrets.CLIENT_SECRET }}" aria-label="Copy GitHub Action example">Copy</button>
+<span class="term-title">.github/workflows/api.yml</span>
+<pre>- uses: batuhanilgarr/Cairn@main
+  with:
+    path: api-tests
+    env: Staging
+    junit: results.xml
+  env:
+    CAIRN_VAR_clientSecret: ${{ secrets.CLIENT_SECRET }}</pre>
+        </div>
+      </div>
+      <div class="prose">
+        <h2>The same collection, in CI</h2>
+        <p>The CLI uses the same pipeline as the app: folder defaults, captures, scripts, assertions, OAuth client credentials and cookies.</p>
+        <ul class="plain">
+          <li><code>run</code> supports data-driven runs, layered environments, and JUnit, JSON and HTML reports. Exit code 0 means all passed, 1 a test failed, 2 bad usage.</li>
+          <li><code>export openapi</code> turns a collection into OpenAPI 3.0.3, with credentials left out.</li>
+          <li><code>import har</code> turns a browser recording into requests, with credentials kept out of the files.</li>
+          <li><code>validate</code> checks files against the published JSON Schemas.</li>
+        </ul>
+        <p class="fine">The CLI is not on npm yet. Build it once with <code>cd cli &amp;&amp; npm ci &amp;&amp; npm run build</code> and run <code>node cli/dist/cairn.mjs</code> wherever the commands above say <code>cairn</code>. Browser sign-in, WebSocket, SSE and gRPC requests are skipped in the CLI. Details in the <a class="link" href="docs/#cli">CLI reference</a>.</p>
+      </div>
+    </div>
+  </section>
+
   <section id="ai" class="sec">
-    <div class="wrap diff-grid">
+    <div class="wrap split flip">
       <figure class="card ai-demo" aria-label="The AI assistant answering a question about a request">
         <figcaption>Ask AI <span class="muted-dim">qwen3:8b on your server</span></figcaption>
         <div class="ai-body">
@@ -185,145 +303,230 @@ Last response: 401 Unauthorized in 84 ms
           <li>Paste the curl command you already use and the endpoint, model and token are filled in. A token is optional.</li>
           <li>Credentials are hidden and <code>{{variables}}</code> stay unresolved. The panel shows exactly what is sent.</li>
         </ul>
-        <p class="fine">Questions go straight from your Mac to the endpoint you set, and nowhere else.</p>
+        <p class="fine">Questions go straight from your Mac to the endpoint you set, and nowhere else. The conversation above is an illustration.</p>
       </div>
     </div>
   </section>
 
-  <section id="speed" class="sec speed">
+  <section id="speed" class="sec tint speed">
     <div class="wrap">
-      <h2 class="left">Fast with the files you really have</h2>
-      <p class="sub">Measured in our interface benchmark on an Apple M1 with 16 GB, in Chrome, with the app talking to a stand-in for the Mac side. Real disk and network time come on top, so treat these as what the interface itself costs.</p>
+      <div class="sec-head">
+        <span class="eyebrow">Measured, with caveats</span>
+        <h2>Fast with the files you really have</h2>
+        <p class="sub">Measured in our interface benchmark on an Apple M1 with 16 GB, in Chrome, with the app talking to a stand-in for the Mac side. Real disk and network time come on top, so treat these as what the interface itself costs. We have not yet measured the packaged app end to end.</p>
+      </div>
       <dl class="figures">
-        <div><dt>10,000-request collection</dt><dd><b>0.49 s</b> to the first rows</dd><p>609 elements on screen instead of 140,774.</p></div>
-        <div><dt>50 MB JSON response</dt><dd><b>0.06 s</b> to the first lines</dd><p>The window never freezes. Opening and indexing the 50 MB (5.6 million lines) takes the Rust side about 0.16 s, and searching it about 12 ms.</p></div>
-        <div><dt>100 MB JSON response</dt><dd><b>0.05 s</b> to the first lines</dd><p>Still no freeze: only the lines you see are drawn, whatever the size.</p></div>
+        <div><dt>10,000-request collection</dt><dd><b>0.49 s</b> to the first rows<span class="note">609 elements on screen instead of 140,774.</span></dd></div>
+        <div><dt>50 MB JSON response</dt><dd><b>0.06 s</b> to the first lines<span class="note">The window never freezes. Opening and indexing the 50 MB (5.6 million lines) takes the Rust side about 0.16 s, and searching it about 12 ms.</span></dd></div>
+        <div><dt>100 MB JSON response</dt><dd><b>0.05 s</b> to the first lines<span class="note">Still no freeze: only the lines you see are drawn, whatever the size.</span></dd></div>
       </dl>
-      <p class="fine">Reproduce it with <code>npm run bench:ui</code> in the repository. Numbers vary by machine.</p>
+      <p class="fine">Filtering a 50 MB body with 467,000 rows took about 0.4 s in the same benchmark. Reproduce the interface numbers with <code>npm run bench:ui</code> in the repository. Numbers vary by machine.</p>
     </div>
   </section>
 
-  <section id="features" class="sec tint">
+  <section id="features" class="sec">
     <div class="wrap">
-      <h2 class="left">Everything on the way from request to release</h2>
+      <div class="sec-head">
+        <span class="eyebrow">Features</span>
+        <h2>Everything on the way from request to release</h2>
+      </div>
       <div class="cols">
         <div>
           <h3>Send</h3>
           <dl>
             <dt>Every protocol</dt>
             <dd>REST, GraphQL with schema-aware autocomplete, gRPC from reflection or .proto files including streaming, WebSocket, SSE and MCP servers.</dd>
-            <dt>Uploads</dt>
-            <dd>multipart/form-data with text and file fields, or send a file as the raw body. Paste a <code>curl -F</code> command and the fields are filled in.</dd>
+            <dt>Split view and tabs</dt>
+            <dd>Two requests side by side, preview tabs, drag to reorder and reopen a closed tab.</dd>
             <dt>OAuth 2.0</dt>
             <dd>Client credentials, authorization code with PKCE in your real browser, and password grants. Tokens refresh themselves.</dd>
-            <dt>Import what you have</dt>
-            <dd>OpenAPI and Swagger with a re-sync that keeps your edits, a whole Postman export, Bruno and cURL.</dd>
+            <dt>Uploads</dt>
+            <dd>multipart/form-data with text and file fields, or a file as the raw body. Paste a <code>curl -F</code> command and the fields are filled in.</dd>
             <dt>Params and URL in sync</dt>
-            <dd>Type <code>?a=1</code> and the Params table fills in; edit a row and only that part of the URL changes. Your encoding stays as you wrote it.</dd>
+            <dd>Type <code>?a=1</code> and the Params table fills in; edit a row and only that part of the URL changes.</dd>
           </dl>
         </div>
         <div>
           <h3>Check</h3>
           <dl>
             <dt>Tests without code, or with it</dt>
-            <dd>Point-and-click assertions and variable captures, plus pre- and post-response JavaScript in an isolated sandbox.</dd>
-            <dt>A CLI for CI</dt>
-            <dd>The same engine as the app. Data-driven runs, JUnit, JSON and HTML reports, and a GitHub Action.</dd>
+            <dd>Point-and-click assertions and variable captures, plus pre- and post-response JavaScript in an isolated sandbox. Postman scripts run as they are.</dd>
+            <dt>Environments that extend</dt>
+            <dd>Environment files can <code>extends</code> another, import a <code>.env</code> file, and layer in the CLI with <code>--env base,staging</code>.</dd>
+            <dt>Shared requests</dt>
+            <dd>Link one request file from many folders and collections with <code>use:</code>.</dd>
             <dt>Mock server</dt>
             <dd>Save responses as examples and serve the collection locally, with path params, templating, delays and CORS.</dd>
             <dt>Folder-level defaults</dt>
             <dd>Set headers, auth and scripts once on a folder. Requests inherit them, override them or switch them off.</dd>
-            <dt>Variables that stack</dt>
-            <dd>Global, collection, folder, environment, then values set by scripts: each level overrides the one before. Built-in <code>{{$guid}}</code>, <code>{{$timestamp}}</code> and <code>{{$randomInt}}</code> are fresh on every send.</dd>
           </dl>
         </div>
         <div>
           <h3>Keep</h3>
           <dl>
+            <dt>Response filter</dt>
+            <dd>A jq subset or JSONPath over the response, also on responses of 50 to 100 MB.</dd>
+            <dt>Big responses, handled</dt>
+            <dd>Large bodies stay on the Rust side and are drawn as a virtual list, so they scroll and search without freezing the window, in our benchmark.</dd>
             <dt>Response history and diff</dt>
             <dd>Compare any two responses side by side. Binary responses preview inline, and anything can be saved to disk.</dd>
             <dt>Code, live, in a side panel</dt>
-            <dd>The open request as cURL, fetch, axios, Python, Go, Java, Kotlin, Swift, C#, PHP, Ruby, Rust, PowerShell or HTTPie, updating as you edit.</dd>
-            <dt>Big responses, handled</dt>
-            <dd>JSON is formatted for you and responses of 100 MB scroll and search without freezing the window, in our benchmark. ⌘F works on any size.</dd>
+            <dd>The open request as cURL, fetch, axios, Python, Go, Java, Kotlin, Swift, C#, PHP, Ruby, Rust, PowerShell or HTTPie.</dd>
             <dt>Made for the Mac</dt>
-            <dd>Native menus, a ⌘K command palette, full keyboard control, light and dark themes.</dd>
-            <dt>Corporate networks</dt>
-            <dd>Proxy, custom CA and client certificates for mutual TLS.</dd>
+            <dd>Native menus, a command palette, full keyboard control, light and dark themes, an interface tested with axe for accessibility, and proxy, custom CA and client certificates for corporate networks.</dd>
           </dl>
         </div>
       </div>
     </div>
   </section>
 
-  <section id="compare" class="sec">
+  <section id="compare" class="sec tint">
     <div class="wrap">
-      <h2 class="left">How it compares</h2>
-      <p class="sub">A good API client is a great tool. Here is what Cairn chooses to be.</p>
-      <div class="tablewrap">
+      <div class="sec-head">
+        <span class="eyebrow">Compare</span>
+        <h2>How it compares</h2>
+        <p class="sub">A good API client is a great tool. Here is what Cairn chooses to be.</p>
+      </div>
+      <div class="tablewrap" tabindex="0" role="region" aria-label="Table, scrolls sideways on small screens">
         <table>
-          <thead><tr><th><span class="vh">Capability</span></th><th class="us">Cairn</th><th>Cloud-first clients</th><th>File-based clients</th></tr></thead>
+          <thead><tr><th scope="col"><span class="vh">Capability</span></th><th scope="col" class="us">Cairn</th><th scope="col">Cloud-first clients</th><th scope="col">File-based clients</th></tr></thead>
           <tbody>
             <tr><th scope="row">Works without an account</th><td class="us">Yes</td><td>Varies</td><td>Yes</td></tr>
-            <tr><th scope="row">Collections are plain, diff-friendly files</th><td class="us">Yes</td><td>Exports are JSON blobs</td><td>Yes</td></tr>
-            <tr><th scope="row">REST, GraphQL, gRPC, WebSocket and SSE</th><td class="us">All included</td><td>Yes</td><td>Varies</td></tr>
+            <tr><th scope="row">Collections are plain, diff-friendly files</th><td class="us">Yes, with a published JSON Schema</td><td>Usually a cloud workspace, exportable as JSON</td><td>Yes</td></tr>
+            <tr><th scope="row">REST, GraphQL, gRPC, WebSocket, SSE and MCP</th><td class="us">All included</td><td>Varies</td><td>Varies</td></tr>
             <tr><th scope="row">OpenAPI import with re-sync</th><td class="us">Keeps your edits</td><td>Import</td><td>Import</td></tr>
             <tr><th scope="row">CLI runner for CI</th><td class="us">Same engine as the app</td><td>Yes</td><td>Yes</td></tr>
+            <tr><th scope="row">Secret scanner for committed files</th><td class="us">Built in (<code>cairn scan</code>)</td><td>Varies</td><td>Varies</td></tr>
             <tr><th scope="row">Mock server from examples</th><td class="us">Built in</td><td>Varies</td><td>Limited</td></tr>
             <tr><th scope="row">AI assistant on your own endpoint</th><td class="us">Ollama or any OpenAI-compatible server</td><td>Varies</td><td>Varies</td></tr>
-            <tr><th scope="row">Response history and diff</th><td class="us">Built in</td><td>Varies</td><td>Varies</td></tr>
+            <tr><th scope="row">Platforms</th><td class="us">macOS today</td><td>Several</td><td>Several</td></tr>
           </tbody>
         </table>
       </div>
-      <p class="fine">Comparisons describe categories of tools in general terms. Features and pricing of other products change, so check them yourself.</p>
+      <p class="fine">Comparisons describe categories of tools in general terms, not named products. Features and pricing of other products change, so check them yourself.</p>
     </div>
   </section>
 
-  <section id="download" class="sec dl">
+  <section id="whats-new" class="sec">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">What&#8217;s new</span>
+        <h2>Recent releases</h2>
+        <p class="sub">The full notes, including known limits, are on the <a class="link" href="changelog/">changelog</a>.</p>
+      </div>
+      <div class="rel-grid">
+        <article class="rel">
+          <header><h3>v0.3.1<span class="tag">Latest</span></h3><time datetime="2026-10-15">Oct 15, 2026</time></header>
+          <ul>
+            <li><b>Split view:</b> two requests side by side.</li>
+            <li><b>Secrets in the macOS Keychain</b>, readable by the CLI on the same Mac.</li>
+            <li><b>Filter big responses:</b> jq and JSONPath on 8 MB and larger bodies.</li>
+            <li><b>SOAP and WSDL import</b> with a sample envelope per operation.</li>
+          </ul>
+        </article>
+        <article class="rel">
+          <header><h3>v0.3.0</h3><time datetime="2026-10-15">Oct 15, 2026</time></header>
+          <ul>
+            <li><b>Reqnest is now Cairn:</b> new name, logo and icon.</li>
+            <li><b>Large responses</b> as a virtual list, and a virtualized collection tree.</li>
+            <li><b>Secret scanner</b>, OpenAPI export, HAR import and published JSON Schemas.</li>
+            <li><b>Environments</b> with <code>extends</code> and <code>.env</code> import, shared requests and a response filter.</li>
+          </ul>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section id="download" class="sec tint">
     <div class="wrap dl-grid">
       <div>
-        <h2>Get Cairn</h2>
-        <p class="sub left">macOS 11 or later. One universal build for Apple silicon and Intel.</p>
-        <div class="cta left">
+        <span class="eyebrow">Download</span>
+        <h2>Get Cairn 0.3.1</h2>
+        <p class="sub">macOS 11 or later. One universal build for Apple silicon and Intel, about 12 MB.</p>
+        <div class="cta" style="margin-top:28px">
           <a class="btn big" href="https://github.com/batuhanilgarr/Cairn/releases/latest/download/Cairn-universal.dmg">Download Cairn.dmg</a>
           <a class="btn big ghost" href="https://github.com/batuhanilgarr/Cairn/releases" rel="noopener">All releases</a>
         </div>
-        <p class="fine">Open the DMG and drag Cairn into Applications. Cairn is not signed with an Apple Developer ID yet, so macOS blocks the first launch. Run <code>xattr -dr com.apple.quarantine /Applications/Cairn.app</code> in Terminal once, or open System Settings, Privacy &amp; Security and choose Open Anyway.</p>
+        <div class="callout" role="note">
+          <p><b>First launch needs one extra step.</b> Cairn is not signed with an Apple Developer ID yet, so macOS blocks it the first time. Open the DMG, drag Cairn into Applications, then run this once in Terminal, or open System Settings, Privacy &amp; Security and choose Open Anyway.</p>
+          <div class="term">
+            <button class="copy" type="button" data-copy="xattr -dr com.apple.quarantine /Applications/Cairn.app" aria-label="Copy the quarantine command">Copy</button>
+<pre>xattr -dr com.apple.quarantine /Applications/Cairn.app</pre>
+          </div>
+        </div>
       </div>
-      <div id="build" class="term-block">
-        <button class="copy" type="button" data-copy="git clone https://github.com/batuhanilgarr/Cairn.git &amp;&amp; cd Cairn &amp;&amp; npm install &amp;&amp; npm run tauri build">Copy</button>
-<pre><span class="c"># build from source: needs Node 20+ and Rust</span>
+      <div>
+        <div class="term">
+          <button class="copy" type="button" data-copy="git clone https://github.com/batuhanilgarr/Cairn.git &amp;&amp; cd Cairn &amp;&amp; npm install &amp;&amp; npm run tauri build" aria-label="Copy the build from source commands">Copy</button>
+<pre><span class="c"># or build from source: needs Node 20+ and Rust</span>
 git clone https://github.com/batuhanilgarr/Cairn.git
 cd Cairn &amp;&amp; npm install
 npm run tauri build</pre>
+        </div>
+        <p class="fine">Cairn is early software and has not yet been exercised end to end in the packaged app. Collections are plain files in a folder, so keep them in Git.</p>
       </div>
     </div>
   </section>
 
-  <section id="faq" class="sec">
+  <section id="faq" class="sec" aria-labelledby="faq-h">
     <div class="wrap narrow">
-      <h2 class="left">Questions</h2>
-      <details><summary>What does it cost?</summary><p>Pricing is announced on this page and in the releases. Your collections are plain files, so you are never locked in: they stay readable without Cairn.</p></details>
-      <details><summary>What does it send to your servers?</summary><p>Nothing. There is no account, no analytics and no telemetry. Requests go straight from your Mac to the API you are calling. The one other thing that can leave your Mac is a question you ask the AI assistant, and it goes only to the endpoint you configured.</p></details>
-      <details><summary>How do I move over from Postman, Bruno or Insomnia?</summary><p>For Postman, export your data (Settings, Data, Export Data) and import that folder in one step: collections, environments, globals, auth and your scripts come across. For Bruno, import its folder; for OpenAPI, import the spec; and any curl command can be pasted straight into the URL bar.</p></details>
-      <details><summary>Where are my secrets stored?</summary><p>Variables marked as secret live in <code>.cairn/secrets.yaml</code>, which Cairn adds to <code>.gitignore</code>. Tokens fetched by OAuth stay in memory only.</p></details>
+      <div class="sec-head">
+        <span class="eyebrow">FAQ</span>
+        <h2 id="faq-h">Questions</h2>
+      </div>
+      <details><summary>What is Cairn?</summary><p>Cairn is a local-first API client for macOS. Your requests are plain YAML files in a folder you keep in Git. It sends REST, GraphQL, gRPC, WebSocket, SSE and MCP requests, runs tests and scripts, and has a command-line runner for CI.</p></details>
+      <details><summary>Is there a Postman alternative that works without an account?</summary><p>Yes. Cairn needs no account, no sign-in and no cloud. Collections are folders on your disk. Requests go straight from your Mac to the API you call, and the only other thing that can leave your Mac is a question you ask the AI assistant, which goes to the endpoint you configured.</p></details>
+      <details><summary>Is Cairn a git-friendly API client?</summary><p>That is the point of it. Every request is a small <code>*.req.yaml</code> file with no generated IDs, keys in a fixed order and bodies as literal blocks, so a changed JSON field is one changed line in a pull request. Order comes from file names, and secrets are kept out of the files. The format is documented and has published JSON Schemas.</p></details>
+      <details><summary>How do I import a Postman collection into plain files?</summary><p>In Postman, open Settings, Data, Export Data. In Cairn, choose Import and pick that folder. Every collection, environment and your globals come across in one go: auth, folder-level variables and scripts, saved examples and <code>pm.*</code> scripts included. Digest, AWS and NTLM auth and <code>pm.sendRequest</code> are not supported yet, and the import lists everything it could not carry over.</p></details>
+      <details><summary>Can I open OpenAPI, WSDL or HAR files?</summary><p>Yes. Cairn imports OpenAPI 3 and Swagger 2 from a URL, a file or the clipboard with a preview, WSDL 1.1 services (every SOAP operation becomes a POST with a sample envelope) and HAR recordings from a browser, in the app or with <code>cairn import har</code>. Bruno collections and cURL commands work too. The WSDL import has been tried against WSDL files written for our tests, not against live SOAP services.</p></details>
+      <details><summary>What does it cost?</summary><p>Pricing and licensing are not decided yet. They will be announced on this page and in the releases. Your collections are plain files, so you are never locked in: they stay readable without Cairn.</p></details>
+      <details><summary>What does it send to your servers?</summary><p>Nothing. There is no account, no analytics and no telemetry, and this website loads no external scripts, fonts or trackers either. The one other thing that can leave your Mac is a question you ask the AI assistant, and it goes only to the endpoint you set.</p></details>
+      <details><summary>Where are my secrets stored?</summary><p>Variables marked as secret live in <code>.cairn/secrets.yaml</code>, which Cairn adds to <code>.gitignore</code>, or in the macOS Keychain if you choose that in Settings. Tokens fetched by OAuth stay in memory only. <code>cairn scan</code> looks for credentials written into the files you commit.</p></details>
       <details><summary>Does the AI assistant need an account or a subscription?</summary><p>No. You bring the model: Ollama running on your machine or server, or any OpenAI-compatible service you already use. Cairn adds nothing in between. A token is optional, and credentials from your requests are hidden before a question is sent.</p></details>
-      <details><summary>Windows and Linux?</summary><p>The app is built on Tauri, so other platforms are possible. Today it targets macOS. The CLI already runs anywhere Node 20 does.</p></details>
+      <details><summary>Does Cairn run on Windows or Linux?</summary><p>Not yet. The app is built on Tauri, so other platforms are possible, but today it targets macOS 11 or later. The CLI already runs anywhere Node 20 does.</p></details>
       <details><summary>Can scripts access my files?</summary><p>In the app, scripts run in an isolated sandbox with a time limit and cannot reach your files or secrets. The CLI runs them in a Node worker, so treat CLI scripts like the rest of your CI code.</p></details>
+      <details><summary>How mature is Cairn?</summary><p>Cairn is early software (version 0.3.1). The interface is tested in real Chrome against a stand-in for the native side, but we have not yet exercised the packaged app end to end, and the app is not signed with an Apple Developer ID, so macOS blocks the first launch. Keep your collections in Git, which you would do anyway.</p></details>
     </div>
   </section>
 </main>
-
 <footer>
-  <div class="wrap foot">
-    <a class="brand" href="#top"><img src="assets/logo.svg" alt="" width="22" height="22"><span>Cairn</span></a>
-    <span class="spacer"></span>
-    <a href="https://github.com/batuhanilgarr/Cairn" rel="noopener">GitHub</a>
-    <a href="https://github.com/batuhanilgarr/Cairn/issues" rel="noopener">Issues</a>
-    <a href="https://github.com/batuhanilgarr/Cairn/blob/main/cli/README.md" rel="noopener">CLI docs</a>
-    <a href="https://github.com/batuhanilgarr/Cairn/blob/main/docs/file-format.md" rel="noopener">File format</a>
+  <div class="wrap">
+    <div class="foot">
+      <div>
+        <a class="brand" href="./"><img src="assets/logo.svg" alt="" width="24" height="24"><span>Cairn</span></a>
+        <p>The API client that lives in your repo. Local-first, for macOS.</p>
+      </div>
+      <nav aria-label="Product">
+        <h2>Product</h2>
+        <ul>
+          <li><a href="#features">Features</a></li>
+          <li><a href="#cli">CLI and CI</a></li>
+          <li><a href="changelog/">Changelog</a></li>
+          <li><a href="#download">Download</a></li>
+        </ul>
+      </nav>
+      <nav aria-label="Guides">
+        <h2>Guides</h2>
+        <ul>
+          <li><a href="migrate-from-postman/">Migrate from Postman</a></li>
+          <li><a href="import-openapi-har-wsdl/">Import OpenAPI, HAR and WSDL</a></li>
+          <li><a href="docs/">Docs and file format</a></li>
+          <li><a href="schema/v1/request.schema.json">JSON Schemas</a></li>
+        </ul>
+      </nav>
+      <nav aria-label="Project">
+        <h2>Project</h2>
+        <ul>
+          <li><a href="https://github.com/batuhanilgarr/Cairn" rel="noopener">GitHub repository</a></li>
+          <li><a href="https://github.com/batuhanilgarr/Cairn/releases" rel="noopener">All releases</a></li>
+          <li><a href="https://github.com/batuhanilgarr/Cairn/issues" rel="noopener">Report an issue</a></li>
+          <li><a href="https://github.com/batuhanilgarr/Cairn/blob/main/cli/README.md" rel="noopener">CLI reference</a></li>
+        </ul>
+      </nav>
+    </div>
+    <p class="legal">Cairn is early software (v0.3.1). Postman, Bruno, Insomnia and other product names belong to their owners; Cairn is not affiliated with them.</p>
   </div>
 </footer>
-<script src="main.js"></script>
+<script src="main.js" defer></script>
 </body>
 </html>

@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Migrate from Postman to plain files | Cairn</title>
+<meta name="description" content="Move Postman collections, environments and globals into Git-friendly YAML files. What carries over, what does not, and how secrets stay out of the files.">
+<link rel="canonical" href="https://batuhanilgarr.github.io/Cairn/migrate-from-postman/">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f4f5f2" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#101517" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="../assets/logo.svg" type="image/svg+xml">
+<link rel="icon" href="../assets/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="../assets/apple-touch-icon.png">
+<link rel="manifest" href="../site.webmanifest">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cairn">
+<meta property="og:locale" content="en_US">
+<meta property="og:title" content="Migrate from Postman to plain files | Cairn">
+<meta property="og:description" content="Move Postman collections, environments and globals into Git-friendly YAML files. What carries over, what does not, and how secrets stay out of the files.">
+<meta property="og:url" content="https://batuhanilgarr.github.io/Cairn/migrate-from-postman/">
+<meta property="og:image" content="https://batuhanilgarr.github.io/Cairn/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Cairn: the API client that lives in your repo. A stack of balanced stones above topographic lines.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Migrate from Postman to plain files | Cairn">
+<meta name="twitter:description" content="Move Postman collections, environments and globals into Git-friendly YAML files. What carries over, what does not, and how secrets stay out of the files.">
+<meta name="twitter:image" content="https://batuhanilgarr.github.io/Cairn/assets/og.png">
+<meta name="twitter:image:alt" content="Cairn: the API client that lives in your repo.">
+<script>document.documentElement.className+=" js"</script>
+<link rel="stylesheet" href="../styles.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Cairn","item":"https://batuhanilgarr.github.io/Cairn/"},{"@type":"ListItem","position":2,"name":"Migrate from Postman","item":"https://batuhanilgarr.github.io/Cairn/migrate-from-postman/"}]}</script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="nav">
+  <div class="wrap navin">
+    <a class="brand" href="../" aria-label="Cairn, home"><img src="../assets/logo.svg" alt="" width="28" height="28"><span>Cairn</span></a>
+    <button class="menu-btn" id="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav"><i aria-hidden="true"></i>Menu</button>
+    <nav class="nav-links" id="site-nav" aria-label="Main">
+      <a href="../#features">Features</a>
+      <a href="../#cli">CLI &amp; CI</a>
+      <a href="../migrate-from-postman/" aria-current="page">Migrate</a>
+      <a href="../changelog/">Changelog</a>
+      <a href="../docs/">Docs</a>
+      <a href="../#faq">FAQ</a>
+      <a href="https://github.com/batuhanilgarr/Cairn" rel="noopener">GitHub</a>
+      <a class="btn" href="../#download">Download</a>
+    </nav>
+  </div>
+</header>
+<main id="main">
+  <section class="pagehero">
+    <div class="wrap">
+      <nav class="crumbs" aria-label="Breadcrumb"><ol><li><a href="../">Cairn</a></li><li aria-current="page">Migrate from Postman</li></ol></nav>
+      <h1>Migrate from Postman</h1>
+      <p class="lead">Export your data from Postman, import the folder into Cairn, and end up with plain YAML files in Git. Here is exactly what carries over and what does not.</p>
+    </div>
+  </section>
+  <div class="wrap article">
+    <nav class="toc" aria-label="On this page"><b>On this page</b><ol><li><a href="#steps">Four steps</a></li><li><a href="#mapping">What becomes what</a></li><li><a href="#limits">What does not carry over</a></li><li><a href="#secrets">Secrets</a></li><li><a href="#ci">Run it in CI</a></li></ol></nav>
+    <div class="doc">
+<h2 id="steps">From Postman to files in four steps</h2>
+<ol class="steps">
+<li><strong>Export from Postman.</strong> Open Settings, Data, Export Data, and choose a folder. You get your collections, environments and globals as files.</li>
+<li><strong>Import in Cairn.</strong> Choose Import and pick that folder. Every collection, environment and your globals come across in one go. Each collection gets its own folder.</li>
+<li><strong>Read the summary.</strong> Cairn lists what it carried over and, just as important, what it could not. Nothing is dropped silently.</li>
+<li><strong>Commit the folder.</strong> It is plain YAML now. Review it in a pull request like any other change.</li>
+</ol>
+<div class="card"><pre>3 collections (128 requests), each in its own folder.
+2 environments, 5 secret values kept out of Git.
+12 global variables (Settings &gt; Variables).
+7 passwords, tokens or keys from the auth settings
+were kept out of the files.
+9 folders with their own auth, variables or scripts.
+
+&#8226; Payments: digest auth isn&#8217;t supported yet,
+  imported without auth</pre></div>
+<p>The summary above is an example of the report&#8217;s shape, with sample numbers.</p>
+
+<h2 id="mapping">What becomes what</h2>
+<div class="tablewrap" tabindex="0" role="region" aria-label="Table, scrolls sideways on small screens"><table>
+<thead><tr><th scope="col">In Postman</th><th scope="col">In Cairn</th></tr></thead>
+<tbody>
+<tr><th scope="row">Collection</th><td>A folder of <code>*.req.yaml</code> files</td></tr>
+<tr><th scope="row">Folder auth, variables and scripts</th><td><code>folder.yaml</code>, committed, and seen by the CLI</td></tr>
+<tr><th scope="row">Environment</th><td><code>environments/*.env.yaml</code>; secret values stay in the git-ignored secrets file or the macOS Keychain</td></tr>
+<tr><th scope="row">Globals</th><td>Global variables on this Mac (Settings, Variables), never committed</td></tr>
+<tr><th scope="row">Saved example responses</th><td>Examples stored in the request file, served by the mock server</td></tr>
+<tr><th scope="row">Pre-request and test scripts</th><td>Run as they are: <code>pm.test</code>, <code>pm.expect</code>, <code>pm.environment</code>, <code>pm.variables</code>, <code>pm.request</code>, <code>pm.response</code></td></tr>
+<tr><th scope="row">OAuth 2.0, API key, bearer, basic</th><td>Carried over</td></tr>
+<tr><th scope="row">Form-data, file and GraphQL bodies</th><td>Carried over</td></tr>
+</tbody></table></div>
+
+<h2 id="limits">What does not carry over yet</h2>
+<ul>
+<li>Digest, AWS and NTLM auth: the request is imported without auth and listed in the summary.</li>
+<li><code>pm.sendRequest</code> in scripts is not available in Cairn scripts. The summary points at the folders that use it.</li>
+</ul>
+
+<h2 id="secrets">Secrets do not follow you into Git</h2>
+<p>Literal passwords, tokens and keys in your auth settings are moved out of the files into global variables on your Mac, so nothing secret gets committed. After the import you can double-check from the command line:</p>
+<div class="term"><button class="copy" type="button" data-copy="cairn scan ./my-collection
+cairn validate ./my-collection" aria-label="Copy the check commands">Copy</button><pre><span class="p">$ </span>cairn scan ./my-collection
+<span class="p">$ </span>cairn validate ./my-collection</pre></div>
+<p>The CLI is not on npm yet; see the <a href="../docs/#cli">CLI reference</a> for how to build it.</p>
+
+<h2 id="ci">Then run it in CI</h2>
+<p>The same collection runs headless with <code>cairn run ./my-collection --env Staging --junit results.xml</code>, or with the <a href="../docs/#action">GitHub Action</a>. Secret values on CI come from <code>CAIRN_VAR_&lt;name&gt;</code> environment variables.</p>
+<p>Coming from Bruno or Insomnia? Bruno folders import directly, and any cURL command can be pasted into the URL bar. See also <a href="../import-openapi-har-wsdl/">importing OpenAPI, HAR and WSDL</a>.</p>
+<p><a class="btn" href="https://github.com/batuhanilgarr/Cairn/releases/latest/download/Cairn-universal.dmg">Download Cairn for macOS</a></p>
+    </div>
+  </div>
+</main>
+<footer>
+  <div class="wrap">
+    <div class="foot">
+      <div>
+        <a class="brand" href="../"><img src="../assets/logo.svg" alt="" width="24" height="24"><span>Cairn</span></a>
+        <p>The API client that lives in your repo. Local-first, for macOS.</p>
+      </div>
+      <nav aria-label="Product">
+        <h2>Product</h2>
+        <ul>
+          <li><a href="../#features">Features</a></li>
+          <li><a href="../#cli">CLI and CI</a></li>
+          <li><a href="../changelog/">Changelog</a></li>
+          <li><a href="../#download">Download</a></li>
+        </ul>
+      </nav>
+      <nav aria-label="Guides">
+        <h2>Guides</h2>
+        <ul>
+          <li><a href="../migrate-from-postman/">Migrate from Postman</a></li>
+          <li><a href="../import-openapi-har-wsdl/">Import OpenAPI, HAR and WSDL</a></li>
+          <li><a href="../docs/">Docs and file format</a></li>
+          <li><a href="../schema/v1/request.schema.json">JSON Schemas</a></li>
+        </ul>
+      </nav>
+      <nav aria-label="Project">
+        <h2>Project</h2>
+        <ul>
+          <li><a href="https://github.com/batuhanilgarr/Cairn" rel="noopener">GitHub repository</a></li>
+          <li><a href="https://github.com/batuhanilgarr/Cairn/releases" rel="noopener">All releases</a></li>
+          <li><a href="https://github.com/batuhanilgarr/Cairn/issues" rel="noopener">Report an issue</a></li>
+          <li><a href="https://github.com/batuhanilgarr/Cairn/blob/main/cli/README.md" rel="noopener">CLI reference</a></li>
+        </ul>
+      </nav>
+    </div>
+    <p class="legal">Cairn is early software (v0.3.1). Postman, Bruno, Insomnia and other product names belong to their owners; Cairn is not affiliated with them.</p>
+  </div>
+</footer>
+<script src="../main.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Import OpenAPI, HAR and WSDL into Git files | Cairn</title>
+<meta name="description" content="Turn OpenAPI and Swagger specs, WSDL services and browser HAR recordings into plain YAML requests with Cairn, in the app or the CLI. Credentials stay out.">
+<link rel="canonical" href="https://batuhanilgarr.github.io/Cairn/import-openapi-har-wsdl/">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f4f5f2" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#101517" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="../assets/logo.svg" type="image/svg+xml">
+<link rel="icon" href="../assets/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="../assets/apple-touch-icon.png">
+<link rel="manifest" href="../site.webmanifest">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cairn">
+<meta property="og:locale" content="en_US">
+<meta property="og:title" content="Import OpenAPI, HAR and WSDL into Git files | Cairn">
+<meta property="og:description" content="Turn OpenAPI and Swagger specs, WSDL services and browser HAR recordings into plain YAML requests with Cairn, in the app or the CLI. Credentials stay out.">
+<meta property="og:url" content="https://batuhanilgarr.github.io/Cairn/import-openapi-har-wsdl/">
+<meta property="og:image" content="https://batuhanilgarr.github.io/Cairn/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Cairn: the API client that lives in your repo. A stack of balanced stones above topographic lines.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Import OpenAPI, HAR and WSDL into Git files | Cairn">
+<meta name="twitter:description" content="Turn OpenAPI and Swagger specs, WSDL services and browser HAR recordings into plain YAML requests with Cairn, in the app or the CLI. Credentials stay out.">
+<meta name="twitter:image" content="https://batuhanilgarr.github.io/Cairn/assets/og.png">
+<meta name="twitter:image:alt" content="Cairn: the API client that lives in your repo.">
+<script>document.documentElement.className+=" js"</script>
+<link rel="stylesheet" href="../styles.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Cairn","item":"https://batuhanilgarr.github.io/Cairn/"},{"@type":"ListItem","position":2,"name":"Import OpenAPI, HAR and WSDL","item":"https://batuhanilgarr.github.io/Cairn/import-openapi-har-wsdl/"}]}</script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="nav">
+  <div class="wrap navin">
+    <a class="brand" href="../" aria-label="Cairn, home"><img src="../assets/logo.svg" alt="" width="28" height="28"><span>Cairn</span></a>
+    <button class="menu-btn" id="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav"><i aria-hidden="true"></i>Menu</button>
+    <nav class="nav-links" id="site-nav" aria-label="Main">
+      <a href="../#features">Features</a>
+      <a href="../#cli">CLI &amp; CI</a>
+      <a href="../migrate-from-postman/">Migrate</a>
+      <a href="../changelog/">Changelog</a>
+      <a href="../docs/">Docs</a>
+      <a href="../#faq">FAQ</a>
+      <a href="https://github.com/batuhanilgarr/Cairn" rel="noopener">GitHub</a>
+      <a class="btn" href="../#download">Download</a>
+    </nav>
+  </div>
+</header>
+<main id="main">
+  <section class="pagehero">
+    <div class="wrap">
+      <nav class="crumbs" aria-label="Breadcrumb"><ol><li><a href="../">Cairn</a></li><li aria-current="page">Import OpenAPI, HAR and WSDL</li></ol></nav>
+      <h1>Import OpenAPI, HAR and WSDL</h1>
+      <p class="lead">Specs, SOAP services and browser recordings all end up the same way: small YAML request files you can review, diff and run in CI.</p>
+    </div>
+  </section>
+  <div class="wrap article">
+    <nav class="toc" aria-label="On this page"><b>On this page</b><ol><li><a href="#openapi">OpenAPI and Swagger</a></li><li><a href="#wsdl">WSDL and SOAP</a></li><li><a href="#har">HAR recordings</a></li><li><a href="#others">Postman, Bruno, cURL</a></li></ol></nav>
+    <div class="doc">
+<h2 id="openapi">OpenAPI and Swagger</h2>
+<p>Import OpenAPI 3 or Swagger 2 specs, JSON or YAML, from a URL, a file or straight from the clipboard. A preview shows what will be written before anything is.</p>
+<ul>
+<li><strong>Re-sync keeps your edits.</strong> Re-importing updates requests in place, matched by <code>source: POST /pets</code>. The spec owns structure, you own values: new parameters and body fields are added, your values, URLs, headers and auth are kept, and operations removed from the spec are reported, never deleted.</li>
+<li><strong>Examples from schemas.</strong> Imported operations get example responses built from their schemas, kept across re-syncs, which the mock server can serve.</li>
+</ul>
+<h3 id="export">Export back to OpenAPI</h3>
+<p>The other direction works too. Requests become operations, folders become tags, saved examples become responses, and auth settings become security schemes. Credentials are never written, and sensitive fields in examples become <code>&lt;redacted&gt;</code>.</p>
+<div class="term"><button class="copy" type="button" data-copy="cairn export openapi ./my-collection -o api.yaml" aria-label="Copy the export command">Copy</button><pre><span class="p">$ </span>cairn export openapi ./my-collection -o api.yaml
+<span class="p">$ </span>cairn export openapi ./my-collection --env Prod
+<span class="p">$ </span>cairn export openapi ./my-collection/invoices</pre></div>
+<p>gRPC, WebSocket, SSE and MCP requests cannot be described in OpenAPI and are skipped with a note.</p>
+
+<h2 id="wsdl">WSDL and SOAP</h2>
+<p>Every operation of a WSDL 1.1 service becomes a POST with a ready-to-edit SOAP envelope built from the schema. SOAP 1.1 and 1.2, document/literal and rpc/literal are supported. Paste the WSDL or its link into the import dialog.</p>
+<p>Limits: WSDL 2.0, <code>rpc/encoded</code> (approximated), WS-Security and MTOM are not supported. The import has been tried against WSDL files written for our tests, not against live SOAP services, so tell us on <a href="https://github.com/batuhanilgarr/Cairn/issues" rel="noopener">GitHub</a> if a real one misbehaves.</p>
+
+<h2 id="har">HAR recordings from a browser</h2>
+<p>Save the recording in your browser (DevTools, Network, Save all as HAR) and import it in the app or from the command line. Each recording gets its own folder and an environment with <code>{{baseUrl}}</code>.</p>
+<div class="term"><button class="copy" type="button" data-copy="cairn import har recording.har ./my-collection --dry-run" aria-label="Copy the HAR import command">Copy</button><pre><span class="p">$ </span>cairn import har recording.har ./my-collection
+<span class="p">$ </span>cairn import har recording.har ./my-collection --all
+<span class="p">$ </span>cairn import har recording.har . --name checkout --dry-run</pre></div>
+<ul>
+<li>API calls only by default; <code>--all</code> includes pages, scripts and images; <code>--dry-run</code> shows what would be imported and writes nothing.</li>
+<li>Tokens, passwords, API keys and <code>Authorization</code> headers are moved into secret variables kept in the git-ignored secrets file. Cookies are dropped. The command never prints a credential.</li>
+<li>Importing the same recording twice creates a second copy. Use <code>--name</code> to keep them apart.</li>
+</ul>
+
+<h2 id="others">Postman, Bruno and cURL</h2>
+<p>Postman exports import in bulk: see <a href="../migrate-from-postman/">Migrate from Postman</a>. Bruno collections, including environments, import as folders. Paste any <code>curl</code> command into the URL bar and the method, headers, body and auth are filled in, <code>curl -F</code> uploads included.</p>
+<p>The CLI is not on npm yet. See the <a href="../docs/#cli">CLI reference</a> for how to build it.</p>
+<p><a class="btn" href="https://github.com/batuhanilgarr/Cairn/releases/latest/download/Cairn-universal.dmg">Download Cairn for macOS</a></p>
+    </div>
+  </div>
+</main>
+<footer>
+  <div class="wrap">
+    <div class="foot">
+      <div>
+        <a class="brand" href="../"><img src="../assets/logo.svg" alt="" width="24" height="24"><span>Cairn</span></a>
+        <p>The API client that lives in your repo. Local-first, for macOS.</p>
+      </div>
+      <nav aria-label="Product">
+        <h2>Product</h2>
+        <ul>
+          <li><a href="../#features">Features</a></li>
+          <li><a href="../#cli">CLI and CI</a></li>
+          <li><a href="../changelog/">Changelog</a></li>
+          <li><a href="../#download">Download</a></li>
+        </ul>
+      </nav>
+      <nav aria-label="Guides">
+        <h2>Guides</h2>
+        <ul>
+          <li><a href="../migrate-from-postman/">Migrate from Postman</a></li>
+          <li><a href="../import-openapi-har-wsdl/">Import OpenAPI, HAR and WSDL</a></li>
+          <li><a href="../docs/">Docs and file format</a></li>
+          <li><a href="../schema/v1/request.schema.json">JSON Schemas</a></li>
+        </ul>
+      </nav>
+      <nav aria-label="Project">
+        <h2>Project</h2>
+        <ul>
+          <li><a href="https://github.com/batuhanilgarr/Cairn" rel="noopener">GitHub repository</a></li>
+          <li><a href="https://github.com/batuhanilgarr/Cairn/releases" rel="noopener">All releases</a></li>
+          <li><a href="https://github.com/batuhanilgarr/Cairn/issues" rel="noopener">Report an issue</a></li>
+          <li><a href="https://github.com/batuhanilgarr/Cairn/blob/main/cli/README.md" rel="noopener">CLI reference</a></li>
+        </ul>
+      </nav>
+    </div>
+    <p class="legal">Cairn is early software (v0.3.1). Postman, Bruno, Insomnia and other product names belong to their owners; Cairn is not affiliated with them.</p>
+  </div>
+</footer>
+<script src="../main.js" defer></script>
+</body>
+</html>

@@ -9,6 +9,8 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "test:ui": "node --test tests/ui/layout.test.mjs",
+    "test:site": "node tests/site/check.mjs",
+    "site:serve": "node scripts/serve-site.mjs 4350",
     "test:openapi": "mkdir -p test-results && node cli/dist/cairn.mjs export openapi tests/fixtures/openapi-collection --env Prod -o test-results/openapi.yaml && npx --yes @redocly/cli@2.63.0 lint test-results/openapi.yaml --config tests/fixtures/redocly.yaml",
     "bench:ui": "node tests/perf/ui-bench.mjs"
   },
