@@ -25,3 +25,6 @@ dist-ssr
 
 # UI layout test screenshots (written on failure)
 test-results
+
+# Claude Code agent worktrees
+.claude/worktrees/
