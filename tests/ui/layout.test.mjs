@@ -36,7 +36,7 @@ const STATES = [
 ];
 
 /** What the app would get from Tauri: a small collection and canned responses. The response is deliberately a worst case (120 headers, 12 cookies, 1 GB, two minutes) so that wide numbers can't break the header. Runs before the app loads. */
-const stubSource = ({ sidebar, aside, bigTree = 0, bigBody = 0, withLink = false, leakyToken = '' }) => `
+const stubSource = ({ sidebar, aside, bigTree = 0, bigBody = 0, withLink = false, leakyToken = '', keychain = false }) => `
 (() => {
   const req = (n, m) => 'name: ' + n + '\\nmethod: ' + m + '\\nurl: https://api.example.com/' + n + '\\n';
   let files = {
@@ -87,6 +87,7 @@ const stubSource = ({ sidebar, aside, bigTree = 0, bigBody = 0, withLink = false
         return { status: 200, statusText: 'OK', headers: [['content-type', 'application/json'], ...Array.from({ length: 12 }, (_, i) => ['set-cookie', 'sid' + i + '=abc; Path=/; HttpOnly']), ...Array.from({ length: 108 }, (_, i) => ['x-trace-' + i, 'v' + i])], body, bodyBase64: null, contentType: 'application/json', sizeBytes: 1000000000, timeMs: 123456, ttfbMs: 98765, httpVersion: 'HTTP/1.1' };
       }
       if (cmd === 'list_tree') return tree;
+      if (cmd === 'secret_available') return ${keychain};
       if (cmd === 'read_text') return files[a.path] ?? null;
       if (cmd === 'write_text') { files[a.path] = a.text; return null; }
       if (cmd === 'list_files') return [];
@@ -121,9 +122,9 @@ after(async () => {
 });
 
 /** Open the app in a fresh browser context. `fail()` saves a screenshot next to the failing assertion. */
-async function open({ width, height = 800, theme = "dark", sidebar = true, aside = null, bigTree = 0, bigBody = 0, withLink = false, leakyToken = "" }, label) {
+async function open({ width, height = 800, theme = "dark", sidebar = true, aside = null, bigTree = 0, bigBody = 0, withLink = false, leakyToken = "", keychain = false }, label) {
   const context = await browser.newContext({ viewport: { width, height }, colorScheme: theme });
-  await context.addInitScript(stubSource({ sidebar, aside, bigTree, bigBody, withLink, leakyToken }));
+  await context.addInitScript(stubSource({ sidebar, aside, bigTree, bigBody, withLink, leakyToken, keychain }));
   const page = await context.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(String(e)));
@@ -1100,3 +1101,35 @@ test("split view: the tab menu offers to open a tab to the right and to close th
     await context.close();
   }
 });
+
+for (const keychain of [false, true]) {
+  test(`settings: where secret values are kept (${keychain ? "macOS Keychain available" : "not available"}) is offered and accessible`, async () => {
+    const { page, context, errors, check } = await open({ width: 1360, keychain }, `secret store ${keychain}`);
+    try {
+      await page.click('.rail button[aria-label="Settings"]');
+      await page.waitForSelector(".settings");
+      await page.waitForTimeout(500);
+      const sel = page.locator('select[aria-label="Keep secret values in"]');
+      const state = await sel.evaluate((el) => ({ disabled: el.disabled, options: [...el.options].map((o) => o.textContent), value: el.value }));
+      const note = await page.locator(".set-row", { has: sel }).locator(".set-label span").textContent();
+      const v = await axeViolations(page);
+      let saved = null;
+      if (keychain) {
+        await sel.selectOption("keychain");
+        await page.waitForTimeout(500);
+        saved = await page.evaluate(() => JSON.parse(localStorage.getItem("rq.settings") ?? "{}").secretStore);
+      }
+      await check(async () => {
+        assert.deepEqual(errors, []);
+        assert.deepEqual(state.options.length, 2);
+        assert.equal(state.disabled, !keychain);
+        assert.equal(state.value, "file");
+        assert.match(note, keychain ? /Switching moves/ : /only available on macOS/);
+        assert.deepEqual(v.map((x) => `${x.id}: ${x.where.join(" | ")}`), [], "accessibility violations");
+        if (keychain) assert.equal(saved, "keychain", "choosing the Keychain is remembered");
+      });
+    } finally {
+      await context.close();
+    }
+  });
+}

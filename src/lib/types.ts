@@ -129,6 +129,8 @@ export type Environment = {
   file?: string;
   /** Name of an environment this one builds on: its variables apply first, this one overrides them. */
   extends?: string;
+  /** Secret variables whose value is in the Keychain but couldn't be read here (CLI, or access denied). */
+  missing?: string[];
 };
 
 export type TreeNode = { name: string; path: string; isDir: boolean; children: TreeNode[] };

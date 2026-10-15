@@ -40,6 +40,7 @@ import { bodyText } from "./lib/bigbody";
 import { SecretScanModal, type ScanState } from "./SecretScanModal";
 import { buildOpenApi, collectExportItems, toJson, toYaml } from "./lib/openapiExport";
 import { isHar, parseHar } from "./lib/har";
+import { keychainAvailable, keychainEvents, secretStore, type SecretStore } from "./lib/keychain";
 import { PasteImportModal } from "./PasteImportModal";
 import { applyFix, checkGitignore, scanText, type Finding } from "./lib/secrets";
 import { dotenvName, parseDotenv } from "./lib/dotenv";
@@ -96,6 +97,8 @@ import {
   linkTarget,
   linkText,
   readRequest,
+  forgetEnvironmentSecrets,
+  migrateSecrets,
 } from "./lib/collection";
 import type { BodyMode, Collection, RequestKind, Environment, HistoryItem, RequestTab, ResponseData, RunOutput, TreeNode } from "./lib/types";
 import {
@@ -1228,6 +1231,26 @@ export default function App() {
   /* ---------------- settings, menu, shortcuts, palette ---------------- */
 
   const changeSettings = (p: Partial<Settings>) => setSettings((cur) => ({ ...cur, ...p }));
+
+  // Where secret values are written follows the setting; a value the Keychain refuses is kept in the file, and we say so.
+  secretStore.current = settings.secretStore;
+  keychainEvents.onError = (m) => flash(m, 6000);
+  useEffect(() => {
+    if (settings.secretStore === "keychain") void keychainAvailable().then((ok) => ok || changeSettings({ secretStore: "file" }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /** Switch where secrets live and move the open collection's existing secret values there. */
+  const changeSecretStore = (mode: SecretStore) =>
+    guard(async () => {
+      if (mode === "keychain" && !(await keychainAvailable())) throw new Error("The system keychain isn't available here.");
+      let moved = 0;
+      if (collection) moved = await migrateSecrets(collection.root, mode);
+      secretStore.current = mode;
+      changeSettings({ secretStore: mode });
+      if (collection) await reloadEnvs();
+      flash(moved ? `Moved ${moved} secret value${moved === 1 ? "" : "s"} ${mode === "keychain" ? "into the Keychain" : "back to the secrets file"}` : mode === "keychain" ? "Secrets will be kept in the Keychain" : "Secrets will be kept in the file");
+    });
   useEffect(() => {
     saveSettings(settings);
     applyAppearance(settings);
@@ -2253,6 +2276,7 @@ export default function App() {
                     className="link"
                     onClick={async () => {
                       if (settings.confirmDelete && !(await confirmDialog("Delete environment", `"${envRaw.name}" will be removed.`))) return;
+                      if (collection && envRaw.file) await forgetEnvironmentSecrets(collection.root, envRaw).catch(() => {});
                       if (envRaw.file) await removePath(envRaw.file).catch(() => {});
                       const rest = envs.filter((x) => x.id !== envRaw.id);
                       setEnvs(rest);
@@ -2409,7 +2433,7 @@ export default function App() {
       {settingsOpen && (
         <SettingsModal
           settings={settings}
-          onChange={changeSettings}
+          onChange={(p) => ("secretStore" in p && p.secretStore ? void changeSecretStore(p.secretStore) : changeSettings(p))}
           section={settingsOpen}
           onSection={setSettingsOpen}
           onClose={() => setSettingsOpen(null)}

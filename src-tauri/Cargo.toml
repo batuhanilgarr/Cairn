@@ -51,6 +51,10 @@ bytes = "1.12.1"
 uuid = { version = "1.28.0", features = ["v4"] }
 
 
+# The macOS Keychain, through the Security framework (the secret never goes through a command line).
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3", default-features = false, features = ["apple-native"] }
+
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
 [profile.release]
 codegen-units = 1

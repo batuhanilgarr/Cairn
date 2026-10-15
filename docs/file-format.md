@@ -236,6 +236,16 @@ staging.env.yaml:
   token: the-real-value
 ```
 
+With **Settings > Secrets > Keep secret values in > The macOS Keychain**, the file holds a marker instead of the value, and the value lives in the Keychain (service `Cairn`, account `<collection folder>|<environment file>|<variable>`):
+
+```yaml
+# .cairn/secrets.yaml (never committed)
+staging.env.yaml:
+  token: "keychain:"
+```
+
+The CLI reads such values through macOS's `security` tool when it runs on that Mac (macOS may ask once to allow it). Anywhere else (CI, another machine) pass them with `--var name=value` or `CAIRN_VAR_name`; the run says which secrets it couldn't read.
+
 ## What is not in the format
 
 Session variables (set by scripts and captures), OAuth tokens, cookies and response history live in memory or in the app's own settings and are never written into the collection.

@@ -8,6 +8,7 @@ import { KVEditor } from "./KVEditor";
 import { AiSettings } from "./AiSettings";
 import { emptyKV } from "./lib/util";
 import { focusScope } from "./lib/focusScope";
+import { keychainAvailable } from "./lib/keychain";
 
 export type SettingsSection = "general" | "appearance" | "variables" | "ai" | "network" | "cookies" | "shortcuts" | "data" | "about";
 
@@ -58,6 +59,8 @@ type Props = {
 
 export function SettingsModal({ settings: s, onChange, section, onSection, onClose, onClearHistory, onResetState, onClearSession }: Props) {
   const [version, setVersion] = useState("");
+  const [keychainOk, setKeychainOk] = useState(false);
+  useEffect(() => void keychainAvailable().then(setKeychainOk), []);
   useEffect(() => {
     getVersion().then(setVersion).catch(() => setVersion("dev"));
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -116,6 +119,17 @@ export function SettingsModal({ settings: s, onChange, section, onSection, onClo
                 </select>
               ))}
               {row("Confirm before deleting", "Ask before deleting requests, folders and environments.", toggle("confirmDelete", "Confirm before deleting"))}
+              <h2>Secrets</h2>
+              {row(
+                "Keep secret values in",
+                keychainOk
+                  ? "Variables marked secret never go into the collection files. Choose where their values live on this Mac. Switching moves the open collection's existing secrets. The CLI can read Keychain values on this Mac (macOS may ask once); in CI pass them with --var."
+                  : "The system keychain is only available on macOS. Secret values stay in the git-ignored .cairn/secrets.yaml.",
+                <select aria-label="Keep secret values in" value={s.secretStore} disabled={!keychainOk} onChange={(e) => onChange({ secretStore: e.target.value as Settings["secretStore"] })}>
+                  <option value="file">A git-ignored file (.cairn/secrets.yaml)</option>
+                  <option value="keychain">The macOS Keychain</option>
+                </select>,
+              )}
             </>
           )}
 

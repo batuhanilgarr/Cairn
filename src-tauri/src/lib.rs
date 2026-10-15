@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 pub mod bigbody;
+pub mod keychain;
 pub mod cookies;
 pub mod grpc;
 pub mod mcp;
@@ -543,6 +544,10 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             send_request,
+            keychain::secret_available,
+            keychain::secret_get,
+            keychain::secret_set,
+            keychain::secret_delete,
             bigbody::body_prepare,
             bigbody::body_lines,
             bigbody::body_search,

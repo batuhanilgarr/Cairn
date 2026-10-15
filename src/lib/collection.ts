@@ -2,6 +2,7 @@ import { parse, stringify } from "yaml";
 import type { AuthMode, BodyMode, Environment, FormPart, KV, OAuthConfig, RequestKind, RequestTab } from "./types";
 import { defaultOAuth, emptyKV, emptyPart, newTab, uid } from "./util";
 import { foldParamsIntoUrl, syncParams } from "./query";
+import { KEYCHAIN_MARKER, keychainDelete, keychainEvents, keychainGet, keychainSet, secretAccount, secretStore, type SecretStore } from "./keychain";
 import { basename, dirname, join, listFiles, makeDir, pathExists, readText, removePath, writeText } from "./fs";
 
 /**
@@ -371,18 +372,20 @@ export async function loadEnvironments(root: string): Promise<Environment[]> {
   for (const file of files) {
     const d: any = parse((await readText(file)) ?? "") ?? {};
     const key = basename(file);
-    const vars: KV[] = (Array.isArray(d.vars) ? d.vars : []).map((v: any) => {
+    const missing: string[] = [];
+    const vars: KV[] = [];
+    for (const v of Array.isArray(d.vars) ? d.vars : []) {
       const isSecret = v?.secret === true;
-      return {
-        id: uid(),
-        key: String(v?.key ?? ""),
-        value: isSecret ? String(secrets[key]?.[v.key] ?? "") : String(v?.value ?? ""),
-        enabled: v?.enabled !== false,
-        secret: isSecret,
-      };
-    });
+      let value = isSecret ? String(secrets[key]?.[v.key] ?? "") : String(v?.value ?? "");
+      if (isSecret && value === KEYCHAIN_MARKER) {
+        // the value is in the Keychain: fetch it; if that fails the variable stays empty and is reported
+        value = (await keychainGet(secretAccount(root, file, String(v.key))).catch(() => null)) ?? "";
+        if (!value) missing.push(String(v.key));
+      }
+      vars.push({ id: uid(), key: String(v?.key ?? ""), value, enabled: v?.enabled !== false, secret: isSecret });
+    }
     vars.push(emptyKV());
-    envs.push({ id: file, name: String(d.name ?? key), vars, file, ...(typeof d.extends === "string" && d.extends ? { extends: d.extends } : {}) });
+    envs.push({ id: file, name: String(d.name ?? key), vars, file, ...(typeof d.extends === "string" && d.extends ? { extends: d.extends } : {}), ...(missing.length ? { missing } : {}) });
   }
   return envs;
 }
@@ -418,7 +421,7 @@ export function effectiveEnv(envs: Environment[], env: Environment | undefined, 
   return { ...env, vars: [...merged.values()] };
 }
 
-export async function saveEnvironment(root: string, env: Environment): Promise<string> {
+export async function saveEnvironment(root: string, env: Environment, store: SecretStore = secretStore.current): Promise<string> {
   const file = env.file ?? (await uniquePath(join(root, "environments"), slug(env.name), ".env.yaml"));
   const vars = env.vars
     .filter((v) => v.key)
@@ -431,12 +434,54 @@ export async function saveEnvironment(root: string, env: Environment): Promise<s
   await writeText(file, stringify({ name: env.name, ...(env.extends ? { extends: env.extends } : {}), vars }, YAML_OPTS));
 
   const all = await readSecrets(root);
+  const before = all[basename(file)] ?? {};
   const mine: Record<string, string> = {};
-  for (const v of env.vars) if (v.secret && v.key) mine[v.key] = v.value;
+  let keychainError: string | null = null;
+  for (const v of env.vars) {
+    if (!(v.secret && v.key)) continue;
+    if (store === "keychain" && v.value) {
+      try {
+        await keychainSet(secretAccount(root, file, v.key), v.value);
+        mine[v.key] = KEYCHAIN_MARKER;
+        continue;
+      } catch (e) {
+        // never lose a value because the Keychain said no: keep it in the file and tell the user
+        keychainError ??= String((e as Error).message ?? e);
+      }
+    }
+    mine[v.key] = v.value;
+  }
+  // entries that were in the Keychain and no longer are (moved back to the file, removed, no longer secret)
+  for (const [k, val] of Object.entries(before)) if (val === KEYCHAIN_MARKER && mine[k] !== KEYCHAIN_MARKER) await keychainDelete(secretAccount(root, file, k)).catch(() => {});
   if (Object.keys(mine).length) all[basename(file)] = mine;
   else delete all[basename(file)];
   await writeText(secretsPath(root), stringify(all, YAML_OPTS));
+  if (keychainError) keychainEvents.onError?.(`${keychainError} The value was kept in the secrets file instead.`);
   return file;
+}
+
+/** An environment is being deleted: drop its secrets from the Keychain and from the secrets file. */
+export async function forgetEnvironmentSecrets(root: string, env: Environment): Promise<void> {
+  if (!env.file) return;
+  const all = await readSecrets(root);
+  const base = basename(env.file);
+  for (const [k, val] of Object.entries(all[base] ?? {})) if (val === KEYCHAIN_MARKER) await keychainDelete(secretAccount(root, env.file, k)).catch(() => {});
+  if (base in all) {
+    delete all[base];
+    await writeText(secretsPath(root), stringify(all, YAML_OPTS));
+  }
+}
+
+/** Move every secret of a collection to the Keychain or back to the file. Returns how many values moved. */
+export async function migrateSecrets(root: string, to: SecretStore): Promise<number> {
+  let moved = 0;
+  for (const env of await loadEnvironments(root)) {
+    const n = env.vars.filter((v) => v.secret && v.key && v.value).length;
+    if (!n) continue;
+    await saveEnvironment(root, env, to);
+    moved += n;
+  }
+  return moved;
 }
 
 export { dirname };

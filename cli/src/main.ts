@@ -146,6 +146,7 @@ export async function runCollection(o: RunOptions): Promise<Report> {
   } else if (envs.length === 1) env = effectiveEnv(envs, envs[0]);
   else if (envs.length > 1) o.onNote?.(`Several environments exist (${envs.map((e) => e.name).join(", ")}); none selected. Use --env.`);
 
+  if (env?.missing?.length) o.onNote?.(`Secret${env.missing.length > 1 ? "s" : ""} ${env.missing.join(", ")} ${env.missing.length > 1 ? "are" : "is"} in the macOS Keychain and couldn't be read here (CI, another Mac, or access denied). Pass ${env.missing.length > 1 ? "them" : "it"} with --var name=value or CAIRN_VAR_name.`);
   const base: Record<string, string> = {};
   for (const [k, v] of Object.entries(process.env)) if (k.startsWith("CAIRN_VAR_") && v !== undefined) base[k.slice("CAIRN_VAR_".length)] = v;
   Object.assign(base, o.vars ?? {});

@@ -1,6 +1,7 @@
 import type { KV } from "./types";
 import { DEFAULT_AI, type AiConfig } from "./ai";
 import { load, save } from "./util";
+import type { SecretStore } from "./keychain";
 
 export type Settings = {
   theme: "system" | "light" | "dark";
@@ -26,6 +27,8 @@ export type Settings = {
   globals: KV[];
   /** AI assistant endpoint. Kept on this Mac only. */
   ai: AiConfig;
+  /** Where secret variable values are kept: the git-ignored .cairn/secrets.yaml, or the macOS Keychain. */
+  secretStore: SecretStore;
 };
 
 export const ACCENTS: { name: string; light: string; dark: string }[] = [
@@ -57,6 +60,7 @@ export const DEFAULT_SETTINGS: Settings = {
   cookies: true,
   globals: [],
   ai: DEFAULT_AI,
+  secretStore: "file",
 };
 
 export const loadSettings = (): Settings => {
