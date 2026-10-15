@@ -905,7 +905,7 @@ test("import: the HAR option is offered, and the choice dialog is accessible", a
   try {
     await page.keyboard.press("Control+k");
     await page.waitForSelector(".palette");
-    await page.keyboard.type("import");
+    await page.keyboard.type("Import OpenAPI, Postman");
     await page.waitForTimeout(250);
     await page.keyboard.press("Enter");
     await page.waitForSelector('[role="dialog"]:not(.palette)');
@@ -917,6 +917,58 @@ test("import: the HAR option is offered, and the choice dialog is accessible", a
       assert.match(text, /HAR recording/);
       assert.match(text, /Postman/);
       assert.deepEqual(v.map((x) => `${x.id}: ${x.where.join(" | ")}`), [], "accessibility violations");
+    });
+  } finally {
+    await context.close();
+  }
+});
+
+test("import from clipboard: preview first, then import; wrong content says why; accessible", async () => {
+  const { page, context, errors, check } = await open({ width: 1360 }, "paste import");
+  try {
+    await page.keyboard.press("Control+k");
+    await page.waitForSelector(".palette");
+    await page.keyboard.type("openapi from clipboard");
+    await page.waitForTimeout(250);
+    await page.keyboard.press("Enter");
+    await page.waitForSelector(".dialog.paste");
+    await page.waitForTimeout(500);
+    const importBtn = page.getByRole("button", { name: "Import", exact: true });
+    const start = { disabled: await importBtn.isDisabled() };
+    await page.fill(".paste-box", "just some words");
+    await page.waitForTimeout(450);
+    const wrong = { text: await page.locator(".paste-status").textContent(), disabled: await importBtn.isDisabled() };
+    await page.fill(".paste-box", JSON.stringify({ info: { name: "c" }, item: [] }));
+    await page.waitForTimeout(450);
+    const postman = await page.locator(".paste-status").textContent();
+    const spec = JSON.stringify({ openapi: "3.0.3", info: { title: "Pets", version: "1" }, servers: [{ url: "https://pets.example" }], paths: { "/pets": { get: { summary: "List pets", responses: { 200: { description: "ok" } } }, post: { summary: "Add pet", responses: { 201: { description: "ok" } } } } } });
+    await page.fill(".paste-box", spec);
+    await page.waitForTimeout(450);
+    const good = { text: await page.locator(".paste-status").textContent(), disabled: await importBtn.isDisabled(), fits: await page.evaluate(() => { const r = document.querySelector(".dialog.paste").getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth && r.bottom <= innerHeight; }) };
+    const v = await axeViolations(page);
+    await page.fill(".paste-box", "https://pets.example/openapi.json");
+    await page.waitForTimeout(450);
+    const link = await page.locator(".paste-status").textContent();
+    await page.fill(".paste-box", spec);
+    await page.waitForTimeout(450);
+    await importBtn.click();
+    await page.waitForSelector(".dialog.paste", { state: "detached" });
+    await page.waitForFunction(() => /imported/i.test(document.body.textContent));
+    const done = await page.evaluate(() => document.querySelector('[role="dialog"]')?.textContent ?? "");
+    await check(async () => {
+      assert.deepEqual(errors, []);
+      assert.ok(start.disabled, "Import should be disabled until something valid is pasted");
+      assert.match(wrong.text, /isn't an OpenAPI/);
+      assert.ok(wrong.disabled);
+      assert.match(postman, /Postman collection/);
+      assert.match(good.text, /Pets/);
+      assert.match(good.text, /2 requests/);
+      assert.match(good.text, /GET \/pets/);
+      assert.ok(!good.disabled, "a valid spec can be imported");
+      assert.ok(good.fits, "the dialog does not fit the window");
+      assert.deepEqual(v.map((x) => `${x.id}: ${x.where.join(" | ")}`), [], "accessibility violations");
+      assert.match(link, /That's a link/);
+      assert.match(done, /Created 2/);
     });
   } finally {
     await context.close();

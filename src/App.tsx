@@ -40,6 +40,7 @@ import { bodyText } from "./lib/bigbody";
 import { SecretScanModal, type ScanState } from "./SecretScanModal";
 import { buildOpenApi, collectExportItems, toJson, toYaml } from "./lib/openapiExport";
 import { isHar, parseHar } from "./lib/har";
+import { PasteImportModal } from "./PasteImportModal";
 import { applyFix, checkGitignore, scanText, type Finding } from "./lib/secrets";
 import { dotenvName, parseDotenv } from "./lib/dotenv";
 import { formatFilterValues, runFilter } from "./lib/filter";
@@ -202,6 +203,7 @@ export default function App() {
   const resView = useRef<EditorView | null>(null);
   const closedTabs = useRef<RequestTab[]>([]);
   const [scan, setScan] = useState<ScanState | null>(null);
+  const [pasteImport, setPasteImport] = useState(false);
   const [tabMenu, setTabMenu] = useState<{ id: string; x: number; y: number } | null>(null);
   const [dragTab, setDragTab] = useState<{ id: string; over: string | null } | null>(null);
 
@@ -393,11 +395,19 @@ export default function App() {
     if (!collection) return;
     const text = /^https?:\/\//i.test(source) ? await fetchSpec(source) : await readText(source);
     if (text === null) throw new Error(`Couldn't read ${source}`);
+    await importOpenApiText(text, source, sync);
+  };
+
+  /** `source` is where the text came from (a URL or file, so it can be re-synced); null for pasted text. */
+  const importOpenApiText = async (text: string, source: string | null, sync: boolean) => {
+    if (!collection) return;
     const parsed = parseOpenApi(text);
     const summary = await writeImport(collection.root, parsed.requests, sync);
     const env = await ensureEnvironment(collection.root, parsed.title, parsed.vars, ["clientSecret", "token", "password", "apiKey"]);
-    const meta = (await readCollectionMeta(collection.root)) ?? { name: collection.name };
-    await writeCollectionMeta(collection.root, { ...meta, openapi: { source } });
+    if (source) {
+      const meta = (await readCollectionMeta(collection.root)) ?? { name: collection.name };
+      await writeCollectionMeta(collection.root, { ...meta, openapi: { source } });
+    }
     await reloadEnvs(env.id);
     await refreshTree();
     await info(`${parsed.title}: imported`, summarize(`Environment "${env.name}" has {{baseUrl}} and the variables the requests use.`, summary, parsed.notes));
@@ -411,6 +421,7 @@ export default function App() {
         ...(meta?.openapi ? [{ id: "resync", label: "Re-sync OpenAPI", hint: meta.openapi.source }] : []),
         { id: "oas-url", label: "OpenAPI / Swagger from URL", hint: "JSON or YAML, v2 or v3" },
         { id: "oas-file", label: "OpenAPI / Swagger from file" },
+        { id: "oas-paste", label: "OpenAPI / Swagger from clipboard", hint: "paste a spec or a link to one, with a preview" },
         { id: "postman-folder", label: "Postman export folder", hint: "all collections, environments (with secrets) and globals in one go" },
         { id: "postman", label: "Postman collection or environment file", hint: "one v2.x JSON export" },
         { id: "bruno", label: "Bruno collection", hint: "pick the collection folder" },
@@ -422,6 +433,7 @@ export default function App() {
         const url = await ask("OpenAPI URL", "", "Import", "e.g. https://petstore3.swagger.io/api/v3/openapi.json");
         if (url) await importOpenApi(url, true);
       }
+      if (choice === "oas-paste") return void setPasteImport(true);
       if (choice === "oas-file") {
         const f = await pickFile("Choose an OpenAPI file", ["json", "yaml", "yml"]);
         if (f) await importOpenApi(f, true);
@@ -1309,6 +1321,7 @@ export default function App() {
     "duplicate-tab": () => addTab({ ...active, id: uid(), file: null, saved: null, name: "New request" }),
     "next-tab": () => nextTab(1),
     "prev-tab": () => nextTab(-1),
+    "import-clipboard": () => (collection ? setPasteImport(true) : void info("Open a collection first", "Create or open a collection (Collections tab) to import into.")),
     "export-openapi": () => (collection ? void exportOpenApi() : void info("No collection open", "Open a collection to export it.")),
     "scan-secrets": () => (collection ? void runScan() : void info("No collection open", "Open a collection to scan its files for secrets.")),
     "run-collection": () => (collection ? void runFolder(collection.root, `Run ${collection.name}`) : void info("No collection open", "Open a collection to run its requests.")),
@@ -1413,10 +1426,11 @@ export default function App() {
     { id: "a:right", group: "Action", title: "Move tab right", run: () => fire("tab-right") },
     { id: "a:open", group: "Action", title: "Open collection…", hint: "⌘O", run: () => fire("open-collection") },
     { id: "a:newc", group: "Action", title: "New collection…", run: () => fire("new-collection") },
-    { id: "a:import", group: "Action", title: "Import OpenAPI, Postman, Bruno…", run: () => fire("import") },
+    { id: "a:import", group: "Action", title: "Import OpenAPI, Postman, HAR, Bruno…", run: () => fire("import") },
     { id: "a:run", group: "Action", title: "Run collection", run: () => fire("run-collection") },
     { id: "a:scan", group: "Action", title: "Scan for secrets", run: () => fire("scan-secrets") },
     { id: "a:openapi", group: "Action", title: "Export OpenAPI", run: () => fire("export-openapi") },
+    { id: "a:oaspaste", group: "Action", title: "Import OpenAPI from clipboard", run: () => fire("import-clipboard") },
     { id: "a:mock", group: "Action", title: mockPort ? `Mock server (running on :${mockPort})` : "Mock server…", run: () => fire("mock") },
     { id: "a:diff", group: "Action", title: "Compare responses of this request", run: () => (hist.length > 1 ? setDiffOpen(true) : flash("Send the request at least twice to compare responses")) },
     { id: "a:code", group: "Action", title: "Show or hide the code snippet panel", hint: "⇧⌘G", run: () => fire("codegen") },
@@ -2265,6 +2279,18 @@ export default function App() {
       )}
       {diffOpen && hist.length > 1 && <DiffModal items={hist} onClose={() => setDiffOpen(false)} />}
       {paletteOpen && <CommandPalette commands={commands} onClose={() => setPaletteOpen(false)} />}
+      {pasteImport && (
+        <PasteImportModal
+          onClose={() => setPasteImport(false)}
+          onImport={(textOrUrl) => {
+            setPasteImport(false);
+            void guard(async () => {
+              if (/^https?:\/\/\S+$/i.test(textOrUrl)) return importOpenApi(textOrUrl, true);
+              await importOpenApiText(textOrUrl, null, true);
+            });
+          }}
+        />
+      )}
       {scan && (
         <SecretScanModal
           state={scan}

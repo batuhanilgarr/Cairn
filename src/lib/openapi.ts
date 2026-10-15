@@ -312,3 +312,37 @@ export function mergeSpecInto(existing: RequestTab, fresh: RequestTab): RequestT
   }
   return out;
 }
+
+/** What a pasted text is, without importing anything: drives the preview in the "from clipboard" dialog. */
+export type SpecInfo =
+  | { kind: "spec"; title: string; version: string; requests: number; names: string[]; notes: number }
+  | { kind: "url"; url: string }
+  | { kind: "empty" }
+  | { kind: "other"; reason: string };
+
+const PREVIEW_LIMIT = 3_000_000;
+
+export function inspectSpec(text: string): SpecInfo {
+  const t = text.trim();
+  if (!t) return { kind: "empty" };
+  if (/^https?:\/\/\S+$/i.test(t)) return { kind: "url", url: t };
+  if (t.length > PREVIEW_LIMIT) return { kind: "other", reason: "Too large to preview, but Import will read it." };
+  let doc: any;
+  try {
+    doc = parse(t);
+  } catch (e) {
+    return { kind: "other", reason: `Not valid JSON or YAML: ${String((e as Error).message).split("\n")[0]}` };
+  }
+  if (!doc || typeof doc !== "object" || Array.isArray(doc)) return { kind: "other", reason: "That isn't an OpenAPI or Swagger document." };
+  if (doc.info && Array.isArray(doc.item)) return { kind: "other", reason: "This is a Postman collection: use Import > Postman collection or environment file." };
+  if (Array.isArray(doc.log?.entries)) return { kind: "other", reason: "This is a HAR recording: use Import > HAR recording." };
+  if (!(doc.openapi || doc.swagger)) return { kind: "other", reason: "Missing the openapi (or swagger) version field." };
+  if (!doc.paths || typeof doc.paths !== "object") return { kind: "other", reason: "The document has no paths." };
+  try {
+    const r = parseOpenApi(t);
+    if (!r.requests.length) return { kind: "other", reason: "The document has no operations (GET, POST, ...) to import." };
+    return { kind: "spec", title: r.title, version: String(doc.openapi ?? `Swagger ${doc.swagger}`), requests: r.requests.length, names: r.requests.slice(0, 6).map((q) => `${q.tab.method} ${q.tab.source?.replace(/^\w+ /, "") ?? q.tab.url}`), notes: r.notes.length };
+  } catch (e) {
+    return { kind: "other", reason: (e as Error).message };
+  }
+}

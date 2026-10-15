@@ -824,3 +824,10 @@ pre.block { white-space: pre-wrap; word-break: break-word; margin: 0; background
 .sev.high { color: var(--bad-ink); background: color-mix(in srgb, var(--bad) 14%, transparent); }
 .sev.medium { color: var(--warn-ink); background: color-mix(in srgb, var(--warn) 16%, transparent); }
 .scan-ok { color: var(--ok-ink); font-weight: 600; }
+
+/* import from clipboard */
+.dialog.paste { width: 600px; max-width: 94vw; }
+.paste-box { display: block; width: 100%; height: 170px; margin: 8px 0; resize: vertical; font-family: var(--mono); font-size: 12px; white-space: pre; overflow: auto; }
+.paste-status { min-height: 44px; font-size: 13px; }
+.paste-list { margin: 6px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 2px; }
+.paste-list li { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -15,7 +15,7 @@
   "scripts": {
     "build": "node build.mjs",
     "typecheck": "tsc --noEmit -p .",
-    "test": "node build.mjs && node --test test/cli.test.mjs test/postman.test.mjs test/query.test.mjs test/ai.test.mjs test/filter.test.mjs test/env.test.mjs test/link.test.mjs test/secrets.test.mjs test/openapi-export.test.mjs test/har.test.mjs test/schema.test.mjs"
+    "test": "node build.mjs && node --test test/cli.test.mjs test/postman.test.mjs test/query.test.mjs test/ai.test.mjs test/filter.test.mjs test/env.test.mjs test/link.test.mjs test/secrets.test.mjs test/openapi-export.test.mjs test/har.test.mjs test/schema.test.mjs test/inspect.test.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
