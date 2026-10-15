@@ -4,6 +4,7 @@ import { parseArgs } from "node:util";
 import { executeRequest } from "../../src/lib/pipeline";
 import { setNetwork } from "../../src/lib/net";
 import { atLeast, formatFindings, scanDirectory, SEVERITIES } from "./scan";
+import { validateDirectory } from "./validate";
 import { buildOpenApi, collectExportItems, toJson, toYaml } from "../../src/lib/openapiExport";
 import { effectiveEnv, linkTarget, loadChain, loadDefaults, loadEnvironments, parseRequest, readCollectionName } from "../../src/lib/collection";
 import { listFilesRecursive } from "../../src/lib/fs";
@@ -20,6 +21,9 @@ Usage
   cairn export openapi [folder] [-o file] [--format yaml|json] [--env name]
       Write the collection as an OpenAPI 3.0.3 document: requests become operations, folders tags, saved examples
       responses, auth settings security schemes. Credentials are never written. The log goes to stderr when the spec goes to stdout.
+  cairn validate [folder] [--format text|json]
+      Check request, folder, collection and environment files against the published format schema (v1).
+      Prints file:line and what is wrong; exit code 1 when anything is. The same schemas give editors completion and hover docs.
   cairn scan [folder] [--fail-on high|medium|low|never] [--format text|json]
       Look for credentials that would be committed (tokens, passwords, keys in request files, folder defaults and
       environments). Prints masked previews only. Exit code 1 when something at or above --fail-on (default medium)
@@ -281,6 +285,18 @@ async function main(argv: string[]): Promise<number> {
     for (const n of notes) log(dim(`  ${n}`));
     return 0;
   }
+  if (cmd === "validate") {
+    const dir = target ?? ".";
+    if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) throw new UsageError(`Not a folder: ${dir}`);
+    const { checked, failures } = validateDirectory(dir);
+    if (values.format === "json") console.log(JSON.stringify({ checked, failures }, null, 2));
+    else {
+      for (const f of failures) for (const p of f.problems) console.log(`${f.file}:${p.line}  ${p.path ? p.path + "  " : ""}${p.message}`);
+      const n = failures.reduce((a, f) => a + f.problems.length, 0);
+      console.log(failures.length ? red(`${n} problem${n === 1 ? "" : "s"} in ${failures.length} of ${checked} file${checked === 1 ? "" : "s"}`) : green(`${checked} file${checked === 1 ? "" : "s"} follow the format (schema v1)`));
+    }
+    return failures.length ? 1 : 0;
+  }
   if (cmd === "scan") {
     const failOn = (values["fail-on"] ?? "medium") as string;
     if (failOn !== "never" && !SEVERITIES.includes(failOn as never)) throw new UsageError(`--fail-on expects high, medium, low or never, got "${failOn}"`);
@@ -291,7 +307,7 @@ async function main(argv: string[]): Promise<number> {
     else console.log(formatFindings(findings, { red, yellow, dim, bold, green }));
     return failOn !== "never" && findings.some((f) => atLeast(f, failOn as "high")) ? 1 : 0;
   }
-  if (cmd !== "run") throw new UsageError(`Unknown command "${cmd}". Try: cairn run, cairn scan or cairn export openapi`);
+  if (cmd !== "run") throw new UsageError(`Unknown command "${cmd}". Try: cairn run, cairn validate, cairn scan or cairn export openapi`);
   if (!target) throw new UsageError("Tell me what to run: cairn run <collection | folder | request.req.yaml>");
 
   const vars: Record<string, string> = {};

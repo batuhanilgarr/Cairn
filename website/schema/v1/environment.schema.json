@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://batuhanilgarr.github.io/Reqnest/schema/v1/environment.schema.json",
+  "title": "Cairn environment (environments/*.env.yaml), format v1",
+  "description": "A set of variables. Secret variables are written here with an empty value; the real value lives in the git-ignored .cairn/secrets.yaml.",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "extends": {
+      "type": "string",
+      "description": "Name of an environment this one builds on: its variables apply first, this one overrides them."
+    },
+    "vars": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "value": {
+            "$ref": "common.schema.json#/$defs/scalar",
+            "description": "Empty for secret variables."
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Written only as `false`."
+          },
+          "secret": {
+            "type": "boolean",
+            "description": "Written only as `true`: the value is kept in .cairn/secrets.yaml, not here."
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

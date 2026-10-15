@@ -8,15 +8,13 @@ params:
     value: customer
     enabled: true
 examples:
-  - id: e1
-    name: OK
+  - name: OK
     status: 200
     headers:
       - key: Content-Type
         value: application/json
     body: '{"data": [{"id": "inv_1", "amount": 12900, "paid": false, "customer": {"id": "cus_1"}}], "has_more": false}'
-  - id: e2
-    name: Unauthorized
+  - name: Unauthorized
     status: 401
     headers:
       - key: Content-Type

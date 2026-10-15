@@ -59,3 +59,11 @@ npx cairn export openapi ./my-collection/invoices          # just one folder
 ```
 
 Requests become operations, folders become tags, saved examples become responses, and auth settings (including what folders inherit) become security schemes. `{{baseUrl}}` becomes the server (or a server variable when no value is known). gRPC, WebSocket, SSE and MCP requests can't be described in OpenAPI and are skipped with a note. Credentials are never written: auth values are left out and sensitive fields in examples are replaced by `<redacted>`.
+
+## Validate the files
+
+```sh
+npx cairn validate ./my-collection
+```
+
+Checks requests, folder defaults, the collection file and environments against the published JSON Schemas (format v1) and prints `file:line  path  message`. Exit code 1 if anything is wrong, so it works as a pre-commit hook or a CI step. The same schemas give VS Code completion and hover docs: see [docs/file-format.md](../docs/file-format.md).

@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://batuhanilgarr.github.io/Reqnest/schema/v1/folder.schema.json",
+  "title": "Cairn folder defaults (folder.yaml), format v1",
+  "description": "Defaults for every request in this folder and below. The collection root has one too. A deeper level overrides a shallower one; a request overrides both.",
+  "type": "object",
+  "properties": {
+    "vars": {
+      "$ref": "common.schema.json#/$defs/rows",
+      "description": "Variables, as defaults: an environment or a script can override them. They are committed, so keep secrets out."
+    },
+    "headers": {
+      "$ref": "common.schema.json#/$defs/rows",
+      "description": "Headers added to every request. A switched-off row removes an inherited header."
+    },
+    "auth": {
+      "$ref": "common.schema.json#/$defs/auth"
+    },
+    "scripts": {
+      "$ref": "common.schema.json#/$defs/scripts"
+    }
+  },
+  "additionalProperties": false
+}

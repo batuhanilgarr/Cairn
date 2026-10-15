@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://batuhanilgarr.github.io/Reqnest/schema/v1/collection.schema.json",
+  "title": "Cairn collection file (cairn.yaml), format v1",
+  "description": "Marks a folder as a collection. Collections made before the rename have reqnest.yaml, which is still read.",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "openapi": {
+      "type": "object",
+      "description": "Set by an OpenAPI import so it can be re-synced.",
+      "required": [
+        "source"
+      ],
+      "properties": {
+        "source": {
+          "type": "string",
+          "description": "URL or path of the spec."
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

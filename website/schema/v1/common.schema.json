@@ -1,0 +1,139 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://batuhanilgarr.github.io/Reqnest/schema/v1/common.schema.json",
+  "title": "Cairn common definitions (format v1)",
+  "$defs": {
+    "scalar": {
+      "type": [
+        "string",
+        "number",
+        "boolean",
+        "null"
+      ],
+      "description": "Written as a string by Cairn; numbers and booleans are accepted when hand-written and read as text."
+    },
+    "row": {
+      "type": "object",
+      "description": "A name/value row (a header, a query parameter, a variable). Rows are written only when they have a key or a value.",
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/scalar",
+          "description": "The name."
+        },
+        "value": {
+          "$ref": "#/$defs/scalar",
+          "description": "The value. May contain {{variables}}."
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "Written only as `false`: a switched-off row stays in the file but is not sent."
+        }
+      },
+      "additionalProperties": false
+    },
+    "rows": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/row"
+      }
+    },
+    "scripts": {
+      "type": "object",
+      "description": "JavaScript that runs around the request (pm.* and the Cairn script API).",
+      "properties": {
+        "pre": {
+          "type": "string",
+          "description": "Runs before the request is sent."
+        },
+        "post": {
+          "type": "string",
+          "description": "Runs after the response arrives."
+        }
+      },
+      "additionalProperties": false
+    },
+    "auth": {
+      "type": "object",
+      "description": "Authorization. Omitted when a request has none; `inherit` takes the nearest folder.yaml (or collection) that sets one.",
+      "required": [
+        "mode"
+      ],
+      "properties": {
+        "mode": {
+          "enum": [
+            "none",
+            "inherit",
+            "bearer",
+            "basic",
+            "oauth2"
+          ]
+        },
+        "token": {
+          "type": "string",
+          "description": "bearer: the token. Use a secret variable such as {{token}}, not the value."
+        },
+        "username": {
+          "type": "string",
+          "description": "basic and oauth2 password grant."
+        },
+        "password": {
+          "type": "string",
+          "description": "basic and oauth2 password grant. Use a secret variable."
+        },
+        "grant": {
+          "enum": [
+            "client_credentials",
+            "authorization_code",
+            "password"
+          ],
+          "description": "oauth2 only."
+        },
+        "authUrl": {
+          "type": "string",
+          "description": "oauth2 authorization_code: the authorization endpoint."
+        },
+        "tokenUrl": {
+          "type": "string",
+          "description": "oauth2: the token endpoint."
+        },
+        "clientId": {
+          "type": "string"
+        },
+        "clientSecret": {
+          "type": "string",
+          "description": "Use a secret variable such as {{clientSecret}}."
+        },
+        "scope": {
+          "type": "string",
+          "description": "Space-separated scopes."
+        },
+        "redirectPort": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "description": "authorization_code: loopback port for the browser redirect (default 8976)."
+        },
+        "pkce": {
+          "type": "boolean",
+          "description": "authorization_code: written only as `false` (PKCE is on by default)."
+        },
+        "clientAuth": {
+          "enum": [
+            "basic",
+            "body"
+          ],
+          "description": "Where client credentials go on the token request (default basic)."
+        },
+        "prefix": {
+          "type": "string",
+          "description": "Authorization header prefix (default Bearer)."
+        },
+        "extra": {
+          "$ref": "#/$defs/rows",
+          "description": "Extra parameters sent to the token endpoint."
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

@@ -8,9 +8,5 @@ body:
   parts:
     - key: title
       value: report
-      enabled: true
-      kind: text
     - key: file
-      value: /tmp/report.pdf
-      enabled: true
-      kind: file
+      file: /tmp/report.pdf

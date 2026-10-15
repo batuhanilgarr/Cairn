@@ -15,11 +15,11 @@
   "scripts": {
     "build": "node build.mjs",
     "typecheck": "tsc --noEmit -p .",
-    "test": "node build.mjs && node --test test/cli.test.mjs test/postman.test.mjs test/query.test.mjs test/ai.test.mjs test/filter.test.mjs test/env.test.mjs test/link.test.mjs test/secrets.test.mjs test/openapi-export.test.mjs test/har.test.mjs"
+    "test": "node build.mjs && node --test test/cli.test.mjs test/postman.test.mjs test/query.test.mjs test/ai.test.mjs test/filter.test.mjs test/env.test.mjs test/link.test.mjs test/secrets.test.mjs test/openapi-export.test.mjs test/har.test.mjs test/schema.test.mjs"
   },
-  "dependencies": {},
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "ajv": "^8.20.0",
     "esbuild": "^0.25.0",
     "tough-cookie": "^5.1.0",
     "typescript": "~5.8.0",

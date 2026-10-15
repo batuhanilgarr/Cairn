@@ -1,0 +1,340 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://batuhanilgarr.github.io/Reqnest/schema/v1/request.schema.json",
+  "title": "Cairn request file (*.req.yaml), format v1",
+  "description": "One request per file. Keys are always written in the same order, defaults are omitted and there are no generated ids, so Git diffs stay small. A file that only says `use:` is a link to a shared request.",
+  "type": "object",
+  "if": {
+    "properties": {
+      "use": {}
+    },
+    "required": [
+      "use"
+    ]
+  },
+  "then": {
+    "description": "A link to a shared request: the content comes from that file; headers, auth and variables still come from where the link sits.",
+    "properties": {
+      "use": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Path of the shared .req.yaml, relative to this file (or absolute)."
+      }
+    },
+    "additionalProperties": false
+  },
+  "else": {
+    "properties": {
+      "name": {
+        "type": "string",
+        "description": "Shown in the tree and tabs. Defaults to the file name."
+      },
+      "type": {
+        "enum": [
+          "graphql",
+          "sse",
+          "ws",
+          "grpc",
+          "mcp"
+        ],
+        "description": "Omitted for plain HTTP requests."
+      },
+      "method": {
+        "type": "string",
+        "pattern": "^[A-Za-z]+$",
+        "description": "HTTP method, e.g. GET. Omitted for graphql, ws, grpc and mcp requests."
+      },
+      "url": {
+        "type": "string",
+        "description": "The full URL including the query string. May contain {{variables}}."
+      },
+      "source": {
+        "type": "string",
+        "description": "Where an import got this request from, so a re-sync can update it in place."
+      },
+      "params": {
+        "$ref": "common.schema.json#/$defs/rows",
+        "description": "Only switched-off query parameters; enabled ones live in `url`."
+      },
+      "headers": {
+        "$ref": "common.schema.json#/$defs/rows"
+      },
+      "body": {
+        "type": "object",
+        "description": "The request body.",
+        "properties": {
+          "mode": {
+            "enum": [
+              "none",
+              "json",
+              "text",
+              "form",
+              "multipart",
+              "binary"
+            ],
+            "description": "binary: `content` is the path of the file to send."
+          },
+          "content": {
+            "type": "string",
+            "description": "The body text (a YAML literal block, so line diffs are real)."
+          },
+          "parts": {
+            "type": "array",
+            "description": "multipart/form-data fields.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string"
+                },
+                "value": {
+                  "$ref": "common.schema.json#/$defs/scalar",
+                  "description": "A text field."
+                },
+                "file": {
+                  "type": "string",
+                  "description": "A file field: the path of the file to upload."
+                },
+                "contentType": {
+                  "type": "string"
+                },
+                "enabled": {
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "auth": {
+        "$ref": "common.schema.json#/$defs/auth"
+      },
+      "graphql": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string"
+          },
+          "variables": {
+            "type": "string",
+            "description": "JSON text."
+          },
+          "operation": {
+            "type": "string",
+            "description": "operationName."
+          }
+        },
+        "additionalProperties": false
+      },
+      "websocket": {
+        "type": "object",
+        "properties": {
+          "protocols": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string",
+            "description": "The message in the composer."
+          },
+          "saved": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "body": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "mcp": {
+        "type": "object",
+        "properties": {
+          "transport": {
+            "enum": [
+              "http",
+              "stdio"
+            ]
+          },
+          "command": {
+            "type": "string"
+          },
+          "args": {
+            "type": "string"
+          },
+          "env": {
+            "$ref": "common.schema.json#/$defs/rows"
+          }
+        },
+        "additionalProperties": false
+      },
+      "grpc": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "enum": [
+              "reflection",
+              "proto"
+            ]
+          },
+          "protoFiles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "importPaths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "method": {
+            "type": "string",
+            "description": "package.Service/Method"
+          },
+          "message": {
+            "type": "string",
+            "description": "JSON text."
+          },
+          "tls": {
+            "type": "boolean",
+            "description": "Written only as `false`."
+          }
+        },
+        "additionalProperties": false
+      },
+      "examples": {
+        "type": "array",
+        "description": "Saved responses; the mock server answers with them.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "status": {
+              "type": "integer",
+              "minimum": 100,
+              "maximum": 599
+            },
+            "headers": {
+              "$ref": "common.schema.json#/$defs/rows"
+            },
+            "body": {
+              "type": "string"
+            },
+            "delay": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Milliseconds."
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "tests": {
+        "type": "array",
+        "description": "Assertions checked after each send.",
+        "items": {
+          "type": "object",
+          "required": [
+            "kind",
+            "op"
+          ],
+          "properties": {
+            "kind": {
+              "enum": [
+                "status",
+                "json",
+                "header",
+                "body",
+                "time"
+              ]
+            },
+            "path": {
+              "type": "string",
+              "description": "json: a path such as $.data[0].id; header: the header name."
+            },
+            "op": {
+              "enum": [
+                "eq",
+                "neq",
+                "contains",
+                "matches",
+                "exists",
+                "lt",
+                "gt"
+              ]
+            },
+            "value": {
+              "$ref": "common.schema.json#/$defs/scalar",
+              "description": "Omitted for `exists`."
+            },
+            "enabled": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "capture": {
+        "type": "array",
+        "description": "Values copied from the response into variables for the next request.",
+        "items": {
+          "type": "object",
+          "required": [
+            "variable",
+            "path"
+          ],
+          "properties": {
+            "variable": {
+              "type": "string"
+            },
+            "from": {
+              "enum": [
+                "json",
+                "header"
+              ]
+            },
+            "path": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "scripts": {
+        "$ref": "common.schema.json#/$defs/scripts"
+      },
+      "settings": {
+        "type": "object",
+        "description": "Only values that differ from the defaults are written.",
+        "properties": {
+          "followRedirects": {
+            "type": "boolean"
+          },
+          "insecure": {
+            "type": "boolean",
+            "description": "Skip TLS certificate verification."
+          },
+          "timeoutMs": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "additionalProperties": false
+  }
+}
