@@ -24,6 +24,8 @@ type Props = {
   onNewFolder: (dir: string) => void;
   onRename: (node: TreeNode) => void;
   onDuplicate: (node: TreeNode) => void;
+  onLink: (dir: string) => void;
+  onUnlink: (node: TreeNode) => void;
   onDelete: (node: TreeNode) => void;
 };
 
@@ -121,7 +123,7 @@ type RowProps = Props & { node: TreeNode; depth: number; open: boolean; onToggle
 const Row = memo(function Row({ node, depth, open, onToggle, ...p }: RowProps) {
   const label = node.isDir ? node.name : node.name.replace(/\.req\.ya?ml$/, "");
   const isActive = !node.isDir && p.activeFile === node.path;
-  const method = p.labels[node.path];
+  const [method, linked] = (p.labels[node.path] ?? "").split("|");
   const btn = (title: string, icon: React.ReactNode, run: () => void) => (
     <button title={title} aria-label={title} onClick={run}>{icon}</button>
   );
@@ -146,10 +148,11 @@ const Row = memo(function Row({ node, depth, open, onToggle, ...p }: RowProps) {
           <span className="tree-ico"><IconFolderSm /></span>
         </>
       ) : (
-        <span className={`tree-method m-${method ?? "none"}`}>{method ?? ""}</span>
+        <span className={`tree-method m-${method || "none"}`}>{method}</span>
       )}
       <span className="tree-label">
         {label}
+        {linked && <span className="tree-link" title="Linked to a shared request: edits change the shared file" aria-label="linked">⛓</span>}
         {p.dirty.has(node.path) && <b className="unsaved" title="Unsaved changes">●</b>}
       </span>
       <span className="row-actions" onClick={(e) => e.stopPropagation()}>
@@ -161,6 +164,7 @@ const Row = memo(function Row({ node, depth, open, onToggle, ...p }: RowProps) {
             node.isDir
               ? [
                   { label: "New folder", onClick: () => p.onNewFolder(node.path) },
+                  { label: "Link a request…", hint: "reuse one defined elsewhere", onClick: () => p.onLink(node.path) },
                   { label: "Run folder", onClick: () => p.onRun(node.path) },
                   { label: "Folder settings…", hint: "variables, headers, auth, scripts", onClick: () => p.onDefaults(node.path) },
                   "sep",
@@ -169,6 +173,7 @@ const Row = memo(function Row({ node, depth, open, onToggle, ...p }: RowProps) {
                 ]
               : [
                   { label: "Duplicate", onClick: () => p.onDuplicate(node) },
+                  ...(linked ? [{ label: "Make a separate copy", hint: "stop sharing", onClick: () => p.onUnlink(node) }] : []),
                   { label: "Rename…", onClick: () => p.onRename(node) },
                   "sep",
                   { label: "Delete", danger: true, onClick: () => p.onDelete(node) },

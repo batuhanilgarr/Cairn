@@ -3,7 +3,7 @@ import path from "node:path";
 import { parseArgs } from "node:util";
 import { executeRequest } from "../../src/lib/pipeline";
 import { setNetwork } from "../../src/lib/net";
-import { effectiveEnv, loadChain, loadEnvironments, parseRequest, readCollectionName } from "../../src/lib/collection";
+import { effectiveEnv, linkTarget, loadChain, loadEnvironments, parseRequest, readCollectionName } from "../../src/lib/collection";
 import { listFilesRecursive } from "../../src/lib/fs";
 import type { Environment, RequestTab, TestResult } from "../../src/lib/types";
 import type { Layer } from "../../src/lib/inherit";
@@ -156,10 +156,11 @@ export async function runCollection(o: RunOptions): Promise<Report> {
     for (const file of files) {
       if (stop) break;
       const rel = file.startsWith(root + "/") ? file.slice(root.length + 1) : path.basename(file);
-      const text = fs.readFileSync(file, "utf8");
       let tab: RequestTab;
       try {
-        tab = parseRequest(text, file);
+        const text = fs.readFileSync(file, "utf8");
+        const shared = linkTarget(text, file);
+        tab = parseRequest(shared ? fs.readFileSync(shared, "utf8") : text, file);
       } catch (e) {
         const r: ReqResult = { file, rel, name: rel, method: "?", url: "", iteration: it + 1, tests: [], logs: [], error: `Couldn't read the request file: ${(e as Error).message}` };
         results.push(r);

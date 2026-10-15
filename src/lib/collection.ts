@@ -182,6 +182,60 @@ const kvIn = (rows: unknown): KV[] => {
   return out;
 };
 
+/* ------------------------- shared (linked) requests ------------------------- */
+
+/**
+ * A request file can be a link to a request kept elsewhere, so one definition serves many folders and
+ * collections: the file holds only `use: <path to the shared .req.yaml>` (relative to the link, or absolute).
+ * The content comes from the shared file; headers, auth and variables still come from where the link sits.
+ */
+const dirOf = (file: string) => file.slice(0, file.lastIndexOf("/") >= 0 ? file.lastIndexOf("/") : 0);
+
+/** Resolve `.` and `..` in a slash path. */
+export function normalizePath(p: string): string {
+  const abs = p.startsWith("/");
+  const out: string[] = [];
+  for (const part of p.split("/")) {
+    if (!part || part === ".") continue;
+    if (part === ".." && out.length && out[out.length - 1] !== "..") out.pop();
+    else if (part !== ".." || !abs) out.push(part);
+  }
+  return (abs ? "/" : "") + out.join("/");
+}
+
+/** The absolute path a link file points at, or null when the text is an ordinary request. */
+export function linkTarget(text: string, file: string): string | null {
+  if (/^(method|url|type):/m.test(text)) return null;
+  const m = /^use:\s*(.+?)\s*$/m.exec(text);
+  if (!m) return null;
+  const raw = m[1].replace(/^(["'])(.*)\1$/, "$2");
+  return normalizePath(raw.startsWith("/") ? raw : `${dirOf(file)}/${raw}`);
+}
+
+/** Path of `to` as seen from the folder `fromDir` (both absolute, slash separated). */
+export function relativePath(fromDir: string, to: string): string {
+  const a = normalizePath(fromDir).split("/").filter(Boolean);
+  const b = normalizePath(to).split("/").filter(Boolean);
+  let i = 0;
+  while (i < a.length && i < b.length - 1 && a[i] === b[i]) i++;
+  return [...a.slice(i).map(() => ".."), ...b.slice(i)].join("/");
+}
+
+/** The text of a link file that points at `target`. */
+export const linkText = (linkFile: string, target: string) => `use: ${relativePath(dirOf(linkFile), target)}\n`;
+
+/** Read a request file, following a link to the shared request. The returned tab keeps the link's own path as `file`. */
+export async function readRequest(file: string): Promise<RequestTab> {
+  const text = await readText(file);
+  if (text === null) throw new Error("File no longer exists");
+  const target = linkTarget(text, file);
+  if (!target) return parseRequest(text, file);
+  const shared = await readText(target);
+  if (shared === null) throw new Error(`The shared request is missing: ${target}`);
+  if (linkTarget(shared, target)) throw new Error(`A shared request can't itself be a link: ${target}`);
+  return { ...parseRequest(shared, file), linkTo: target };
+}
+
 export function parseRequest(text: string, file: string): RequestTab {
   const tab = parseRequestRaw(text, file);
   // "Saved" means the canonical form: a hand-edited file isn't dirty just because its formatting differs.

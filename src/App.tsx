@@ -83,7 +83,13 @@ import {
   saveEnvironment,
   serializeRequest,
   slug,
-  uniquePath, effectiveEnv, envAncestors } from "./lib/collection";
+  uniquePath,
+  effectiveEnv,
+  envAncestors,
+  linkTarget,
+  linkText,
+  readRequest,
+} from "./lib/collection";
 import type { BodyMode, Collection, RequestKind, Environment, HistoryItem, RequestTab, ResponseData, RunOutput, TreeNode } from "./lib/types";
 import {
   METHODS,
@@ -304,14 +310,13 @@ export default function App() {
     guard(async () => {
       const existing = tabs.find((t) => t.file === path);
       if (existing) return setActiveId(existing.id);
-      const text = await readText(path);
-      if (text === null) throw new Error("File no longer exists");
-      addTab(parseRequest(text, path));
+      addTab(await readRequest(path));
     });
 
   const writeTab = async (tab: RequestTab, file: string) => {
     const text = serializeRequest(tab);
-    await writeText(file, text);
+    // a linked request saves into the shared file, so every place that links to it sees the edit
+    await writeText(tab.linkTo ?? file, text);
     setTabs((ts) => ts.map((t) => (t.id === tab.id ? { ...t, file, saved: text } : t)));
   };
 
@@ -490,7 +495,11 @@ export default function App() {
       if (!name || name === current) return;
       const dir = dirname(node.path);
       const target = isReq ? await requestPath(dir, name) : await uniquePath(dir, slug(name), "");
-      if (isReq) {
+      if (isReq && linkTarget((await readText(node.path)) ?? "", node.path)) {
+        // renaming a link only renames the link file; the shared request keeps its own name
+        await renamePath(node.path, target);
+        setTabs((ts) => ts.map((t) => (t.file === node.path ? { ...t, file: target } : t)));
+      } else if (isReq) {
         const text = await readText(node.path);
         const tab = parseRequest(text ?? "", node.path);
         const renamed = serializeRequest({ ...tab, name });
@@ -508,10 +517,44 @@ export default function App() {
   const duplicateNode = (node: TreeNode) =>
     guard(async () => {
       const text = await readText(node.path);
+      if (linkTarget(text ?? "", node.path)) {
+        // duplicating a link makes another link to the same shared request
+        const tab = await readRequest(node.path);
+        await writeText(await requestPath(dirname(node.path), `${tab.name} link`), text ?? "");
+        return void (await refreshTree());
+      }
       const tab = parseRequest(text ?? "", node.path);
       const name = `${tab.name} copy`;
       await writeText(await requestPath(dirname(node.path), name), serializeRequest({ ...tab, name }));
       await refreshTree();
+    });
+
+  /** Put a link to an existing request into a folder: one shared definition, used in many places. */
+  const linkRequestInto = (dir: string) =>
+    guard(async () => {
+      const picked = await pickAnyFile("Choose the request to link to");
+      if (!picked) return;
+      if (!/\.req\.ya?ml$/.test(picked)) throw new Error("Pick a request file (*.req.yaml).");
+      const pickedText = (await readText(picked)) ?? "";
+      const target = linkTarget(pickedText, picked) ?? picked;
+      const shared = await readRequest(target);
+      const file = await requestPath(dir, shared.name);
+      await writeText(file, linkText(file, target));
+      await refreshTree();
+      await openFile(file);
+      flash(`Linked “${shared.name}”`);
+    });
+
+  /** Turn a link into its own copy of the shared request. */
+  const unlinkNode = (node: TreeNode) =>
+    guard(async () => {
+      const tab = await readRequest(node.path);
+      const text = serializeRequest({ ...tab, linkTo: undefined });
+      await writeText(node.path, text);
+      setTabs((ts) => ts.map((t) => (t.file === node.path ? { ...t, linkTo: undefined, saved: text } : t)));
+      setLabel(node.path, pillOf(tab));
+      await refreshTree();
+      flash("Now a separate copy");
     });
 
   const deleteNode = (node: TreeNode) =>
@@ -559,9 +602,8 @@ export default function App() {
       const current = tabsRef.current;
       for (const t of current) {
         if (!t.file || t.saved == null || serializeRequest(t) !== t.saved) continue;
-        const text = await readText(t.file).catch(() => null);
-        if (text === null) continue;
-        const fresh = parseRequest(text, t.file);
+        const fresh = await readRequest(t.file).catch(() => null);
+        if (!fresh) continue;
         if (fresh.saved !== t.saved) setTabs((ts) => ts.map((x) => (x.id === t.id ? { ...fresh, id: t.id } : x)));
       }
     };
@@ -1009,7 +1051,7 @@ export default function App() {
         items[i].state = "running";
         render();
         try {
-          const tab = parseRequest((await readText(files[i])) ?? "", files[i]);
+          const tab = await readRequest(files[i]);
           items[i].name = tab.name;
           const out = await executeRequest(tab, { env, globals: settings.globals, session: sessionRef.current, tokens: tokensRef.current, onSession: bump, layers: await freshLayers(tab) });
           items[i].status = out.response?.status;
@@ -1047,7 +1089,7 @@ export default function App() {
     tabStrip.current?.querySelector(".tab.on")?.scrollIntoView({ inline: "nearest", block: "nearest" });
   }, [active?.id, tabs.length]);
   useEffect(() => {
-    for (const t of tabs) if (t.file) setLabel(t.file, pillOf(t));
+    for (const t of tabs) if (t.file) setLabel(t.file, pillOf(t) + (t.linkTo ? "|link" : ""));
   }, [tabs]);
 
   const nextTab = (d: number) => {
@@ -1300,6 +1342,8 @@ export default function App() {
                     onNewFolder={newFolderIn}
                     onRename={renameNode}
                     onDuplicate={duplicateNode}
+                    onLink={linkRequestInto}
+                    onUnlink={unlinkNode}
                     onDelete={deleteNode}
                   />
                 </>
@@ -1566,6 +1610,12 @@ export default function App() {
         ) : (
         <>
         <section className="panel req" ref={reqPanel} style={{ flex: `0 0 ${splitPct}%` }}>
+          {active.linkTo && active.file && (
+            <div className="link-note" role="note">
+              <span title={active.linkTo}>⛓ Linked: edits change the shared request ({active.linkTo.split("/").slice(-2).join("/")}) wherever it is used.</span>
+              <button className="btn small" onClick={() => unlinkNode({ name: basename(active.file!), path: active.file!, isDir: false, children: [] })}>Make a separate copy</button>
+            </div>
+          )}
           <nav className="subtabs">
             {sections.map((s) => (
               <button key={s} className={section === s ? "on" : ""} onClick={() => setReqSection(s)}>

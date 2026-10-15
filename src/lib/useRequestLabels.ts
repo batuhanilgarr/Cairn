@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from "react";
+import { linkTarget } from "./collection";
 import { readText } from "./fs";
 
 const KIND_LABEL: Record<string, string> = { graphql: "GQL", ws: "WS", sse: "SSE", grpc: "gRPC", mcp: "MCP" };
@@ -30,10 +31,20 @@ export function useRequestLabels(): [Record<string, string>, (paths: string[]) =
       while (queue.current.length) {
         const batch = queue.current.splice(0, BATCH);
         const texts = await Promise.all(batch.map((p) => readText(p).catch(() => null)));
+        // a link shows the method of the request it points at, plus a marker the tree draws as a chain icon
+        const labels = await Promise.all(
+          texts.map(async (t, i) => {
+            if (t === null) return null;
+            const target = linkTarget(t, batch[i]);
+            if (!target) return labelOf(t);
+            const shared = await readText(target).catch(() => null);
+            return (shared === null ? "?" : labelOf(shared)) + "|link";
+          }),
+        );
         setLabels((cur) => {
           const next = { ...cur };
           batch.forEach((p, i) => {
-            if (texts[i] !== null) next[p] = labelOf(texts[i]!);
+            if (labels[i] !== null) next[p] = labels[i]!;
           });
           return next;
         });

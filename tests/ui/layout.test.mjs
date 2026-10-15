@@ -36,7 +36,7 @@ const STATES = [
 ];
 
 /** What the app would get from Tauri: a small collection and canned responses. The response is deliberately a worst case (120 headers, 12 cookies, 1 GB, two minutes) so that wide numbers can't break the header. Runs before the app loads. */
-const stubSource = ({ sidebar, aside, bigTree = 0, bigBody = 0 }) => `
+const stubSource = ({ sidebar, aside, bigTree = 0, bigBody = 0, withLink = false }) => `
 (() => {
   const req = (n, m) => 'name: ' + n + '\\nmethod: ' + m + '\\nurl: https://api.example.com/' + n + '\\n';
   let files = {
@@ -45,6 +45,7 @@ const stubSource = ({ sidebar, aside, bigTree = 0, bigBody = 0 }) => `
     '/demo/invoices/create-invoice.req.yaml': req('create-invoice', 'POST'),
     '/demo/invoices/void-invoice.req.yaml': req('void-invoice', 'DELETE'),
   };
+  if (${withLink}) files['/demo/invoices/login-link.req.yaml'] = 'use: ../auth/login.req.yaml\\n';
   const f = (p) => ({ name: p.split('/').pop(), path: p, isDir: false, children: [] });
   const d = (p, c) => ({ name: p.split('/').pop(), path: p, isDir: true, children: c });
   let tree = [d('/demo/auth', [f('/demo/auth/login.req.yaml')]), d('/demo/invoices', Object.keys(files).filter((k) => k.includes('invoices/')).map(f))];
@@ -118,9 +119,9 @@ after(async () => {
 });
 
 /** Open the app in a fresh browser context. `fail()` saves a screenshot next to the failing assertion. */
-async function open({ width, height = 800, theme = "dark", sidebar = true, aside = null, bigTree = 0, bigBody = 0 }, label) {
+async function open({ width, height = 800, theme = "dark", sidebar = true, aside = null, bigTree = 0, bigBody = 0, withLink = false }, label) {
   const context = await browser.newContext({ viewport: { width, height }, colorScheme: theme });
-  await context.addInitScript(stubSource({ sidebar, aside, bigTree, bigBody }));
+  await context.addInitScript(stubSource({ sidebar, aside, bigTree, bigBody, withLink }));
   const page = await context.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(String(e)));
@@ -748,6 +749,42 @@ for (const width of [760, 1360]) {
         assert.ok(m.pickerWide, "the environment picker is squeezed");
         assert.ok(m.over <= 0, "the page overflows sideways");
         assert.match(m.note, /Also gets \d+ variable/);
+        assert.deepEqual(v.map((x) => `${x.id}: ${x.where.join(" | ")}`), [], "accessibility violations");
+      });
+    } finally {
+      await context.close();
+    }
+  });
+}
+
+for (const width of [760, 1360]) {
+  test(`linked requests: marker, shared method, banner and menu fit and are accessible: ${width}px`, async () => {
+    const { page, context, errors, check } = await open({ width, withLink: true }, `${width}px linked request`);
+    try {
+      const row = page.locator(".tree-row", { hasText: "login-link" });
+      await row.waitFor();
+      await page.waitForFunction(() => [...document.querySelectorAll(".tree-row")].some((r) => r.textContent.includes("login-link") && r.querySelector(".tree-link") && r.querySelector(".tree-method")?.textContent === "POST"));
+      await row.locator(".tree-label").click();
+      await page.waitForSelector(".link-note");
+      await page.waitForTimeout(250);
+      const m = await page.evaluate(() => {
+        const n = document.querySelector(".link-note").getBoundingClientRect();
+        const pr = document.querySelector(".panel.req").getBoundingClientRect();
+        const btn = document.querySelector(".link-note button").getBoundingClientRect();
+        return { title: document.querySelector(".tab.on .tab-title")?.textContent, inside: n.left >= pr.left - 1 && n.right <= pr.right + 1 && btn.right <= pr.right + 1, oneLine: n.height < 48, over: document.documentElement.scrollWidth - innerWidth, text: document.querySelector(".link-note").textContent };
+      });
+      await row.hover();
+      await row.locator('button[aria-label^="More actions"]').click();
+      const items = await page.locator('[role="menuitem"]').allTextContents();
+      await page.keyboard.press("Escape");
+      const v = await axeViolations(page);
+      await check(async () => {
+        assert.deepEqual(errors, []);
+        assert.equal(m.title, "login", "a linked request opens with the shared request's name");
+        assert.match(m.text, /edits change the shared request/);
+        assert.ok(m.inside && m.oneLine, `the link note does not fit: ${JSON.stringify(m)}`);
+        assert.ok(m.over <= 0, "the page overflows sideways");
+        assert.ok(items.some((t) => /Make a separate copy/.test(t)), `the row menu should offer to make a copy: ${items.join(" | ")}`);
         assert.deepEqual(v.map((x) => `${x.id}: ${x.where.join(" | ")}`), [], "accessibility violations");
       });
     } finally {

@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
-import { listFilesRecursive, readText } from "./fs";
-import { parseRequest } from "./collection";
+import { listFilesRecursive } from "./fs";
+import { readRequest } from "./collection";
 
 export type MockRoute = {
   method: string;
@@ -20,9 +20,8 @@ export function pathOf(url: string): string {
 export async function buildRoutes(root: string, includeEmpty: boolean): Promise<MockRoute[]> {
   const routes: MockRoute[] = [];
   for (const file of await listFilesRecursive(root, ".req.yaml")) {
-    const text = await readText(file);
-    if (text === null) continue;
-    const t = parseRequest(text, file);
+    const t = await readRequest(file).catch(() => null);
+    if (!t) continue;
     if (t.kind !== "http" && t.kind !== "graphql") continue;
     if (!t.examples.length && !includeEmpty) continue;
     routes.push({
