@@ -40,6 +40,18 @@ Node worker thread: unlike the app they are not sandboxed, so treat them like an
     CAIRN_VAR_clientSecret: ${{ secrets.CLIENT_SECRET }}
 ```
 
+## Load test
+
+```sh
+npx cairn bench orders/create.req.yaml -e Staging -c 25 --duration 30
+npx cairn bench ./my-collection/orders --requests 5000 -c 50 --max-error-rate 1 --max-p95 400
+npx cairn bench create.req.yaml --format json > load.json
+```
+
+N users send the request (or cycle through every request in a folder) at the same time, using the same engine as `cairn run`: inheritance, variables, auth and scripts all apply. The report shows requests per second, errors and latency (min, mean, p50, p90, p95, p99, max), per request when a folder is tested. Defaults are 10 users for 10 seconds; it stops at whichever of `--duration` and `--requests` comes first, and Ctrl-C stops early and still prints what was measured. `--ramp <seconds>` starts the users gradually.
+
+With tests in a request, a failed test is an error; without tests a 4xx or 5xx response is. `--max-error-rate <percent>`, `--max-p95 <ms>` and `--max-p99 <ms>` make the exit code 1 when a limit is exceeded, so it can gate a CI job. Latency is the time of the whole step, including scripts, measured on the machine running the test, so a slow laptop or a distant runner shows up in the numbers. The tool itself tops out at roughly 16,000 requests per second (measured on the development Mac against a trivial server on the same machine, so client and server shared the CPU); above that you are measuring the tool, so run it from a separate machine for high loads. Cookies are off unless you pass `--cookies`. Limits: 500 users, 3,600 seconds. Only load test servers you own or are allowed to test.
+
 ## Scan for secrets
 
 ```sh

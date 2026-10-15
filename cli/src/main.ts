@@ -6,6 +6,7 @@ import { setNetwork } from "../../src/lib/net";
 import { atLeast, formatFindings, scanDirectory, SEVERITIES } from "./scan";
 import { validateDirectory } from "./validate";
 import { importHar } from "./importHar";
+import { BENCH_LIMITS, checkThresholds, formatBench, runBench } from "./bench";
 import { buildOpenApi, collectExportItems, toJson, toYaml } from "../../src/lib/openapiExport";
 import { effectiveEnv, linkTarget, loadChain, loadDefaults, loadEnvironments, parseRequest, readCollectionName } from "../../src/lib/collection";
 import { listFilesRecursive } from "../../src/lib/fs";
@@ -29,6 +30,12 @@ Usage
   cairn validate [folder] [--format text|json]
       Check request, folder, collection and environment files against the published format schema (v1).
       Prints file:line and what is wrong; exit code 1 when anything is. The same schemas give editors completion and hover docs.
+  cairn bench <request.req.yaml | folder> [-c users] [--duration sec] [--requests n] [options]
+      Load test: N users send the request (or cycle through the folder's requests) at the same time and the run reports
+      requests/s, errors and latency (min, mean, p50, p90, p95, p99, max). Defaults: 10 users for 10 s. Stops at whichever of
+      --duration and --requests comes first; Ctrl-C stops early and still prints what was measured. With tests in a request, a failed test
+      is an error; without, a 4xx or 5xx response is. Limits for CI: --max-error-rate <percent>, --max-p95 <ms>, --max-p99 <ms>
+      (exit code 1 when one is exceeded). --ramp <sec> starts the users gradually; --cookies keeps cookies (off by default). Only load test servers you own or may test.
   cairn scan [folder] [--fail-on high|medium|low|never] [--format text|json]
       Look for credentials that would be committed (tokens, passwords, keys in request files, folder defaults and
       environments). Prints masked previews only. Exit code 1 when something at or above --fail-on (default medium)
@@ -128,7 +135,10 @@ function findRoot(start: string): string {
   }
 }
 
-export async function runCollection(o: RunOptions): Promise<Report> {
+type Prepared = { root: string; name: string; files: string[]; env: Environment | undefined; base: Record<string, string> };
+
+/** Find the collection, its requests and environment, and set up the network: shared by `run` and `bench`. */
+async function prepareRun(o: Pick<RunOptions, "target" | "env" | "vars" | "proxy" | "ca" | "noCookies" | "onNote">): Promise<Prepared> {
   const target = path.resolve(o.target);
   if (!fs.existsSync(target)) throw new UsageError(`Not found: ${o.target}`);
   const root = findRoot(target).split(path.sep).join("/");
@@ -163,6 +173,11 @@ export async function runCollection(o: RunOptions): Promise<Report> {
     cookiesDisabled: !!o.noCookies,
   });
 
+  return { root, name, files, env, base };
+}
+
+export async function runCollection(o: RunOptions): Promise<Report> {
+  const { root, name, files, env, base } = await prepareRun(o);
   const rows = o.data ? loadData(o.data) : [];
   const iterations = rows.length || Math.max(1, o.iterations ?? 1);
   const tokens = new Map();
@@ -259,6 +274,8 @@ async function main(argv: string[]): Promise<number> {
       junit: { type: "string" }, json: { type: "string" }, html: { type: "string" }, "no-color": { type: "boolean" },
       "fail-on": { type: "string" }, format: { type: "string" }, out: { type: "string", short: "o" },
       all: { type: "boolean" }, name: { type: "string" }, "dry-run": { type: "boolean" },
+      concurrency: { type: "string", short: "c" }, cookies: { type: "boolean" }, duration: { type: "string" }, requests: { type: "string" }, ramp: { type: "string" },
+      "max-error-rate": { type: "string" }, "max-p95": { type: "string" }, "max-p99": { type: "string" },
       help: { type: "boolean", short: "h" }, version: { type: "boolean", short: "v" },
     },
   });
@@ -326,6 +343,56 @@ async function main(argv: string[]): Promise<number> {
     }
     return failures.length ? 1 : 0;
   }
+  if (cmd === "bench") {
+    if (!target) throw new UsageError("Tell me what to load test: cairn bench <request.req.yaml | folder> [-c users] [--duration sec] [--requests n]");
+    const whole = (v: string | undefined, flag: string, min: number, max: number) => {
+      if (v === undefined) return undefined;
+      const n = Number(v);
+      if (!Number.isInteger(n) || n < min || n > max) throw new UsageError(`${flag} expects a whole number from ${min} to ${max}, got "${v}"`);
+      return n;
+    };
+    const dec = (v: string | undefined, flag: string) => {
+      if (v === undefined) return undefined;
+      const n = Number(v);
+      if (!Number.isFinite(n) || n < 0) throw new UsageError(`${flag} expects a number, got "${v}"`);
+      return n;
+    };
+    const concurrency = whole(values.concurrency, "--concurrency", 1, BENCH_LIMITS.concurrency) ?? 10;
+    const requests = whole(values.requests, "--requests", 1, BENCH_LIMITS.requests);
+    const durationSec = dec(values.duration, "--duration");
+    if (durationSec !== undefined && (durationSec <= 0 || durationSec > BENCH_LIMITS.durationSec)) throw new UsageError(`--duration expects 1 to ${BENCH_LIMITS.durationSec} seconds, got "${values.duration}"`);
+    const rampSec = dec(values.ramp, "--ramp") ?? 0;
+    const format = values.format ?? "text";
+    if (format !== "text" && format !== "json") throw new UsageError(`--format expects text or json, got "${format}"`);
+    const vars: Record<string, string> = {};
+    for (const kv of values.var ?? []) {
+      const i = kv.indexOf("=");
+      if (i < 1) throw new UsageError(`--var expects key=value, got "${kv}"`);
+      vars[kv.slice(0, i)] = kv.slice(i + 1);
+    }
+    const notes: string[] = [];
+    const ctx = await prepareRun({ target, env: values.env, vars, proxy: values.proxy, ca: values.ca, noCookies: !values.cookies, onNote: (m) => notes.push(m) });
+    const signal = { stop: false };
+    const onSigint = () => { signal.stop = true; };
+    process.once("SIGINT", onSigint);
+    const tty = process.stderr.isTTY && format === "text";
+    const rep = await runBench({
+      files: ctx.files, root: ctx.root, collection: ctx.name, env: ctx.env, base: ctx.base, concurrency,
+      durationMs: durationSec !== undefined ? durationSec * 1000 : requests === undefined ? 10_000 : undefined,
+      requests, rampMs: rampSec * 1000, timeoutMs: dec(values.timeout, "--timeout"), insecure: values.insecure, signal,
+      onTick: tty ? (done, failedN, el) => process.stderr.write(`\r${dim(`  ${(el / 1000).toFixed(0)} s · ${done} requests · ${failedN} failed`)}   `) : undefined,
+    });
+    process.removeListener("SIGINT", onSigint);
+    if (tty) process.stderr.write("\r\x1b[K");
+    const problems = checkThresholds(rep, { maxErrorRate: dec(values["max-error-rate"], "--max-error-rate"), maxP95: dec(values["max-p95"], "--max-p95"), maxP99: dec(values["max-p99"], "--max-p99") });
+    if (format === "json") console.log(JSON.stringify({ ...rep, notes, problems }, null, 2));
+    else {
+      for (const n of notes) console.log(yellow(`note: ${n}`));
+      console.log(formatBench(rep, { red, green, dim, bold, yellow }));
+      for (const p of problems) console.log(red(`  ✗ ${p}`));
+    }
+    return problems.length || rep.count === 0 ? 1 : 0;
+  }
   if (cmd === "scan") {
     const failOn = (values["fail-on"] ?? "medium") as string;
     if (failOn !== "never" && !SEVERITIES.includes(failOn as never)) throw new UsageError(`--fail-on expects high, medium, low or never, got "${failOn}"`);
@@ -336,7 +403,7 @@ async function main(argv: string[]): Promise<number> {
     else console.log(formatFindings(findings, { red, yellow, dim, bold, green }));
     return failOn !== "never" && findings.some((f) => atLeast(f, failOn as "high")) ? 1 : 0;
   }
-  if (cmd !== "run") throw new UsageError(`Unknown command "${cmd}". Try: cairn run, cairn import har, cairn validate, cairn scan or cairn export openapi`);
+  if (cmd !== "run") throw new UsageError(`Unknown command "${cmd}". Try: cairn run, cairn bench, cairn import har, cairn validate, cairn scan or cairn export openapi`);
   if (!target) throw new UsageError("Tell me what to run: cairn run <collection | folder | request.req.yaml>");
 
   const vars: Record<string, string> = {};
