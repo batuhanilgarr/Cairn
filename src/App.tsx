@@ -1333,9 +1333,9 @@ export default function App() {
     "zoom-in": () => zoomBy(0.1),
     "zoom-out": () => zoomBy(-0.1),
     "zoom-reset": () => changeSettings({ zoom: 1 }),
-    "help-docs": () => void openUrl("https://github.com/batuhanilgarr/Reqnest#readme"),
-    "help-github": () => void openUrl("https://github.com/batuhanilgarr/Reqnest"),
-    "help-issue": () => void openUrl("https://github.com/batuhanilgarr/Reqnest/issues/new"),
+    "help-docs": () => void openUrl("https://github.com/batuhanilgarr/Cairn#readme"),
+    "help-github": () => void openUrl("https://github.com/batuhanilgarr/Cairn"),
+    "help-issue": () => void openUrl("https://github.com/batuhanilgarr/Cairn/issues/new"),
   };
 
   /** Menu accelerators and the keydown fallback both land here; a repeat within 150 ms is the same keypress. */

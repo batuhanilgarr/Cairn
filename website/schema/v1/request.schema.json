@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://batuhanilgarr.github.io/Reqnest/schema/v1/request.schema.json",
+  "$id": "https://batuhanilgarr.github.io/Cairn/schema/v1/request.schema.json",
   "title": "Cairn request file (*.req.yaml), format v1",
   "description": "One request per file. Keys are always written in the same order, defaults are omitted and there are no generated ids, so Git diffs stay small. A file that only says `use:` is a link to a shared request.",
   "type": "object",

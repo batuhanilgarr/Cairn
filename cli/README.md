@@ -31,7 +31,7 @@ Node worker thread: unlike the app they are not sandboxed, so treat them like an
 ### GitHub Actions
 
 ```yaml
-- uses: batuhanilgarr/Reqnest@main
+- uses: batuhanilgarr/Cairn@main
   with:
     path: api-tests
     env: Staging

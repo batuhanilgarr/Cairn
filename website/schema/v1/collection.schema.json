@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://batuhanilgarr.github.io/Reqnest/schema/v1/collection.schema.json",
+  "$id": "https://batuhanilgarr.github.io/Cairn/schema/v1/collection.schema.json",
   "title": "Cairn collection file (cairn.yaml), format v1",
   "description": "Marks a folder as a collection. Collections made before the rename have reqnest.yaml, which is still read.",
   "type": "object",

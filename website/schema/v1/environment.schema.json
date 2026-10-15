@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://batuhanilgarr.github.io/Reqnest/schema/v1/environment.schema.json",
+  "$id": "https://batuhanilgarr.github.io/Cairn/schema/v1/environment.schema.json",
   "title": "Cairn environment (environments/*.env.yaml), format v1",
   "description": "A set of variables. Secret variables are written here with an empty value; the real value lives in the git-ignored .cairn/secrets.yaml.",
   "type": "object",

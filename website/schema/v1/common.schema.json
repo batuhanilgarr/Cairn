@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://batuhanilgarr.github.io/Reqnest/schema/v1/common.schema.json",
+  "$id": "https://batuhanilgarr.github.io/Cairn/schema/v1/common.schema.json",
   "title": "Cairn common definitions (format v1)",
   "$defs": {
     "scalar": {

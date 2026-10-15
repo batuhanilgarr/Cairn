@@ -15,7 +15,7 @@ This page is the contract for the format. The machine-readable version is a set 
 | `cairn.yaml` — marks the collection root | [collection.schema.json](../website/schema/v1/collection.schema.json) |
 | `environments/*.env.yaml` — a set of variables | [environment.schema.json](../website/schema/v1/environment.schema.json) |
 
-Published at `https://batuhanilgarr.github.io/Reqnest/schema/v1/<name>.schema.json` (the host will move when the project gets its own domain; the `/schema/v1/` path stays).
+Published at `https://batuhanilgarr.github.io/Cairn/schema/v1/<name>.schema.json` (the host will move when the project gets its own domain; the `/schema/v1/` path stays).
 
 ## Stability
 
@@ -38,15 +38,15 @@ With the YAML extension for VS Code (Red Hat), add to `.vscode/settings.json` in
 ```json
 {
   "yaml.schemas": {
-    "https://batuhanilgarr.github.io/Reqnest/schema/v1/request.schema.json": "**/*.req.yaml",
-    "https://batuhanilgarr.github.io/Reqnest/schema/v1/folder.schema.json": "**/folder.yaml",
-    "https://batuhanilgarr.github.io/Reqnest/schema/v1/collection.schema.json": "/cairn.yaml",
-    "https://batuhanilgarr.github.io/Reqnest/schema/v1/environment.schema.json": "environments/*.env.yaml"
+    "https://batuhanilgarr.github.io/Cairn/schema/v1/request.schema.json": "**/*.req.yaml",
+    "https://batuhanilgarr.github.io/Cairn/schema/v1/folder.schema.json": "**/folder.yaml",
+    "https://batuhanilgarr.github.io/Cairn/schema/v1/collection.schema.json": "/cairn.yaml",
+    "https://batuhanilgarr.github.io/Cairn/schema/v1/environment.schema.json": "environments/*.env.yaml"
   }
 }
 ```
 
-Or per file, as a first-line comment: `# yaml-language-server: $schema=https://batuhanilgarr.github.io/Reqnest/schema/v1/request.schema.json`.
+Or per file, as a first-line comment: `# yaml-language-server: $schema=https://batuhanilgarr.github.io/Cairn/schema/v1/request.schema.json`.
 
 ## A request: `*.req.yaml`
 

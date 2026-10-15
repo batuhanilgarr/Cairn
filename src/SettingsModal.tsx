@@ -215,8 +215,8 @@ export function SettingsModal({ settings: s, onChange, section, onSection, onClo
               <p className="muted">Version {version}</p>
               <p>Local-first API client. No account, no cloud, no telemetry.</p>
               <div className="row center-row">
-                <button className="btn small" onClick={() => openUrl("https://github.com/batuhanilgarr/Reqnest")}>GitHub</button>
-                <button className="btn small" onClick={() => openUrl("https://github.com/batuhanilgarr/Reqnest/issues/new")}>Report an issue</button>
+                <button className="btn small" onClick={() => openUrl("https://github.com/batuhanilgarr/Cairn")}>GitHub</button>
+                <button className="btn small" onClick={() => openUrl("https://github.com/batuhanilgarr/Cairn/issues/new")}>Report an issue</button>
               </div>
             </div>
           )}

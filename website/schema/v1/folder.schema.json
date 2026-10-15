@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://batuhanilgarr.github.io/Reqnest/schema/v1/folder.schema.json",
+  "$id": "https://batuhanilgarr.github.io/Cairn/schema/v1/folder.schema.json",
   "title": "Cairn folder defaults (folder.yaml), format v1",
   "description": "Defaults for every request in this folder and below. The collection root has one too. A deeper level overrides a shallower one; a request overrides both.",
   "type": "object",
