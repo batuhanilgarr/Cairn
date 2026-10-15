@@ -2,7 +2,7 @@ import { stringify } from "yaml";
 import { applyDefaults } from "./inherit";
 import { loadChain, readRequest } from "./collection";
 import { listFilesRecursive } from "./fs";
-import { isSensitiveName, scanText } from "./secrets";
+import { isSensitiveName, redactSensitive, scanText } from "./secrets";
 import type { KV, RequestTab } from "./types";
 
 /**
@@ -56,13 +56,7 @@ const typed = (value: string, schema: Obj): string | number | boolean => (schema
 
 const scalarSchema = (value: string): Obj => (/^-?\d+$/.test(value) ? { type: "integer" } : /^-?\d*\.\d+$/.test(value) ? { type: "number" } : /^(true|false)$/.test(value) ? { type: "boolean" } : { type: "string" });
 
-/** Replace string values under sensitive names (password, token, ...) so an example never carries a credential. */
-function redact(v: unknown, key = ""): unknown {
-  if (Array.isArray(v)) return v.map((x) => redact(x, key));
-  if (v && typeof v === "object") return Object.fromEntries(Object.entries(v as Obj).map(([k, x]) => [k, redact(x, k)]));
-  if (typeof v === "string" && key && isSensitiveName(key) && v && !v.includes("{{")) return REDACTED;
-  return v;
-}
+const redact = (v: unknown) => redactSensitive(v, REDACTED);
 
 /** JSON with unquoted {{variables}} (valid in Cairn, not in JSON) still parses. */
 function parseJsonLoose(text: string): { ok: true; value: unknown } | { ok: false } {

@@ -899,3 +899,26 @@ for (const width of [760, 1360]) {
     }
   });
 }
+
+test("import: the HAR option is offered, and the choice dialog is accessible", async () => {
+  const { page, context, errors, check } = await open({ width: 1360 }, "import choices");
+  try {
+    await page.keyboard.press("Control+k");
+    await page.waitForSelector(".palette");
+    await page.keyboard.type("import");
+    await page.waitForTimeout(250);
+    await page.keyboard.press("Enter");
+    await page.waitForSelector('[role="dialog"]:not(.palette)');
+    await page.waitForTimeout(500);
+    const text = await page.locator('[role="dialog"]:not(.palette)').first().textContent();
+    const v = await axeViolations(page);
+    await check(async () => {
+      assert.deepEqual(errors, []);
+      assert.match(text, /HAR recording/);
+      assert.match(text, /Postman/);
+      assert.deepEqual(v.map((x) => `${x.id}: ${x.where.join(" | ")}`), [], "accessibility violations");
+    });
+  } finally {
+    await context.close();
+  }
+});

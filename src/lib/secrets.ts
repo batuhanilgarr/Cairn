@@ -63,6 +63,14 @@ const PLACEHOLDER = /^(x+|\*+|\.{3}|<.*>|\$\{.*\}|\$[A-Za-z_]\w*|your[-_ ].*|cha
 /** True for names like password, token or apiKey (but not tokenUrl or authScheme). */
 export const isSensitiveName = (name: string) => SENSITIVE.test(name) && !NOT_A_VALUE.test(name);
 
+/** Replace string values under sensitive names (password, token, ...) with a placeholder, deeply. */
+export function redactSensitive(v: unknown, placeholder: string | ((key: string, value: string) => string), key = ""): unknown {
+  if (Array.isArray(v)) return v.map((x) => redactSensitive(x, placeholder, key));
+  if (v && typeof v === "object") return Object.fromEntries(Object.entries(v as Record<string, unknown>).map(([k, x]) => [k, redactSensitive(x, placeholder, k)]));
+  if (typeof v === "string" && key && isSensitiveName(key) && v && !v.includes("{{")) return typeof placeholder === "function" ? placeholder(key, v) : placeholder;
+  return v;
+}
+
 const unquote = (v: string) => v.replace(/^(["'])(.*)\1$/, "$2").trim();
 const looksLikeValue = (v: string, min: number) => {
   if (v.length < min || PLACEHOLDER.test(v) || v.includes("{{") || v === "|" || v === ">" || v === "|-" || v === ">-") return false;

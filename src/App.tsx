@@ -39,6 +39,7 @@ import { BigBodyView, bigFind } from "./BigBodyView";
 import { bodyText } from "./lib/bigbody";
 import { SecretScanModal, type ScanState } from "./SecretScanModal";
 import { buildOpenApi, collectExportItems, toJson, toYaml } from "./lib/openapiExport";
+import { isHar, parseHar } from "./lib/har";
 import { applyFix, checkGitignore, scanText, type Finding } from "./lib/secrets";
 import { dotenvName, parseDotenv } from "./lib/dotenv";
 import { formatFilterValues, runFilter } from "./lib/filter";
@@ -413,6 +414,7 @@ export default function App() {
         { id: "postman-folder", label: "Postman export folder", hint: "all collections, environments (with secrets) and globals in one go" },
         { id: "postman", label: "Postman collection or environment file", hint: "one v2.x JSON export" },
         { id: "bruno", label: "Bruno collection", hint: "pick the collection folder" },
+        { id: "har", label: "HAR recording", hint: "DevTools > Network > Save all as HAR; credentials are kept out of the files" },
       ]);
       if (!choice) return;
       if (choice === "resync" && meta?.openapi) return importOpenApi(meta.openapi.source, true);
@@ -423,6 +425,31 @@ export default function App() {
       if (choice === "oas-file") {
         const f = await pickFile("Choose an OpenAPI file", ["json", "yaml", "yml"]);
         if (f) await importOpenApi(f, true);
+      }
+      if (choice === "har") {
+        const f = await pickFile("Choose a HAR file", ["har", "json"]);
+        if (!f) return;
+        const text = await readText(f);
+        if (text === null || !isHar(text)) throw new Error("That file isn't a HAR recording (no log.entries).");
+        const scope = await choose("Which requests?", [
+          { id: "api", label: "API calls only", hint: "skips pages, scripts, styles, images and fonts" },
+          { id: "all", label: "Everything in the recording" },
+        ]);
+        if (!scope) return;
+        const title = basename(f).replace(/\.(har|json)$/i, "") || "HAR import";
+        const parsed = parseHar(text, title, { includeStatic: scope === "all" });
+        if (!parsed.requests.length) return void (await info("Nothing to import", ["The recording has no requests Cairn can import.", ...parsed.notes].join("\n")));
+        await writeImport(collection.root, parsed.requests.map((r) => ({ ...r, folder: [title, ...r.folder] })), false);
+        // tokens, passwords and keys from the recording live in an environment as secret variables, never in the files
+        const secretNames = Object.keys(parsed.secrets ?? {});
+        const env = await ensureEnvironment(collection.root, title, { ...parsed.vars, ...(parsed.secrets ?? {}) }, secretNames);
+        await reloadEnvs(env.id);
+        await refreshTree();
+        await info(
+          "HAR import finished",
+          [`${parsed.requests.length} request${parsed.requests.length === 1 ? "" : "s"} in the “${title}” folder; environment “${env.name}” has {{baseUrl}}${secretNames.length ? ` and ${secretNames.length} secret variable${secretNames.length === 1 ? "" : "s"}` : ""}.`, "", ...parsed.notes.slice(0, 6).map((n) => `• ${n}`), ...(parsed.notes.length > 6 ? [`• +${parsed.notes.length - 6} more`] : [])].join("\n"),
+        );
+        return;
       }
       if (choice === "postman" || choice === "postman-folder") {
         let files: string[];
